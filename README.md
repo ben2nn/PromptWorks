@@ -31,11 +31,11 @@ PromptWorks 是一个面向 Prompt 工程与 LLM 测试流程的管理平台。�
    cp .env.example .env
    `
 
-3. 初始化数据库：当前使用 SQLAlchemy ORM，后续会补充 Alembic 迁移文件。开发阶段可运行下列脚本快速创建数据表：
+3. 初始化数据库：使用 Alembic 应用最新迁移（确保 `.env` 中的 `DATABASE_URL` 指向可访问的 PostgreSQL 实例）。
 
-   `bash
-   uv run python -m app.db.init_db
-   `
+   ```bash
+   uv run alembic upgrade head
+   ```
 
 4. 启动开发服务器：
 
@@ -44,6 +44,14 @@ PromptWorks 是一个面向 Prompt 工程与 LLM 测试流程的管理平台。�
    `
 
 服务器启动后可在 http://127.0.0.1:8000 访问，API 文档位于 /api/v1/openapi.json 与 /docs。
+
+## 🗃️ 数据库迁移
+
+- 同步数据库结构：`uv run alembic upgrade head`
+- 创建新迁移：`uv run alembic revision --autogenerate -m "add new table"`
+- 回滚上一个迁移：`uv run alembic downgrade -1`
+
+所有命令会读取 `.env` 中的 `DATABASE_URL`。在创建新迁移时，请确保目标数据库已处于最新状态，以便 Alembic 能正确比对差异。
 
 ## 🧪 运行测试
 
@@ -66,6 +74,9 @@ backend/
 │   ├── models/         # SQLAlchemy 数据模型
 │   ├── schemas/        # Pydantic 请求/响应模型
 │   └── services/       # 业务服务与任务逻辑 (待实现)
+├── alembic/           # Alembic 配置与迁移脚本
+│   └── versions/      # 历史迁移文件
+├── alembic.ini        # Alembic CLI 配置
 ├── tests/              # pytest 测试用例
 ├── pyproject.toml      # 项目依赖与构建配置
 ├── README.md           # 使用说明
