@@ -118,7 +118,8 @@ def create_llm(
 ) -> LLMProvider:
     """Create a new LLM provider entry."""
 
-    data = payload.model_dump()
+    # Use JSON mode to ensure URL fields are serialized to strings before reaching SQLAlchemy
+    data = payload.model_dump(mode="json")
     data["parameters"] = data.get("parameters") or {}
     provider_name = data["provider_name"]
     resolved_is_custom, resolved_base_url = _resolve_provider_defaults(
@@ -167,7 +168,7 @@ def update_llm(
     """Update an existing LLM provider."""
 
     provider = _get_provider_or_404(db, provider_id)
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, mode="json")
     if "parameters" in update_data and update_data["parameters"] is None:
         update_data["parameters"] = {}
 
@@ -290,4 +291,15 @@ def invoke_llm(
     else:
         logger.info("外部 LLM 接口调用成功: provider_id=%s", provider.id)
 
-    return response.json()
+    response_payload = response.json()
+    try:
+        choices = response_payload.get("choices")
+        if isinstance(choices, list) and choices:
+            message = choices[0].get("message", {})
+            content = message.get("content")
+            if isinstance(content, str):
+                logger.debug("LLM 响应内容前100字符: %s", content[:100])
+    except AttributeError:
+        pass
+
+    return response_payload
