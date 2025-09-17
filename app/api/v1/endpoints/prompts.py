@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Sequence
 
@@ -18,7 +18,9 @@ router = APIRouter()
 def list_prompts(
     *,
     db: Session = Depends(get_db),
-    q: str | None = Query(default=None, description="Filter prompts by partial name or author."),
+    q: str | None = Query(
+        default=None, description="Filter prompts by partial name or author."
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Sequence[Prompt]:
@@ -27,7 +29,9 @@ def list_prompts(
     stmt = select(Prompt).order_by(Prompt.updated_at.desc()).offset(offset).limit(limit)
     if q:
         like_term = f"%{q}%"
-        stmt = stmt.where((Prompt.name.ilike(like_term)) | (Prompt.author.ilike(like_term)))
+        stmt = stmt.where(
+            (Prompt.name.ilike(like_term)) | (Prompt.author.ilike(like_term))
+        )
 
     return list(db.scalars(stmt))
 
@@ -55,16 +59,22 @@ def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Prompt:
     """根据 ID 获取单个提示词，不存在时返回 404。"""
     prompt = db.get(Prompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
+        )
     return prompt
 
 
 @router.put("/{prompt_id}", response_model=PromptRead)
-def update_prompt(*, db: Session = Depends(get_db), prompt_id: int, payload: PromptUpdate) -> Prompt:
+def update_prompt(
+    *, db: Session = Depends(get_db), prompt_id: int, payload: PromptUpdate
+) -> Prompt:
     """根据 ID 更新提示词内容，处理重复版本冲突。"""
     prompt = db.get(Prompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
+        )
 
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(prompt, key, value)
@@ -82,14 +92,17 @@ def update_prompt(*, db: Session = Depends(get_db), prompt_id: int, payload: Pro
     return prompt
 
 
-@router.delete("/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+@router.delete(
+    "/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+)
 def delete_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Response:
     """删除指定 ID 的提示词并返回 204。"""
     prompt = db.get(Prompt, prompt_id)
     if not prompt:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
+        )
 
     db.delete(prompt)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

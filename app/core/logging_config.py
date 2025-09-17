@@ -17,7 +17,9 @@ DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 class BeijingTimeFormatter(logging.Formatter):
     """自定义日志格式化器，用于强制日志时间显示为北京时间。"""
 
-    def __init__(self, fmt: str, datefmt: str | None = None, timezone: ZoneInfo | None = None) -> None:
+    def __init__(
+        self, fmt: str, datefmt: str | None = None, timezone: ZoneInfo | None = None
+    ) -> None:
         # 记录目标时区，默认使用北京时区
         super().__init__(fmt=fmt, datefmt=datefmt)
         self._timezone = timezone or BEIJING_TZ

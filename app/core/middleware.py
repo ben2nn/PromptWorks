@@ -20,7 +20,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self._logger = get_logger("promptworks.middleware.request")
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         # 记录请求开始时间，方便统计耗时
         start_time = time.perf_counter()
         method = request.method

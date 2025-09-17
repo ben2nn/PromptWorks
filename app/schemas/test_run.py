@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,7 +13,9 @@ class TestRunBase(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     repetitions: int = Field(default=1, ge=1, le=50)
-    schema_data: dict | None = Field(default=None, alias="schema", serialization_alias="schema")
+    schema_data: dict | None = Field(
+        default=None, alias="schema", serialization_alias="schema"
+    )
     notes: str | None = None
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
@@ -29,7 +31,9 @@ class TestRunUpdate(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     top_p: float | None = Field(default=None, ge=0.0, le=1.0)
     repetitions: int | None = Field(default=None, ge=1, le=50)
-    schema_data: dict | None = Field(default=None, alias="schema", serialization_alias="schema")
+    schema_data: dict | None = Field(
+        default=None, alias="schema", serialization_alias="schema"
+    )
     notes: str | None = None
     status: TestRunStatus | None = None
 
@@ -45,4 +49,6 @@ class TestRunRead(TestRunBase):
     prompt: PromptRead | None = None
     results: list[ResultRead] = []
 
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True, serialize_by_alias=True)
+    model_config = ConfigDict(
+        from_attributes=True, populate_by_name=True, serialize_by_alias=True
+    )

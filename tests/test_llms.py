@@ -1,4 +1,4 @@
-﻿from typing import Any
+from typing import Any
 
 
 def create_provider(client, payload: dict[str, Any]) -> dict[str, Any]:
@@ -86,8 +86,12 @@ def test_invoke_llm_uses_openai_schema(client, monkeypatch):
         def text(self) -> str:  # pragma: no cover - parity with httpx response
             return ""
 
-    def fake_post(url: str, headers: dict[str, str], json: dict[str, Any], timeout: float) -> DummyResponse:
-        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+    def fake_post(
+        url: str, headers: dict[str, str], json: dict[str, Any], timeout: float
+    ) -> DummyResponse:
+        captured.update(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
         return DummyResponse()
 
     monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.post", fake_post)

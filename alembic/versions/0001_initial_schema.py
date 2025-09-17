@@ -1,10 +1,11 @@
 """Create initial tables
 
 Revision ID: 0001_initial_schema
-Revises: 
+Revises:
 Create Date: 2024-10-06 00:00:00
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -61,8 +62,18 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("author", sa.String(length=100), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name", "version", name="uq_prompt_name_version"),
     )
@@ -79,8 +90,18 @@ def upgrade() -> None:
         sa.Column("is_custom", sa.Boolean(), nullable=False),
         sa.Column("logo_url", sa.String(length=255), nullable=True),
         sa.Column("logo_emoji", sa.String(length=16), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_llm_providers_id", "llm_providers", ["id"], unique=False)
@@ -102,8 +123,18 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["prompt_id"], ["prompts.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -115,10 +146,17 @@ def upgrade() -> None:
         sa.Column("test_run_id", sa.Integer(), nullable=False),
         sa.Column("run_index", sa.Integer(), nullable=False),
         sa.Column("output", sa.Text(), nullable=False),
-        sa.Column("parsed_output", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "parsed_output", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("tokens_used", sa.Integer(), nullable=True),
         sa.Column("latency_ms", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["test_run_id"], ["test_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -130,12 +168,21 @@ def upgrade() -> None:
         sa.Column("result_id", sa.Integer(), nullable=False),
         sa.Column("is_valid_json", sa.Boolean(), nullable=True),
         sa.Column("schema_pass", sa.Boolean(), nullable=True),
-        sa.Column("missing_fields", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("type_mismatches", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "missing_fields", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
+        sa.Column(
+            "type_mismatches", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("consistency_score", sa.Float(), nullable=True),
         sa.Column("numeric_accuracy", sa.Float(), nullable=True),
         sa.Column("boolean_accuracy", sa.Float(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["result_id"], ["results.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

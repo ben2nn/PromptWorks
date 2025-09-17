@@ -1,4 +1,4 @@
-﻿from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 
 def test_create_and_list_prompts(client: TestClient):

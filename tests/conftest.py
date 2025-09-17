@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -31,7 +31,9 @@ def db_session(engine) -> Session:
 
     connection = engine.connect()
     transaction = connection.begin()
-    session_local = sessionmaker(bind=connection, autoflush=False, autocommit=False, expire_on_commit=False)
+    session_local = sessionmaker(
+        bind=connection, autoflush=False, autocommit=False, expire_on_commit=False
+    )
     session = session_local()
     try:
         yield session

@@ -21,15 +21,15 @@ PromptWorks 是一个面向 Prompt 工程与 LLM 测试流程的管理平台。�
 
 1. 安装依赖（推荐使用 uv 管理虚拟环境）：
 
-   `bash
+   ```bash
    uv sync
-   `
+   ```
 
 2. 配置环境变量：复制示例配置并按需修改数据库、Redis、API Key 等信息。
 
-   `bash
+   ```bash
    cp .env.example .env
-   `
+   ```
 
 3. 初始化数据库：使用 Alembic 应用最新迁移（确保 `.env` 中的 `DATABASE_URL` 指向可访问的 PostgreSQL 实例）。
 
@@ -39,9 +39,9 @@ PromptWorks 是一个面向 Prompt 工程与 LLM 测试流程的管理平台。�
 
 4. 启动开发服务器：
 
-   `bash
+   ```bash
    uv run fastapi dev app/main.py
-   `
+   ```
 
 服务器启动后可在 http://127.0.0.1:8000 访问，API 文档位于 /api/v1/openapi.json 与 /docs。
 
@@ -57,9 +57,37 @@ PromptWorks 是一个面向 Prompt 工程与 LLM 测试流程的管理平台。�
 
 项目使用 pytest 进行单元测试与接口测试：
 
-`bash
+```bash
 uv run pytest
-`
+```
+
+## 🧰 开发辅助命令（PoeThePoet）
+
+为便于统一执行格式化、类型检查与测试，我们在 `pyproject.toml` 中配置了 PoeThePoet 任务：
+
+1. 首次使用前请安装包含开发工具的依赖：
+
+   ```bash
+   uv sync --extra dev
+   ```
+
+2. 运行常用任务：
+
+   ```bash
+   # 仅格式化代码
+   uv run poe format
+
+   # 静态类型检查
+   uv run poe lint
+
+   # 以 -s -v 参数运行 pytest
+   uv run poe test
+
+   # 依次执行格式化、类型检查、测试
+   uv run poe test-all
+   ```
+
+所有任务都带有中文说明，可通过 `uv run poe -h` 查看当前支持的命令与帮助信息。
 
 测试示例会使用 SQLite 内存数据库，避免对实际数据库造成影响。
 

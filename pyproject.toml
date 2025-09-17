@@ -23,9 +23,40 @@ dependencies = [
 dev = [
     "ruff>=0.5.0",
     "pytest>=8.2.0",
-    "pytest-asyncio>=0.23.0"
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.10.0",
+    "poethepoet>=0.27.0"
 ]
 
 [build-system]
 requires = ["setuptools>=67.0"]
 build-backend = "setuptools.build_meta"
+
+# 显式限定 setuptools 仅打包 app 目录，避免 flat-layout 带来的包发现冲突。
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+# 使用 PoeThePoet 统一管理开发流程任务，方便快速执行格式化、类型检查和测试。
+[tool.poe]
+# 如需查看所有任务，可运行 `poe -h`。
+
+[tool.poe.tasks.format]
+help = "使用 Ruff 对整个项目执行代码格式化，保持风格统一。"
+cmd = "ruff format ."
+
+[tool.poe.tasks.lint]
+help = "使用 MyPy 对 app 与 tests 目录进行静态类型检查，提前发现潜在类型错误。"
+cmd = "mypy app tests"
+
+[tool.poe.tasks.test]
+help = "以 -s -v 参数运行 pytest，输出详细的测试日志信息。"
+cmd = "pytest -s -v"
+
+[tool.poe.tasks."test-all"]
+help = "顺序执行格式化、类型检查与测试，确保提交前的基本质量验证。"
+sequence = ["format", "lint", "test"]
+
+[tool.poe.tasks.server]
+help = "通过 uv 启动 FastAPI 开发服务器，便于本地调试接口。"
+cmd = "uv run fastapi dev app/main.py"

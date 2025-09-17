@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import Any
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
@@ -7,7 +7,9 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 class LLMProviderBase(BaseModel):
     provider_name: str = Field(..., description="Human readable or vendor name")
     model_name: str = Field(..., description="Target model identifier")
-    base_url: AnyHttpUrl | None = Field(None, description="Optional override of the API base URL")
+    base_url: AnyHttpUrl | None = Field(
+        None, description="Optional override of the API base URL"
+    )
     api_key: str = Field(..., min_length=1)
     parameters: dict[str, Any] = Field(default_factory=dict)
     logo_url: AnyHttpUrl | None = None

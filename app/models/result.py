@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 
@@ -13,7 +13,9 @@ class Result(Base):
     __tablename__ = "results"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    test_run_id: Mapped[int] = mapped_column(ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
+    test_run_id: Mapped[int] = mapped_column(
+        ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False
+    )
     run_index: Mapped[int] = mapped_column(Integer, nullable=False)
     output: Mapped[str] = mapped_column(Text, nullable=False)
     parsed_output: Mapped[dict | None] = mapped_column(JSONBCompat, nullable=True)
@@ -25,5 +27,8 @@ class Result(Base):
 
     test_run: Mapped["TestRun"] = relationship("TestRun", back_populates="results")
     metrics: Mapped[list["Metric"]] = relationship(
-        "Metric", back_populates="result", cascade="all, delete-orphan", passive_deletes=True
+        "Metric",
+        back_populates="result",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

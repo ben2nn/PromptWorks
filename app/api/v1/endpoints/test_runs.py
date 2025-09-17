@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Sequence
 
@@ -46,12 +46,16 @@ def list_test_runs(
 
 
 @router.post("/", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
-def create_test_run(*, db: Session = Depends(get_db), payload: TestRunCreate) -> TestRun:
+def create_test_run(
+    *, db: Session = Depends(get_db), payload: TestRunCreate
+) -> TestRun:
     """为指定提示词创建新的测试运行，初始状态为待处理。"""
 
     prompt_exists = db.scalar(select(Prompt.id).where(Prompt.id == payload.prompt_id))
     if not prompt_exists:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
+        )
 
     test_run = TestRun(**payload.model_dump(), status=TestRunStatus.PENDING)
     db.add(test_run)
@@ -74,7 +78,9 @@ def get_test_run(*, db: Session = Depends(get_db), test_run_id: int) -> TestRun:
     )
     test_run = db.scalar(stmt)
     if not test_run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found"
+        )
 
     return test_run
 
@@ -90,7 +96,9 @@ def update_test_run(
 
     test_run = db.get(TestRun, test_run_id)
     if not test_run:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found"
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
     status_value = update_data.pop("status", None)
@@ -105,7 +113,9 @@ def update_test_run(
 
 
 @router.get("/{test_run_id}/results", response_model=list[ResultRead])
-def list_results_for_test_run(*, db: Session = Depends(get_db), test_run_id: int) -> Sequence[Result]:
+def list_results_for_test_run(
+    *, db: Session = Depends(get_db), test_run_id: int
+) -> Sequence[Result]:
     """列出指定测试运行的所有结果数据，按执行顺序排序。"""
 
     stmt = (
