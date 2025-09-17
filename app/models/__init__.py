@@ -1,4 +1,5 @@
 ﻿from app.models.base import Base
+from app.models.llm_provider import LLMProvider
 from app.models.metric import Metric
 from app.models.prompt import Prompt
 from app.models.result import Result
@@ -11,4 +12,5 @@ __all__ = [
     "TestRunStatus",
     "Result",
     "Metric",
+    "LLMProvider",
 ]
