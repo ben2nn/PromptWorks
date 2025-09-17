@@ -4,7 +4,7 @@ from typing import Any, Sequence
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,8 +37,9 @@ def _normalize_provider_name(provider_name: str) -> str:
     return provider_name.strip().lower()
 
 
-def _normalize_base_url(base_url: str) -> str:
-    return base_url.rstrip("/")
+def _normalize_base_url(base_url: str | AnyHttpUrl) -> str:
+    normalized = str(base_url)
+    return normalized.rstrip("/")
 
 
 def _resolve_provider_defaults(
