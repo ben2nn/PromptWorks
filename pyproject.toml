@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.5.0",
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
     "mypy>=1.10.0",
     "poethepoet>=0.27.0"
 ]
@@ -36,6 +37,24 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
+
+# 默认启用 dev 依赖组，确保本地开发命令（如 pytest-cov、poethepoet）可用。
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.5.0",
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.10.0",
+    "poethepoet>=0.27.0"
+]
+
+# 配置 pytest 默认启用覆盖率统计并要求最低 90% 覆盖率。
+[tool.pytest.ini_options]
+addopts = "-s -v --cov=app --cov-report=term-missing --cov-fail-under=90"
 
 # 使用 PoeThePoet 统一管理开发流程任务，方便快速执行格式化、类型检查和测试。
 [tool.poe]
@@ -50,8 +69,8 @@ help = "使用 MyPy 对 app 与 tests 目录进行静态类型检查，提前发
 cmd = "mypy app tests"
 
 [tool.poe.tasks.test]
-help = "以 -s -v 参数运行 pytest，输出详细的测试日志信息。"
-cmd = "pytest -s -v"
+help = "运行 pytest 并输出覆盖率统计（最低 90% 覆盖率）。"
+cmd = "pytest"
 
 [tool.poe.tasks."test-all"]
 help = "顺序执行格式化、类型检查与测试，确保提交前的基本质量验证。"
