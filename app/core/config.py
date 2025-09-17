@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     """Application configuration loaded from environment variables."""
 
     APP_ENV: str = "development"
+    # 是否启用测试模式，用于控制 DEBUG 级别日志的输出
+    APP_TEST_MODE: bool = False
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "PromptWorks"
     DATABASE_URL: str = "postgresql+psycopg://promptworks:promptworks@localhost:5432/promptworks"

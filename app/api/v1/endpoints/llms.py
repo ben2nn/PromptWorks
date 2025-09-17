@@ -8,11 +8,15 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.logging_config import get_logger
 from app.db.session import get_db
 from app.models.llm_provider import LLMProvider
 from app.schemas.llm_provider import LLMProviderCreate, LLMProviderRead, LLMProviderUpdate
 
 router = APIRouter()
+
+# 初始化接口级日志对象，方便在各个操作中手动打日志
+logger = get_logger("promptworks.api.llms")
 
 KNOWN_PROVIDER_DEFAULTS: dict[str, str] = {
     "openai": "https://api.openai.com/v1",
@@ -96,6 +100,9 @@ def list_llms(
 ) -> Sequence[LLMProvider]:
     """Return a paginated list of LLM providers."""
 
+    # 记录列表查询参数，便于追踪调用来源
+    logger.info("查询 LLM 提供者列表: provider=%s limit=%s offset=%s", provider_name, limit, offset)
+
     stmt = select(LLMProvider).order_by(LLMProvider.updated_at.desc()).offset(offset).limit(limit)
     if provider_name:
         stmt = stmt.where(LLMProvider.provider_name.ilike(f"%{provider_name}%"))
@@ -138,6 +145,8 @@ def create_llm(
     db.add(provider)
     db.commit()
     db.refresh(provider)
+    # 记录成功创建的提供者信息，辅助审计
+    logger.info("创建 LLM 提供者成功: id=%s 名称=%s 模型=%s", provider.id, provider.provider_name, provider.model_name)
     return provider
 
 
@@ -203,6 +212,8 @@ def update_llm(
 
     db.commit()
     db.refresh(provider)
+    # 记录更新后的提供者信息，便于问题追溯
+    logger.info("更新 LLM 提供者成功: id=%s 名称=%s 模型=%s", provider.id, provider.provider_name, provider.model_name)
     return provider
 
 
@@ -213,6 +224,8 @@ def delete_llm(*, db: Session = Depends(get_db), provider_id: int) -> Response:
     provider = _get_provider_or_404(db, provider_id)
     db.delete(provider)
     db.commit()
+    # 记录删除动作，避免重要资源被误删难以还原
+    logger.info("删除 LLM 提供者成功: id=%s 名称=%s", provider.id, provider.provider_name)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -251,9 +264,14 @@ def invoke_llm(
     }
 
     url = f"{_normalize_base_url(base_url)}/chat/completions"
+    # 记录调用外部接口的关键信息，方便排查调用链路
+    logger.info("调用外部 LLM 接口: provider_id=%s url=%s", provider.id, url)
+    logger.debug("LLM 请求参数: %s", request_payload)
     try:
         response = httpx.post(url, headers=headers, json=request_payload, timeout=DEFAULT_INVOKE_TIMEOUT)
     except httpx.HTTPError as exc:
+        # 捕获网络层异常并输出错误日志，加速定位外部接口问题
+        logger.error("调用外部 LLM 接口出现网络异常: provider_id=%s 错误=%s", provider.id, exc)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     if response.status_code >= 400:
@@ -261,6 +279,15 @@ def invoke_llm(
             error_payload = response.json()
         except ValueError:
             error_payload = {"message": response.text}
+        # 输出外部接口的错误响应，方便快速定位异常原因
+        logger.error("外部 LLM 接口返回错误: provider_id=%s 状态码=%s 响应=%s", provider.id, response.status_code, error_payload)
         raise HTTPException(status_code=response.status_code, detail=error_payload)
+
+    # 正常响应时输出成功日志与耗时信息
+    elapsed_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else None
+    if elapsed_ms is not None:
+        logger.info("外部 LLM 接口调用成功: provider_id=%s 耗时 %.2fms", provider.id, elapsed_ms)
+    else:
+        logger.info("外部 LLM 接口调用成功: provider_id=%s", provider.id)
 
     return response.json()
