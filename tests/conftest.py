@@ -1,6 +1,9 @@
+from collections.abc import Iterator
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -10,7 +13,7 @@ from app.models import Base  # noqa: F401 - ensure models are loaded
 
 
 @pytest.fixture(scope="session")
-def engine():
+def engine() -> Iterator[Engine]:
     """Create a shared in-memory SQLite engine for tests."""
 
     engine = create_engine(
@@ -26,7 +29,7 @@ def engine():
 
 
 @pytest.fixture()
-def db_session(engine) -> Session:
+def db_session(engine: Engine) -> Iterator[Session]:
     """Provide a database session wrapped in a transaction."""
 
     connection = engine.connect()
@@ -44,7 +47,7 @@ def db_session(engine) -> Session:
 
 
 @pytest.fixture()
-def client(db_session: Session):
+def client(db_session: Session) -> Iterator[TestClient]:
     """Return a FastAPI TestClient with a database override."""
 
     def override_get_db():

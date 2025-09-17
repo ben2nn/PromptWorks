@@ -1,7 +1,11 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+if TYPE_CHECKING:
+    from app.models.test_run import TestRun
 
 from app.models.base import Base
 

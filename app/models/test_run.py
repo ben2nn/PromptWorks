@@ -3,11 +3,17 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.types import JSONBCompat
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.prompt import Prompt
+    from app.models.result import Result
 
 
 class TestRunStatus(str, Enum):

@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.types import JSONBCompat
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.result import Result
 
 
 class Metric(Base):
