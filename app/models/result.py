@@ -3,9 +3,9 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.types import JSONBCompat
 from app.models.base import Base
 
 
@@ -16,7 +16,7 @@ class Result(Base):
     test_run_id: Mapped[int] = mapped_column(ForeignKey("test_runs.id", ondelete="CASCADE"), nullable=False)
     run_index: Mapped[int] = mapped_column(Integer, nullable=False)
     output: Mapped[str] = mapped_column(Text, nullable=False)
-    parsed_output: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    parsed_output: Mapped[dict | None] = mapped_column(JSONBCompat, nullable=True)
     tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

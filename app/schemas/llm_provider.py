@@ -16,7 +16,10 @@ class LLMProviderBase(BaseModel):
         description="Emoji representation used when no logo URL is provided",
         max_length=16,
     )
-    is_custom: bool = False
+    is_custom: bool | None = Field(
+        default=None,
+        description="Optional flag to force custom-provider logic; autodetected when omitted.",
+    )
 
 
 class LLMProviderCreate(LLMProviderBase):
@@ -38,5 +41,6 @@ class LLMProviderRead(LLMProviderBase):
     id: int
     created_at: datetime
     updated_at: datetime
+    is_custom: bool
 
     model_config = ConfigDict(from_attributes=True)

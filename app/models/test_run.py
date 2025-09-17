@@ -4,9 +4,9 @@ from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import DateTime, Enum as PgEnum, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.types import JSONBCompat
 from app.models.base import Base
 
 
@@ -27,7 +27,7 @@ class TestRun(Base):
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.7)
     top_p: Mapped[float] = mapped_column(nullable=False, default=1.0)
     repetitions: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    schema: Mapped[dict | None] = mapped_column(JSONBCompat, nullable=True)
     status: Mapped[TestRunStatus] = mapped_column(
         PgEnum(TestRunStatus, name="test_run_status"),
         nullable=False,

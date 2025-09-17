@@ -285,7 +285,8 @@ def invoke_llm(
         raise HTTPException(status_code=response.status_code, detail=error_payload)
 
     # 正常响应时输出成功日志与耗时信息
-    elapsed_ms = response.elapsed.total_seconds() * 1000 if response.elapsed else None
+    elapsed = getattr(response, "elapsed", None)
+    elapsed_ms = elapsed.total_seconds() * 1000 if elapsed is not None else None
     if elapsed_ms is not None:
         logger.info("外部 LLM 接口调用成功: provider_id=%s 耗时 %.2fms", provider.id, elapsed_ms)
     else:
