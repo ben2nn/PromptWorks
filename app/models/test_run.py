@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 
 class TestRunStatus(str, Enum):
+    __test__ = False
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -24,6 +25,7 @@ class TestRunStatus(str, Enum):
 
 
 class TestRun(Base):
+    __test__ = False
     __tablename__ = "test_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

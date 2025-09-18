@@ -8,6 +8,7 @@ from app.schemas.result import ResultRead
 
 
 class TestRunBase(BaseModel):
+    __test__ = False
     model_name: str = Field(..., max_length=100)
     model_version: str | None = Field(default=None, max_length=50)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
@@ -22,10 +23,12 @@ class TestRunBase(BaseModel):
 
 
 class TestRunCreate(TestRunBase):
+    __test__ = False
     prompt_id: int
 
 
 class TestRunUpdate(BaseModel):
+    __test__ = False
     model_name: str | None = Field(default=None, max_length=100)
     model_version: str | None = Field(default=None, max_length=50)
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
@@ -41,6 +44,7 @@ class TestRunUpdate(BaseModel):
 
 
 class TestRunRead(TestRunBase):
+    __test__ = False
     id: int
     prompt_id: int
     status: TestRunStatus

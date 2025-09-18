@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 
 def test_create_and_list_prompts(client: TestClient):
+    """验证创建提示后能被列表接口正确返回"""
     payload = {
         "name": "订单确认",
         "version": "v1",
@@ -23,6 +24,7 @@ def test_create_and_list_prompts(client: TestClient):
 
 
 def test_update_and_delete_prompt(client: TestClient):
+    """验证提示的更新与删除流程可用"""
     create_resp = client.post(
         "/api/v1/prompts/",
         json={

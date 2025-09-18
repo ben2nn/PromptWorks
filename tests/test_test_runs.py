@@ -15,6 +15,7 @@ def _create_prompt(client: TestClient) -> int:
 
 
 def test_create_test_run_requires_prompt(client: TestClient):
+    """验证缺少有效提示时创建测试运行会返回404"""
     response = client.post(
         "/api/v1/test-runs/",
         json={
@@ -29,6 +30,7 @@ def test_create_test_run_requires_prompt(client: TestClient):
 
 
 def test_create_and_retrieve_test_run(client: TestClient):
+    """验证测试运行创建后可由列表和详情接口查询"""
     prompt_id = _create_prompt(client)
 
     create_resp = client.post(
