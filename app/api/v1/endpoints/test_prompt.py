@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[TestRunRead])
-def list_test_runs(
+def list_test_prompts(
     *,
     db: Session = Depends(get_db),
     status_filter: TestRunStatus | None = Query(default=None, alias="status"),
@@ -25,7 +25,7 @@ def list_test_runs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Sequence[TestRun]:
-    """按筛选条件分页返回测试运行列表，包含关联提示词和结果。"""
+    """按筛选条件分页返回提示词测试列表，包含关联提示词和结果。"""
 
     stmt = (
         select(TestRun)
@@ -46,10 +46,10 @@ def list_test_runs(
 
 
 @router.post("/", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
-def create_test_run(
+def create_test_prompt(
     *, db: Session = Depends(get_db), payload: TestRunCreate
 ) -> TestRun:
-    """为指定提示词创建新的测试运行，初始状态为待处理。"""
+    """为指定提示词创建新的提示词测试，初始状态为待处理。"""
 
     prompt_exists = db.scalar(select(Prompt.id).where(Prompt.id == payload.prompt_id))
     if not prompt_exists:
@@ -64,9 +64,9 @@ def create_test_run(
     return test_run
 
 
-@router.get("/{test_run_id}", response_model=TestRunRead)
-def get_test_run(*, db: Session = Depends(get_db), test_run_id: int) -> TestRun:
-    """根据 ID 获取单个测试运行及其关联数据，不存在时返回 404。"""
+@router.get("/{test_prompt_id}", response_model=TestRunRead)
+def get_test_prompt(*, db: Session = Depends(get_db), test_prompt_id: int) -> TestRun:
+    """根据 ID 获取单个提示词测试及其关联数据，不存在时返回 404。"""
 
     stmt = (
         select(TestRun)
@@ -74,7 +74,7 @@ def get_test_run(*, db: Session = Depends(get_db), test_run_id: int) -> TestRun:
             joinedload(TestRun.prompt),
             selectinload(TestRun.results).selectinload(Result.metrics),
         )
-        .where(TestRun.id == test_run_id)
+        .where(TestRun.id == test_prompt_id)
     )
     test_run = db.scalar(stmt)
     if not test_run:
@@ -85,16 +85,16 @@ def get_test_run(*, db: Session = Depends(get_db), test_run_id: int) -> TestRun:
     return test_run
 
 
-@router.patch("/{test_run_id}", response_model=TestRunRead)
-def update_test_run(
+@router.patch("/{test_prompt_id}", response_model=TestRunRead)
+def update_test_prompt(
     *,
     db: Session = Depends(get_db),
-    test_run_id: int,
+    test_prompt_id: int,
     payload: TestRunUpdate,
 ) -> TestRun:
-    """根据 ID 更新测试运行字段并可修改状态。"""
+    """根据 ID 更新提示词测试字段并可修改状态。"""
 
-    test_run = db.get(TestRun, test_run_id)
+    test_run = db.get(TestRun, test_prompt_id)
     if not test_run:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found"
@@ -112,15 +112,15 @@ def update_test_run(
     return test_run
 
 
-@router.get("/{test_run_id}/results", response_model=list[ResultRead])
-def list_results_for_test_run(
-    *, db: Session = Depends(get_db), test_run_id: int
+@router.get("/{test_prompt_id}/results", response_model=list[ResultRead])
+def list_results_for_test_prompt(
+    *, db: Session = Depends(get_db), test_prompt_id: int
 ) -> Sequence[Result]:
-    """列出指定测试运行的所有结果数据，按执行顺序排序。"""
+    """列出指定提示词测试的所有结果数据，按执行顺序排序。"""
 
     stmt = (
         select(Result)
-        .where(Result.test_run_id == test_run_id)
+        .where(Result.test_run_id == test_prompt_id)
         .options(selectinload(Result.metrics))
         .order_by(Result.run_index.asc())
     )

@@ -14,10 +14,10 @@ def _create_prompt(client: TestClient) -> int:
     return response.json()["id"]
 
 
-def test_create_test_run_requires_prompt(client: TestClient):
-    """验证缺少有效提示时创建测试运行会返回404"""
+def test_create_test_prompt_requires_prompt(client: TestClient):
+    """验证缺少有效提示时创建提示词测试会返回404"""
     response = client.post(
-        "/api/v1/test-runs/",
+        "/api/v1/test_prompt/",
         json={
             "prompt_id": 999,
             "model_name": "gpt-4o",
@@ -29,12 +29,12 @@ def test_create_test_run_requires_prompt(client: TestClient):
     assert response.status_code == 404
 
 
-def test_create_and_retrieve_test_run(client: TestClient):
-    """验证测试运行创建后可由列表和详情接口查询"""
+def test_create_and_retrieve_test_prompt(client: TestClient):
+    """验证提示词测试创建后可由列表和详情接口查询"""
     prompt_id = _create_prompt(client)
 
     create_resp = client.post(
-        "/api/v1/test-runs/",
+        "/api/v1/test_prompt/",
         json={
             "prompt_id": prompt_id,
             "model_name": "gpt-4o",
@@ -46,22 +46,22 @@ def test_create_and_retrieve_test_run(client: TestClient):
         },
     )
     assert create_resp.status_code == 201
-    test_run = create_resp.json()
-    assert test_run["status"] == "pending"
-    assert test_run["prompt_id"] == prompt_id
+    test_prompt = create_resp.json()
+    assert test_prompt["status"] == "pending"
+    assert test_prompt["prompt_id"] == prompt_id
 
-    list_resp = client.get("/api/v1/test-runs/")
+    list_resp = client.get("/api/v1/test_prompt/")
     assert list_resp.status_code == 200
     results = list_resp.json()
     assert len(results) == 1
-    assert results[0]["id"] == test_run["id"]
+    assert results[0]["id"] == test_prompt["id"]
 
-    detail_resp = client.get(f"/api/v1/test-runs/{test_run['id']}")
+    detail_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["prompt"]["id"] == prompt_id
     assert detail["results"] == []
 
-    list_results_resp = client.get(f"/api/v1/test-runs/{test_run['id']}/results")
+    list_results_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}/results")
     assert list_results_resp.status_code == 200
     assert list_results_resp.json() == []

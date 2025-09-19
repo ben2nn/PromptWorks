@@ -115,9 +115,9 @@ backend/
 
 - GET /api/v1/prompts：分页查询 Prompt 列表，支持名称/作者模糊搜索。
 - POST /api/v1/prompts：创建新 Prompt 版本。
-- GET /api/v1/test-runs：查询测试任务，按状态或 Prompt 筛选。
-- POST /api/v1/test-runs：创建测试任务记录，待后端或任务队列执行。
-- GET /api/v1/test-runs/{id}/results：获取指定任务的执行结果和指标。
+- GET /api/v1/test_prompt：查询测试任务，按状态或 Prompt 筛选。
+- POST /api/v1/test_prompt：创建测试任务记录，待后端或任务队列执行。
+- GET /api/v1/test_prompt/{id}/results：获取指定任务的执行结果和指标。
 
 ## 🧱 数据模型
 

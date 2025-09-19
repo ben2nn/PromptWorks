@@ -406,7 +406,9 @@ def test_invoke_llm_uses_fallback_base_url_for_known_provider(
     def fake_post(
         url: str, headers: dict[str, str], json: dict[str, Any], timeout: float
     ) -> DummyResponse:
-        captured.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        captured.update(
+            {"url": url, "headers": headers, "json": json, "timeout": timeout}
+        )
         return DummyResponse()
 
     monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.post", fake_post)
