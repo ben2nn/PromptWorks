@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db.session import get_db
-from app.models.prompt import Prompt
+from app.models.prompt import Prompt, PromptVersion
 from app.models.result import Result
 from app.models.test_run import TestRun, TestRunStatus
 from app.schemas.result import ResultRead
@@ -16,45 +16,50 @@ from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
 router = APIRouter()
 
 
+def _test_run_query():
+    return select(TestRun).options(
+        joinedload(TestRun.prompt_version)
+        .joinedload(PromptVersion.prompt)
+        .joinedload(Prompt.prompt_class),
+        selectinload(TestRun.results).selectinload(Result.metrics),
+    )
+
+
 @router.get("/", response_model=list[TestRunRead])
 def list_test_prompts(
     *,
     db: Session = Depends(get_db),
     status_filter: TestRunStatus | None = Query(default=None, alias="status"),
-    prompt_id: int | None = Query(default=None),
+    prompt_version_id: int | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Sequence[TestRun]:
-    """按筛选条件分页返回提示词测试列表，包含关联提示词和结果。"""
+    """按筛选条件列出 Prompt 测试任务。"""
 
     stmt = (
-        select(TestRun)
-        .options(
-            joinedload(TestRun.prompt),
-            selectinload(TestRun.results).selectinload(Result.metrics),
-        )
+        _test_run_query()
         .order_by(TestRun.created_at.desc())
         .offset(offset)
         .limit(limit)
     )
     if status_filter:
         stmt = stmt.where(TestRun.status == status_filter)
-    if prompt_id:
-        stmt = stmt.where(TestRun.prompt_id == prompt_id)
+    if prompt_version_id:
+        stmt = stmt.where(TestRun.prompt_version_id == prompt_version_id)
 
-    return list(db.scalars(stmt))
+    return list(db.execute(stmt).unique().scalars().all())
 
 
 @router.post("/", response_model=TestRunRead, status_code=status.HTTP_201_CREATED)
 def create_test_prompt(
     *, db: Session = Depends(get_db), payload: TestRunCreate
 ) -> TestRun:
-    """为指定提示词创建新的提示词测试，初始状态为待处理。"""
+    """为指定 Prompt 版本创建新的测试任务，初始状态为 pending。"""
 
-    prompt_exists = db.scalar(select(Prompt.id).where(Prompt.id == payload.prompt_id))
-    if not prompt_exists:
+    prompt_version = db.get(PromptVersion, payload.prompt_version_id)
+    if not prompt_version:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prompt 版本不存在"
         )
 
     test_run = TestRun(**payload.model_dump(), status=TestRunStatus.PENDING)
@@ -66,20 +71,13 @@ def create_test_prompt(
 
 @router.get("/{test_prompt_id}", response_model=TestRunRead)
 def get_test_prompt(*, db: Session = Depends(get_db), test_prompt_id: int) -> TestRun:
-    """根据 ID 获取单个提示词测试及其关联数据，不存在时返回 404。"""
+    """根据 ID 获取单个测试任务及其关联数据。"""
 
-    stmt = (
-        select(TestRun)
-        .options(
-            joinedload(TestRun.prompt),
-            selectinload(TestRun.results).selectinload(Result.metrics),
-        )
-        .where(TestRun.id == test_prompt_id)
-    )
-    test_run = db.scalar(stmt)
+    stmt = _test_run_query().where(TestRun.id == test_prompt_id)
+    test_run = db.execute(stmt).unique().scalar_one_or_none()
     if not test_run:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run 不存在"
         )
 
     return test_run
@@ -92,12 +90,12 @@ def update_test_prompt(
     test_prompt_id: int,
     payload: TestRunUpdate,
 ) -> TestRun:
-    """根据 ID 更新提示词测试字段并可修改状态。"""
+    """根据 ID 更新测试任务属性，可修改状态。"""
 
     test_run = db.get(TestRun, test_prompt_id)
     if not test_run:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Test run not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run 不存在"
         )
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -116,7 +114,7 @@ def update_test_prompt(
 def list_results_for_test_prompt(
     *, db: Session = Depends(get_db), test_prompt_id: int
 ) -> Sequence[Result]:
-    """列出指定提示词测试的所有结果数据，按执行顺序排序。"""
+    """列出指定测试任务的所有结果。"""
 
     stmt = (
         select(Result)

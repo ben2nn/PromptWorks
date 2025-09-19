@@ -1,25 +1,26 @@
 from fastapi.testclient import TestClient
 
 
-def _create_prompt(client: TestClient) -> int:
+def _create_prompt(client: TestClient) -> dict:
     response = client.post(
         "/api/v1/prompts/",
         json={
             "name": "对话助手",
             "version": "v1",
-            "content": "你是一位乐于助人的智能助手。",
+            "content": "你是一位擅长助人的智能助手。",
+            "class_name": "聊天类",
         },
     )
     assert response.status_code == 201
-    return response.json()["id"]
+    return response.json()
 
 
-def test_create_test_prompt_requires_prompt(client: TestClient):
-    """验证缺少有效提示时创建提示词测试会返回404"""
+def test_create_test_prompt_requires_prompt_version(client: TestClient):
+    """缺少有效 Prompt 版本时创建测试任务返回 404。"""
     response = client.post(
         "/api/v1/test_prompt/",
         json={
-            "prompt_id": 999,
+            "prompt_version_id": 999,
             "model_name": "gpt-4o",
             "temperature": 0.1,
             "top_p": 0.9,
@@ -30,13 +31,14 @@ def test_create_test_prompt_requires_prompt(client: TestClient):
 
 
 def test_create_and_retrieve_test_prompt(client: TestClient):
-    """验证提示词测试创建后可由列表和详情接口查询"""
-    prompt_id = _create_prompt(client)
+    """验证测试任务创建后可通过列表和详情接口读取。"""
+    prompt_payload = _create_prompt(client)
+    prompt_version_id = prompt_payload["current_version"]["id"]
 
     create_resp = client.post(
         "/api/v1/test_prompt/",
         json={
-            "prompt_id": prompt_id,
+            "prompt_version_id": prompt_version_id,
             "model_name": "gpt-4o",
             "model_version": "2024-05-01",
             "temperature": 0.2,
@@ -48,7 +50,9 @@ def test_create_and_retrieve_test_prompt(client: TestClient):
     assert create_resp.status_code == 201
     test_prompt = create_resp.json()
     assert test_prompt["status"] == "pending"
-    assert test_prompt["prompt_id"] == prompt_id
+    assert test_prompt["prompt_version_id"] == prompt_version_id
+    assert test_prompt["prompt_version"]["version"] == "v1"
+    assert test_prompt["prompt"]["name"] == prompt_payload["name"]
 
     list_resp = client.get("/api/v1/test_prompt/")
     assert list_resp.status_code == 200
@@ -59,7 +63,8 @@ def test_create_and_retrieve_test_prompt(client: TestClient):
     detail_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
-    assert detail["prompt"]["id"] == prompt_id
+    assert detail["prompt_version"]["id"] == prompt_version_id
+    assert detail["prompt"]["id"] == prompt_payload["id"]
     assert detail["results"] == []
 
     list_results_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}/results")

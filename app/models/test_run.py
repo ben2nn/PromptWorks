@@ -12,7 +12,7 @@ from app.db.types import JSONBCompat
 from app.models.base import Base
 
 if TYPE_CHECKING:
-    from app.models.prompt import Prompt
+    from app.models.prompt import Prompt, PromptVersion
     from app.models.result import Result
 
 
@@ -29,8 +29,8 @@ class TestRun(Base):
     __tablename__ = "test_runs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    prompt_id: Mapped[int] = mapped_column(
-        ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False
+    prompt_version_id: Mapped[int] = mapped_column(
+        ForeignKey("prompts_versions.id", ondelete="CASCADE"), nullable=False
     )
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -55,10 +55,19 @@ class TestRun(Base):
         nullable=False,
     )
 
-    prompt: Mapped["Prompt"] = relationship("Prompt", back_populates="test_runs")
+    prompt_version: Mapped["PromptVersion"] = relationship(
+        "PromptVersion", back_populates="test_runs"
+    )
     results: Mapped[list["Result"]] = relationship(
         "Result",
         back_populates="test_run",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    @property
+    def prompt(self) -> Prompt | None:
+        return self.prompt_version.prompt if self.prompt_version else None
+
+
+__all__ = ["TestRun", "TestRunStatus"]

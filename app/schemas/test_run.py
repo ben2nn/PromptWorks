@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.test_run import TestRunStatus
-from app.schemas.prompt import PromptRead
+from app.schemas.prompt import PromptRead, PromptVersionRead
 from app.schemas.result import ResultRead
 
 
@@ -24,7 +24,7 @@ class TestRunBase(BaseModel):
 
 class TestRunCreate(TestRunBase):
     __test__ = False
-    prompt_id: int
+    prompt_version_id: int = Field(..., ge=1)
 
 
 class TestRunUpdate(BaseModel):
@@ -46,10 +46,11 @@ class TestRunUpdate(BaseModel):
 class TestRunRead(TestRunBase):
     __test__ = False
     id: int
-    prompt_id: int
+    prompt_version_id: int
     status: TestRunStatus
     created_at: datetime
     updated_at: datetime
+    prompt_version: PromptVersionRead | None = None
     prompt: PromptRead | None = None
     results: list[ResultRead] = []
 
