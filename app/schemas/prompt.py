@@ -3,6 +3,19 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
+class PromptTagBase(BaseModel):
+    name: str = Field(..., max_length=100)
+    color: str = Field(..., pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class PromptTagRead(PromptTagBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PromptClassBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: str | None = None
@@ -46,6 +59,10 @@ class PromptCreate(PromptBase):
     class_description: str | None = None
     version: str = Field(..., max_length=50)
     content: str
+    tag_ids: list[int] | None = Field(
+        default=None,
+        description="为 Prompt 选择的标签 ID 列表，未提供时保持既有设置",
+    )
 
     @model_validator(mode="after")
     def validate_class_reference(self):
@@ -64,6 +81,10 @@ class PromptUpdate(BaseModel):
     version: str | None = Field(default=None, max_length=50)
     content: str | None = None
     activate_version_id: int | None = Field(default=None, ge=1)
+    tag_ids: list[int] | None = Field(
+        default=None,
+        description="如果提供则覆盖 Prompt 的标签，传空列表代表清空标签",
+    )
 
     @model_validator(mode="after")
     def validate_version_payload(self):
@@ -86,7 +107,8 @@ class PromptRead(PromptBase):
     id: int
     prompt_class: PromptClassRead
     current_version: PromptVersionRead | None = None
-    versions: list[PromptVersionRead] = []
+    versions: list[PromptVersionRead] = Field(default_factory=list)
+    tags: list[PromptTagRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

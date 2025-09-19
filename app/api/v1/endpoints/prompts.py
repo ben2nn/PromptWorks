@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db.session import get_db
-from app.models.prompt import Prompt, PromptClass, PromptVersion
+from app.models.prompt import Prompt, PromptClass, PromptTag, PromptVersion
 from app.schemas.prompt import PromptCreate, PromptRead, PromptUpdate
 
 router = APIRouter()
@@ -19,6 +19,7 @@ def _prompt_query():
         joinedload(Prompt.prompt_class),
         joinedload(Prompt.current_version),
         selectinload(Prompt.versions),
+        selectinload(Prompt.tags),
     )
 
 
@@ -63,6 +64,24 @@ def _resolve_prompt_class(
     return prompt_class
 
 
+def _resolve_prompt_tags(db: Session, tag_ids: list[int]) -> list[PromptTag]:
+    if not tag_ids:
+        return []
+
+    unique_ids = list(dict.fromkeys(tag_ids))
+    stmt = select(PromptTag).where(PromptTag.id.in_(unique_ids))
+    tags = db.execute(stmt).scalars().all()
+    found_ids = {tag.id for tag in tags}
+    missing = [tag_id for tag_id in unique_ids if tag_id not in found_ids]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"以下标签不存在: {missing}",
+        )
+    id_to_tag = {tag.id: tag for tag in tags}
+    return [id_to_tag[tag_id] for tag_id in unique_ids]
+
+
 @router.get("/", response_model=list[PromptRead])
 def list_prompts(
     *,
@@ -89,7 +108,7 @@ def list_prompts(
 
 @router.post("/", response_model=PromptRead, status_code=status.HTTP_201_CREATED)
 def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Prompt:
-    """创建 Prompt 并写入首个版本，没有分类时自动创建分类。"""
+    """创建 Prompt 并写入首个版本，缺少分类时自动创建分类。"""
 
     prompt_class = _resolve_prompt_class(
         db,
@@ -102,6 +121,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
         Prompt.class_id == prompt_class.id, Prompt.name == payload.name
     )
     prompt = db.scalar(stmt)
+    created_new_prompt = False
     if not prompt:
         prompt = Prompt(
             name=payload.name,
@@ -111,11 +131,17 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
         )
         db.add(prompt)
         db.flush()
+        created_new_prompt = True
     else:
         if payload.description is not None:
             prompt.description = payload.description
         if payload.author is not None:
             prompt.author = payload.author
+
+    if payload.tag_ids is not None:
+        prompt.tags = _resolve_prompt_tags(db, payload.tag_ids)
+    elif created_new_prompt:
+        prompt.tags = []
 
     existing_version = db.scalar(
         select(PromptVersion).where(
@@ -126,7 +152,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
     if existing_version:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该 Prompt 已存在相同版本",
+            detail="该 Prompt 已存在同名版本",
         )
 
     prompt_version = PromptVersion(
@@ -143,7 +169,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="创建 Prompt 时出现约束冲突"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="创建 Prompt 时发生数据冲突"
         ) from exc
 
     return _get_prompt_or_404(db, prompt.id)
@@ -151,7 +177,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
 
 @router.get("/{prompt_id}", response_model=PromptRead)
 def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Prompt:
-    """根据 ID 获取 Prompt 详情，包含所有版本信息。"""
+    """根据 ID 获取 Prompt 详情，包含全部版本信息。"""
 
     return _get_prompt_or_404(db, prompt_id)
 
@@ -160,7 +186,7 @@ def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Prompt:
 def update_prompt(
     *, db: Session = Depends(get_db), prompt_id: int, payload: PromptUpdate
 ) -> Prompt:
-    """更新 Prompt 元数据，可选择创建新版本或切换当前版本。"""
+    """更新 Prompt 及其元数据，可选择创建新版本或切换当前版本。"""
 
     prompt = _get_prompt_or_404(db, prompt_id)
 
@@ -181,6 +207,9 @@ def update_prompt(
         prompt.description = payload.description
     if payload.author is not None:
         prompt.author = payload.author
+
+    if payload.tag_ids is not None:
+        prompt.tags = _resolve_prompt_tags(db, payload.tag_ids)
 
     if payload.version is not None and payload.content is not None:
         exists = db.scalar(
@@ -231,7 +260,7 @@ def update_prompt(
     "/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
 def delete_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Response:
-    """删除 Prompt 及其所有版本。"""
+    """删除 Prompt 及其全部版本。"""
 
     prompt = db.get(Prompt, prompt_id)
     if not prompt:

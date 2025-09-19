@@ -4,10 +4,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Column,
     DateTime,
     ForeignKey,
     Integer,
     String,
+    Table,
     Text,
     UniqueConstraint,
     func,
@@ -18,6 +20,22 @@ if TYPE_CHECKING:
     from app.models.test_run import TestRun
 
 from app.models.base import Base
+
+
+prompt_tag_association = Table(
+    "prompt_tag_links",
+    Base.metadata,
+    Column(
+        "prompt_id",
+        ForeignKey("prompts.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "tag_id",
+        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class PromptClass(Base):
@@ -40,6 +58,29 @@ class PromptClass(Base):
         "Prompt",
         back_populates="prompt_class",
         cascade="all, delete-orphan",
+    )
+
+
+class PromptTag(Base):
+    __tablename__ = "prompt_tags"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    prompts: Mapped[list["Prompt"]] = relationship(
+        "Prompt",
+        secondary=prompt_tag_association,
+        back_populates="tags",
     )
 
 
@@ -97,6 +138,11 @@ class Prompt(Base):
         primaryjoin="Prompt.current_version_id == PromptVersion.id",
         post_update=True,
     )
+    tags: Mapped[list["PromptTag"]] = relationship(
+        "PromptTag",
+        secondary=prompt_tag_association,
+        back_populates="prompts",
+    )
 
 
 class PromptVersion(Base):
@@ -127,7 +173,7 @@ class PromptVersion(Base):
         nullable=False,
     )
 
-    prompt: Mapped[Prompt] = relationship(
+    prompt: Mapped["Prompt"] = relationship(
         "Prompt",
         back_populates="versions",
         foreign_keys="PromptVersion.prompt_id",
@@ -138,4 +184,4 @@ class PromptVersion(Base):
     )
 
 
-__all__ = ["PromptClass", "Prompt", "PromptVersion"]
+__all__ = ["PromptClass", "Prompt", "PromptTag", "PromptVersion"]
