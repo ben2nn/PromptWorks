@@ -34,7 +34,7 @@ def test_create_custom_provider_requires_url(client):
     }
     response = client.post("/api/v1/llms/", json=payload)
     assert response.status_code == 400
-    assert "Base URL is required" in response.text
+    assert "自定义提供者必须提供基础 URL" in response.text
 
 
 def test_create_custom_with_emoji_logo(client):
@@ -63,7 +63,7 @@ def test_create_non_custom_unknown_provider_requires_base_url(client):
     }
     response = client.post("/api/v1/llms/", json=payload)
     assert response.status_code == 400
-    assert "Base URL is required for this provider" in response.text
+    assert "该提供者需要配置基础 URL" in response.text
 
 
 # 场景：验证列表接口的分页参数与模糊过滤
@@ -118,7 +118,7 @@ def test_get_llm_returns_single_provider(client):
 def test_get_llm_not_found(client):
     response = client.get("/api/v1/llms/9999")
     assert response.status_code == 404
-    assert "Provider not found" in response.text
+    assert "未找到指定的提供者" in response.text
 
 
 def test_update_disallows_logo_emoji_for_known_provider(client):
@@ -133,7 +133,7 @@ def test_update_disallows_logo_emoji_for_known_provider(client):
 
     response = client.put(f"/api/v1/llms/{provider['id']}", json={"logo_emoji": "🤖"})
     assert response.status_code == 400
-    assert "Logo emoji" in response.text
+    assert "仅允许自定义提供者设置 logo 表情符号" in response.text
 
 
 # 场景：重复创建相同配置的提供者时触发唯一性校验
@@ -147,7 +147,7 @@ def test_create_duplicate_provider_conflict(client):
 
     response = client.post("/api/v1/llms/", json=payload)
     assert response.status_code == 400
-    assert "already exists" in response.text
+    assert "已存在具有相同名称、模型和基础 URL 的提供者" in response.text
 
 
 # 场景：更新时允许清空参数并规范化 base_url
@@ -210,7 +210,7 @@ def test_update_llm_detects_duplicate_combination(client):
         },
     )
     assert response.status_code == 400
-    assert "already exists" in response.text
+    assert "已存在具有相同名称、模型和基础 URL 的提供者" in response.text
 
 
 # 场景：删除后再次查询应返回 404
@@ -311,7 +311,7 @@ def test_invoke_llm_requires_configured_base_url(client, db_session):
     }
     response = client.post(f"/api/v1/llms/{provider.id}/invoke", json=body)
     assert response.status_code == 400
-    assert "Base URL is not configured" in response.text
+    assert "该提供者未配置基础 URL" in response.text
 
 
 # 场景：HTTPX 抛出超时异常时返回 502

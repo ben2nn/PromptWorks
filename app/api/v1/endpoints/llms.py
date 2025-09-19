@@ -31,22 +31,16 @@ DEFAULT_INVOKE_TIMEOUT = 30.0
 
 
 class ChatMessage(BaseModel):
-    role: str = Field(
-        ..., description="Chat message role such as system, user, assistant"
-    )
-    content: Any = Field(
-        ..., description="Message content that follows the OpenAI chat schema"
-    )
+    role: str = Field(..., description="聊天消息的角色，例如 system、user、assistant")
+    content: Any = Field(..., description="遵循 OpenAI 聊天格式的消息内容")
 
 
 class LLMInvocationRequest(BaseModel):
     messages: list[ChatMessage]
     parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Additional OpenAI compatible parameters"
+        default_factory=dict, description="额外的 OpenAI 兼容参数"
     )
-    model: str | None = Field(
-        default=None, description="Optional model override for this invocation"
-    )
+    model: str | None = Field(default=None, description="可选的模型覆盖参数")
 
 
 def _normalize_provider_name(provider_name: str) -> str:
@@ -72,7 +66,7 @@ def _resolve_provider_defaults(
         if not base_url:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Base URL is required for custom providers.",
+                detail="自定义提供者必须提供基础 URL。",
             )
         return True, _normalize_base_url(base_url)
 
@@ -80,7 +74,7 @@ def _resolve_provider_defaults(
         if not known_default:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Base URL is required for this provider.",
+                detail="该提供者需要配置基础 URL。",
             )
         base_url = known_default
 
@@ -91,7 +85,7 @@ def _ensure_logo_constraints(*, is_custom: bool, logo_emoji: str | None) -> None
     if logo_emoji and not is_custom:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Logo emoji is only allowed for custom providers.",
+            detail="仅允许自定义提供者设置 logo 表情符号。",
         )
 
 
@@ -99,7 +93,7 @@ def _get_provider_or_404(db: Session, provider_id: int) -> LLMProvider:
     provider = db.get(LLMProvider, provider_id)
     if not provider:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="未找到指定的提供者"
         )
     return provider
 
@@ -112,7 +106,7 @@ def list_llms(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Sequence[LLMProvider]:
-    """Return a paginated list of LLM providers."""
+    """返回分页的 LLM 提供者列表。"""
 
     # 记录列表查询参数，便于追踪调用来源
     logger.info(
@@ -140,9 +134,9 @@ def create_llm(
     db: Session = Depends(get_db),
     payload: LLMProviderCreate,
 ) -> LLMProvider:
-    """Create a new LLM provider entry."""
+    """创建一个新的 LLM 提供者记录。"""
 
-    # Use JSON mode to ensure URL fields are serialized to strings before reaching SQLAlchemy
+    # 使用 JSON 模式确保 URL 字段在进入 SQLAlchemy 前被序列化为字符串
     data = payload.model_dump(mode="json")
     data["parameters"] = data.get("parameters") or {}
     provider_name = data["provider_name"]
@@ -165,7 +159,7 @@ def create_llm(
     if db.scalar(stmt):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provider with the same name, model, and base URL already exists.",
+            detail="已存在具有相同名称、模型和基础 URL 的提供者。",
         )
 
     provider = LLMProvider(**data)
@@ -184,7 +178,7 @@ def create_llm(
 
 @router.get("/{provider_id}", response_model=LLMProviderRead)
 def get_llm(*, db: Session = Depends(get_db), provider_id: int) -> LLMProvider:
-    """Return a single LLM provider."""
+    """返回单个 LLM 提供者信息。"""
 
     return _get_provider_or_404(db, provider_id)
 
@@ -196,7 +190,7 @@ def update_llm(
     provider_id: int,
     payload: LLMProviderUpdate,
 ) -> LLMProvider:
-    """Update an existing LLM provider."""
+    """更新现有的 LLM 提供者。"""
 
     provider = _get_provider_or_404(db, provider_id)
     update_data = payload.model_dump(exclude_unset=True, mode="json")
@@ -239,7 +233,7 @@ def update_llm(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Provider with the same name, model, and base URL already exists.",
+            detail="已存在具有相同名称、模型和基础 URL 的提供者。",
         )
 
     db.commit()
@@ -258,7 +252,7 @@ def update_llm(
     "/{provider_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
 def delete_llm(*, db: Session = Depends(get_db), provider_id: int) -> Response:
-    """Delete an LLM provider."""
+    """删除指定的 LLM 提供者。"""
 
     provider = _get_provider_or_404(db, provider_id)
     db.delete(provider)
@@ -277,7 +271,7 @@ def invoke_llm(
     provider_id: int,
     payload: LLMInvocationRequest,
 ) -> dict[str, Any]:
-    """Invoke the target LLM using an OpenAI compatible chat completion call."""
+    """使用兼容 OpenAI Chat Completion 的方式调用目标 LLM。"""
 
     provider = _get_provider_or_404(db, provider_id)
     base_url = provider.base_url
@@ -287,7 +281,7 @@ def invoke_llm(
         if not default_url:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Base URL is not configured for this provider.",
+                detail="该提供者未配置基础 URL。",
             )
         base_url = default_url
 
