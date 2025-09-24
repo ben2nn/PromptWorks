@@ -1,0 +1,58 @@
+:root {
+  font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #1f2329;
+  background-color: #f5f6f8;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --app-bg-color: #f5f6f8;
+  --header-bg-color: #ffffff;
+  --header-text-color: #1f2329;
+  --side-bg-color: #ffffff;
+  --side-border-color: #eaecf3;
+  --content-bg-color: #f8f9fb;
+  --text-weak-color: #606266;
+}
+
+.dark {
+  color: #f0f4f8;
+  background-color: #1a1c1f;
+
+  --app-bg-color: #1a1c1f;
+  --header-bg-color: #1f262f;
+  --header-text-color: #f0f4f8;
+  --side-bg-color: #1f262f;
+  --side-border-color: #2c323b;
+  --content-bg-color: #181c22;
+  --text-weak-color: #c0c4cc;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--app-bg-color);
+  color: var(--header-text-color);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.el-main {
+  color: inherit;
+}
