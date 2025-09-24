@@ -3,102 +3,84 @@
     <section class="page-header">
       <div class="page-header__text">
         <h2>Prompt 管理</h2>
-        <p class="page-desc">集中管理不同业务场景的提示词，快速查看版本与负责人。</p>
+        <p class="page-desc">集中管理提示词资产，快速了解所属分类、作者与当前启用版本。</p>
       </div>
       <el-button type="primary" :icon="Plus" disabled>新建 Prompt</el-button>
     </section>
 
-    <el-row :gutter="16" class="card-grid">
-      <el-col
+    <div class="card-grid">
+      <div
         v-for="prompt in prompts"
         :key="prompt.id"
-        :xs="24"
-        :sm="12"
-        :md="8"
-        class="card-grid__col"
+        class="card-grid__item"
       >
         <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
           <div class="prompt-card__header">
             <div>
+              <p class="prompt-class">{{ prompt.prompt_class.name }}</p>
               <h3 class="prompt-title">{{ prompt.name }}</h3>
-              <p class="prompt-scenario">应用场景：{{ prompt.scenario }}</p>
             </div>
             <el-tag type="success" round size="small">
-              当前版本 {{ prompt.latestVersion }}
+              当前版本 {{ prompt.current_version?.version ?? '未启用' }}
             </el-tag>
           </div>
-          <p class="prompt-desc">{{ prompt.description }}</p>
+          <p class="prompt-desc">{{ prompt.description ?? '暂无描述' }}</p>
           <div class="prompt-meta">
             <div class="meta-item">
-              <span class="meta-label">负责人</span>
-              <span>{{ prompt.owner }}</span>
+              <span class="meta-label">作者</span>
+              <span>{{ prompt.author ?? '未设置' }}</span>
             </div>
             <div class="meta-item">
-              <span class="meta-label">更新</span>
-              <span>{{ prompt.updatedAt }}</span>
+              <span class="meta-label">更新时间</span>
+              <span>{{ formatDate(prompt.updated_at) }}</span>
             </div>
           </div>
           <div class="prompt-tags">
             <el-tag
-              v-for="(tag, index) in prompt.tags"
-              :key="tag"
-              :type="tagTypes[index % tagTypes.length]"
+              v-for="tag in prompt.tags"
+              :key="tag.id"
               size="small"
-              round
+              effect="dark"
+              :style="{ backgroundColor: tag.color, borderColor: tag.color }"
             >
-              {{ tag }}
+              {{ tag.name }}
             </el-tag>
           </div>
         </el-card>
-      </el-col>
-    </el-row>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Plus } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import type { PromptSummary } from '../types/prompt'
+import { mockPrompts } from '../mocks/prompts'
 
 const router = useRouter()
+const prompts = mockPrompts
 
-const prompts: PromptSummary[] = [
-  {
-    id: 'chat-sales',
-    name: '销售跟进话术',
-    description: '用于客服跟进潜在客户的对话模板，强调需求澄清与价值陈述。',
-    tags: ['销售', '中文', '对话流程'],
-    owner: '宋佳',
-    scenario: '线索跟进与客户维护',
-    updatedAt: '2025-09-18 10:20',
-    latestVersion: 'v1.4.2'
-  },
-  {
-    id: 'email-review',
-    name: '邮件润色助手',
-    description: '自动优化英文商务邮件措辞，确保语气礼貌、结构清晰。',
-    tags: ['英文', '邮件', '润色'],
-    owner: 'Alex Li',
-    scenario: '市场团队邮件发送',
-    updatedAt: '2025-09-12 08:45',
-    latestVersion: 'v0.9.0'
-  },
-  {
-    id: 'code-review',
-    name: '代码审查要点',
-    description: '引导 AI 关注性能、安全和规范的代码审查提示语。',
-    tags: ['代码质量', '审查'],
-    owner: '陈曦',
-    scenario: '研发流程代码检查',
-    updatedAt: '2025-09-21 14:05',
-    latestVersion: 'v2.1.0'
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+})
+
+function formatDate(value: string | null | undefined) {
+  if (!value) {
+    return '--'
   }
-]
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return dateFormatter.format(date)
+}
 
-const tagTypes = ['primary', 'warning', 'info', 'success'] as const
-
-function goDetail(id: string) {
-  router.push({ name: 'prompt-detail', params: { id } })
+function goDetail(id: number) {
+  router.push({ name: 'prompt-detail', params: { id: String(id) } })
 }
 </script>
 
@@ -128,8 +110,15 @@ function goDetail(id: string) {
   font-size: 14px;
 }
 
-.card-grid__col {
-  margin-bottom: 16px;
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.card-grid__item {
+  height: 100%;
 }
 
 .prompt-card {
@@ -137,6 +126,9 @@ function goDetail(id: string) {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   border-radius: 12px;
   border: 1px solid transparent;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .prompt-card:hover {
@@ -151,16 +143,16 @@ function goDetail(id: string) {
   gap: 12px;
 }
 
+.prompt-class {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-weak-color);
+}
+
 .prompt-title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-}
-
-.prompt-scenario {
-  margin: 4px 0 0;
-  color: var(--text-weak-color);
-  font-size: 13px;
 }
 
 .prompt-desc {
@@ -168,6 +160,7 @@ function goDetail(id: string) {
   color: var(--header-text-color);
   font-size: 14px;
   line-height: 1.6;
+  flex: 1;
 }
 
 .prompt-meta {
@@ -175,6 +168,7 @@ function goDetail(id: string) {
   gap: 24px;
   font-size: 13px;
   color: var(--text-weak-color);
+  margin-bottom: 12px;
 }
 
 .meta-item {
@@ -188,7 +182,7 @@ function goDetail(id: string) {
 }
 
 .prompt-tags {
-  margin-top: 16px;
+  margin-top: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

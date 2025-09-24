@@ -1,22 +1,37 @@
-export interface PromptSummary {
-  id: string
+﻿export interface PromptTag {
+  id: number
   name: string
-  description: string
-  tags: string[]
-  owner: string
-  scenario: string
-  updatedAt: string
-  latestVersion: string
+  color: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PromptClass {
+  id: number
+  name: string
+  description: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface PromptVersion {
+  id: number
+  prompt_id: number
   version: string
-  createdAt: string
-  author: string
   content: string
-  changeLog: string
+  created_at: string
+  updated_at: string
 }
 
-export interface PromptDetail extends PromptSummary {
+export interface Prompt {
+  id: number
+  name: string
+  description: string | null
+  author: string | null
+  prompt_class: PromptClass
+  current_version: PromptVersion | null
   versions: PromptVersion[]
+  tags: PromptTag[]
+  created_at: string
+  updated_at: string
 }

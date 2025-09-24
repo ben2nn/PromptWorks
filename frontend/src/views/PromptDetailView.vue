@@ -8,11 +8,15 @@
     </el-breadcrumb>
 
     <section class="detail-header">
-      <div>
+      <div class="detail-header__text">
+        <p class="detail-class">所属分类 · {{ detail.prompt_class.name }}</p>
         <h2 class="detail-title">{{ detail.name }}</h2>
-        <p class="detail-subtitle">{{ detail.scenario }}</p>
+        <p class="detail-subtitle">{{ detail.description ?? '暂无描述' }}</p>
       </div>
-      <el-tag type="success" effect="light">当前版本 {{ detail.latestVersion }}</el-tag>
+      <div class="detail-header__meta">
+        <el-tag type="success" effect="light">当前版本 {{ detail.current_version?.version ?? '未启用' }}</el-tag>
+        <span class="detail-updated">更新于 {{ formatDateTime(detail.updated_at) }}</span>
+      </div>
     </section>
 
     <el-row :gutter="20" class="detail-body">
@@ -21,7 +25,7 @@
           <template #header>
             <div class="card-header">
               <h3>版本对比</h3>
-              <span class="card-subtitle">选择任意两个版本生成差异视图</span>
+              <span class="card-subtitle">选择任意两个版本对比内容差异</span>
             </div>
           </template>
           <el-form :inline="true" label-width="80px" class="diff-form">
@@ -65,22 +69,22 @@
           <template #header>
             <div class="card-header">
               <h3>版本历史</h3>
-              <span class="card-subtitle">查看每一次迭代的变更说明</span>
+              <span class="card-subtitle">按时间查看每次迭代内容</span>
             </div>
           </template>
           <el-timeline>
             <el-timeline-item
               v-for="version in detail.versions"
-              :key="version.version"
-              :timestamp="version.createdAt"
+              :key="version.id"
+              :timestamp="formatDateTime(version.created_at)"
               placement="top"
             >
               <div class="timeline-item">
                 <div class="timeline-header">
                   <strong>{{ version.version }}</strong>
-                  <span class="timeline-author">{{ version.author }}</span>
+                  <span class="timeline-updated">{{ formatDateTime(version.updated_at) }}</span>
                 </div>
-                <p class="timeline-change">{{ version.changeLog }}</p>
+                <p class="timeline-content">{{ summarizeContent(version.content) }}</p>
               </div>
             </el-timeline-item>
           </el-timeline>
@@ -92,28 +96,29 @@
           <template #header>
             <div class="card-header">
               <h3>Prompt 信息</h3>
-              <span class="card-subtitle">基础元数据与标签</span>
+              <span class="card-subtitle">基础字段与关联标签</span>
             </div>
           </template>
           <el-descriptions :column="1" border size="small">
-            <el-descriptions-item label="负责人">{{ detail.owner }}</el-descriptions-item>
-            <el-descriptions-item label="场景">{{ detail.scenario }}</el-descriptions-item>
-            <el-descriptions-item label="最近更新">{{ detail.updatedAt }}</el-descriptions-item>
+            <el-descriptions-item label="作者">{{ detail.author ?? '未设置' }}</el-descriptions-item>
+            <el-descriptions-item label="分类描述">{{ detail.prompt_class.description ?? '暂无说明' }}</el-descriptions-item>
+            <el-descriptions-item label="创建时间">{{ formatDateTime(detail.created_at) }}</el-descriptions-item>
+            <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updated_at) }}</el-descriptions-item>
           </el-descriptions>
           <div class="detail-tags">
             <el-tag
               v-for="tag in detail.tags"
-              :key="tag"
-              type="info"
-              round
+              :key="tag.id"
               size="small"
+              effect="dark"
+              :style="{ backgroundColor: tag.color, borderColor: tag.color }"
             >
-              {{ tag }}
+              {{ tag.name }}
             </el-tag>
           </div>
           <div class="detail-description">
-            <h4>描述</h4>
-            <p>{{ detail.description }}</p>
+            <h4>当前版本内容</h4>
+            <pre class="detail-content">{{ detail.current_version?.content ?? '暂无内容' }}</pre>
           </div>
         </el-card>
 
@@ -121,7 +126,7 @@
           <template #header>
             <div class="card-header">
               <h3>测试工作台</h3>
-              <span class="card-subtitle">后续迭代将完善测试能力</span>
+              <span class="card-subtitle">后续将接入在线调试与回归测试</span>
             </div>
           </template>
           <el-empty description="测试功能占位，敬请期待" />
@@ -134,8 +139,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { PromptDetail } from '../types/prompt'
 import { diffLines, type Change } from 'diff'
+import { mockPrompts, getPromptById } from '../mocks/prompts'
 
 interface DiffSegment {
   type: 'added' | 'removed' | 'unchanged'
@@ -145,117 +150,15 @@ interface DiffSegment {
 const router = useRouter()
 const route = useRoute()
 
-const promptLibrary: Record<string, PromptDetail> = {
-  'chat-sales': {
-    id: 'chat-sales',
-    name: '销售跟进话术',
-    description: '指导客服与潜客对话的提示词，强调需求挖掘、价值陈述和下一步跟进。',
-    tags: ['销售', '对话流程', '转化率'],
-    owner: '宋佳',
-    scenario: '线索跟进与客户维护',
-    updatedAt: '2025-09-18 10:20',
-    latestVersion: 'v1.4.2',
-    versions: [
-      {
-        version: 'v1.4.2',
-        createdAt: '2025-09-18 10:20',
-        author: '宋佳',
-        content: `你是资深销售顾问。
-1. 先明确客户当前困扰。
-2. 提炼产品价值主张。
-3. 给出下一步可执行建议。
-使用亲和、有温度的语气。`,
-        changeLog: '优化价值主张描述，补充下一步建议。'
-      },
-      {
-        version: 'v1.3.0',
-        createdAt: '2025-09-10 09:05',
-        author: 'Alex Li',
-        content: `你是一名资深销售。
-1. 询问客户目前的问题。
-2. 简要阐述产品优势。
-使用亲和语气，保持对话简洁。`,
-        changeLog: '增强问题定位指引，语气更聚焦销售场景。'
-      },
-      {
-        version: 'v1.0.0',
-        createdAt: '2025-08-01 14:22',
-        author: '陈曦',
-        content: `你需要协助销售跟进潜在客户，整理合适的回复。`,
-        changeLog: '首次创建。'
-      }
-    ]
-  },
-  'email-review': {
-    id: 'email-review',
-    name: '邮件润色助手',
-    description: '帮助用户优化英文商务邮件，使其礼貌得体、结构清晰。',
-    tags: ['英文', '邮件', '润色'],
-    owner: 'Alex Li',
-    scenario: '市场团队邮件发送',
-    updatedAt: '2025-09-12 08:45',
-    latestVersion: 'v0.9.0',
-    versions: [
-      {
-        version: 'v0.9.0',
-        createdAt: '2025-09-12 08:45',
-        author: 'Alex Li',
-        content: `You are a senior copy editor.
-- Polish greetings and closings.
-- Keep sentences concise and respectful.
-- Offer two improved alternatives when possible.`,
-        changeLog: '新增建议输出两套候选内容。'
-      },
-      {
-        version: 'v0.5.0',
-        createdAt: '2025-08-30 15:12',
-        author: 'Will Chen',
-        content: `You are a copy editor helping with business emails.
-- Make tone polite.
-- Check grammar.`,
-        changeLog: '调整语气要求，强调语法检查。'
-      }
-    ]
-  },
-  'code-review': {
-    id: 'code-review',
-    name: '代码审查要点',
-    description: '聚焦性能、安全和代码规范的审查提示语，帮助研发快速定位风险。',
-    tags: ['代码质量', '审查'],
-    owner: '陈曦',
-    scenario: '研发流程代码检查',
-    updatedAt: '2025-09-21 14:05',
-    latestVersion: 'v2.1.0',
-    versions: [
-      {
-        version: 'v2.1.0',
-        createdAt: '2025-09-21 14:05',
-        author: '陈曦',
-        content: `你是资深代码审查专家。
-请重点关注：
-1. 性能热点与复杂度。
-2. 安全漏洞与数据校验。
-3. 代码风格与可维护性。
-给出高优先级问题列表并附理由。`,
-        changeLog: '新增高优先级问题输出要求。'
-      },
-      {
-        version: 'v2.0.0',
-        createdAt: '2025-09-15 10:30',
-        author: '陈曦',
-        content: `你是资深代码审查专家。
-关注性能、安全、规范三大维度，输出改进建议。`,
-        changeLog: '覆盖核心关注点，但缺少输出格式要求。'
-      }
-    ]
-  }
-}
+const fallbackId = mockPrompts[0]?.id ?? 1
+const currentId = computed(() => {
+  const value = Number(route.params.id)
+  return Number.isNaN(value) ? fallbackId : value
+})
 
-const currentId = computed(() => (route.params.id as string) || 'chat-sales')
+const detail = computed(() => getPromptById(currentId.value) ?? mockPrompts[0])
 
-const detail = computed(() => promptLibrary[currentId.value] ?? promptLibrary['chat-sales'])
-
-const versionOptions = computed(() => detail.value.versions.map((item) => item.version))
+const versionOptions = computed(() => detail.value?.versions.map((item) => item.version) ?? [])
 
 const baseVersion = ref('')
 const compareVersion = ref('')
@@ -263,6 +166,11 @@ const compareVersion = ref('')
 watch(
   detail,
   (value) => {
+    if (!value || !value.versions.length) {
+      baseVersion.value = ''
+      compareVersion.value = ''
+      return
+    }
     baseVersion.value = value.versions[0]?.version ?? ''
     compareVersion.value = value.versions[1]?.version ?? value.versions[0]?.version ?? ''
   },
@@ -282,8 +190,12 @@ const diffClassMap: Record<DiffSegment['type'], string> = {
 }
 
 const diffSegments = computed<DiffSegment[]>(() => {
-  const base = detail.value.versions.find((item) => item.version === baseVersion.value)
-  const target = detail.value.versions.find((item) => item.version === compareVersion.value)
+  const prompt = detail.value
+  if (!prompt) {
+    return []
+  }
+  const base = prompt.versions.find((item) => item.version === baseVersion.value)
+  const target = prompt.versions.find((item) => item.version === compareVersion.value)
 
   if (!base || !target || base.version === target.version) {
     return []
@@ -293,16 +205,40 @@ const diffSegments = computed<DiffSegment[]>(() => {
 
   return changes.flatMap((change) => {
     const type: DiffSegment['type'] = change.added ? 'added' : change.removed ? 'removed' : 'unchanged'
-    const lines = change.value.split('\n')
-    if (lines[lines.length - 1] === '') {
-      lines.pop()
-    }
-    return lines.map((line) => ({
+    const parts = change.value.replace(/\n$/, '').split('\n')
+    return parts.map((line) => ({
       type,
-      text: line.length ? line : ' '
+      text: line || ' '
     }))
   })
 })
+
+const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+})
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return '--'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return dateTimeFormatter.format(date)
+}
+
+function summarizeContent(content: string) {
+  const normalized = content.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
+    return '暂无内容摘要'
+  }
+  return normalized.length > 80 ? `${normalized.slice(0, 80)}…` : normalized
+}
 
 function handleVersionChange() {
   if (baseVersion.value === compareVersion.value) {
@@ -336,9 +272,21 @@ function goHome() {
 
 .detail-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.detail-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-class {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-weak-color);
 }
 
 .detail-title {
@@ -348,8 +296,22 @@ function goHome() {
 }
 
 .detail-subtitle {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--text-weak-color);
+  line-height: 1.6;
+}
+
+.detail-header__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-weak-color);
+}
+
+.detail-updated {
+  margin: 0;
 }
 
 .detail-body {
@@ -442,14 +404,16 @@ function goHome() {
   font-size: 14px;
 }
 
-.timeline-author {
+.timeline-updated {
   color: var(--text-weak-color);
+  font-size: 12px;
 }
 
-.timeline-change {
+.timeline-content {
   margin: 0;
   color: var(--header-text-color);
   font-size: 13px;
+  line-height: 1.6;
 }
 
 .detail-tags {
@@ -464,9 +428,14 @@ function goHome() {
   font-size: 16px;
 }
 
-.detail-description p {
+.detail-content {
   margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--content-bg-color);
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', 'Fira Mono', Consolas, monospace;
+  font-size: 13px;
   line-height: 1.6;
-  color: var(--header-text-color);
 }
 </style>
