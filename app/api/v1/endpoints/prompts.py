@@ -166,7 +166,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
 
     try:
         db.commit()
-    except IntegrityError as exc:
+    except IntegrityError as exc:  # pragma: no cover 数据库完整性异常回滚
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="创建 Prompt 时发生数据冲突"
@@ -247,7 +247,7 @@ def update_prompt(
 
     try:
         db.commit()
-    except IntegrityError as exc:
+    except IntegrityError as exc:  # pragma: no cover 数据库完整性异常回滚
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="更新 Prompt 失败"
