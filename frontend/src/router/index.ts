@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+锘縤mport { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -7,19 +7,31 @@ const router = createRouter({
       path: '/',
       name: 'prompt-management',
       component: () => import('../views/PromptManagementView.vue'),
-      meta: { menu: 'prompt', title: 'Prompt 管理' }
+      meta: { menu: 'prompt', title: 'Prompt 绠＄悊' }
     },
     {
       path: '/prompts/:id',
       name: 'prompt-detail',
       component: () => import('../views/PromptDetailView.vue'),
-      meta: { menu: 'prompt', title: 'Prompt 详情' }
+      meta: { menu: 'prompt', title: 'Prompt 璇︽儏' }
+    },
+    {
+      path: '/classes',
+      name: 'class-management',
+      component: () => import('../views/PromptClassManagementView.vue'),
+      meta: { menu: 'class', title: '鍒嗙被绠＄悊' }
+    },
+    {
+      path: '/tags',
+      name: 'tag-management',
+      component: () => import('../views/PromptTagManagementView.vue'),
+      meta: { menu: 'tag', title: '鏍囩绠＄悊' }
     },
     {
       path: '/llms',
       name: 'llm-management',
       component: () => import('../views/LLMManagementView.vue'),
-      meta: { menu: 'llm', title: 'LLMs 管理' }
+      meta: { menu: 'llm', title: 'LLMs 绠＄悊' }
     },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]

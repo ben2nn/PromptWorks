@@ -50,7 +50,7 @@
 import { computed, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Setting, Collection, Cpu, Sunny, Moon } from '@element-plus/icons-vue'
+import { Setting, Collection, Files, Tickets, Cpu, Sunny, Moon } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import enUs from 'element-plus/es/locale/lang/en'
 
@@ -70,6 +70,8 @@ const isDark = ref(false)
 
 const menuItems: MenuItem[] = [
   { index: 'prompt', label: 'Prompt 管理', routeName: 'prompt-management', icon: Collection },
+  { index: 'class', label: '分类管理', routeName: 'class-management', icon: Files },
+  { index: 'tag', label: '标签管理', routeName: 'tag-management', icon: Tickets },
   { index: 'llm', label: 'LLMs 管理', routeName: 'llm-management', icon: Cpu }
 ]
 
