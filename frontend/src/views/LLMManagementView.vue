@@ -511,9 +511,10 @@ function inferBaseUrl(providerName: string): string {
 .provider-card__form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* gap: 12px; */
   width: 100%;
   max-width: 360px;
+  margin-top: 15px;
 }
 
 .provider-card__form .el-form-item {
