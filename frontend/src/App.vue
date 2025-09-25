@@ -25,11 +25,7 @@
         <el-container>
           <el-aside width="220px" class="side-nav">
             <el-menu class="side-menu" :default-active="activeMenu" @select="handleMenuSelect">
-              <el-menu-item
-                v-for="item in menuItems"
-                :key="item.index"
-                :index="item.index"
-              >
+              <el-menu-item v-for="item in menuItems" :key="item.index" :index="item.index">
                 <el-icon>
                   <component :is="item.icon" />
                 </el-icon>
@@ -50,7 +46,18 @@
 import { computed, ref, watch } from 'vue'
 import type { Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Setting, Collection, Files, Tickets, Cpu, Sunny, Moon } from '@element-plus/icons-vue'
+import {
+  Setting,
+  Collection,
+  MagicStick,
+  Memo,
+  Files,
+  Tickets,
+  Cpu,
+  Histogram,
+  Sunny,
+  Moon
+} from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import enUs from 'element-plus/es/locale/lang/en'
 
@@ -70,9 +77,12 @@ const isDark = ref(false)
 
 const menuItems: MenuItem[] = [
   { index: 'prompt', label: 'Prompt 管理', routeName: 'prompt-management', icon: Collection },
+  { index: 'quick-test', label: '快速测试', routeName: 'quick-test', icon: MagicStick },
+  { index: 'test-job', label: '测试任务', routeName: 'test-job-management', icon: Memo },
   { index: 'class', label: '分类管理', routeName: 'class-management', icon: Files },
   { index: 'tag', label: '标签管理', routeName: 'tag-management', icon: Tickets },
-  { index: 'llm', label: 'LLMs 管理', routeName: 'llm-management', icon: Cpu }
+  { index: 'llm', label: 'LLMs 管理', routeName: 'llm-management', icon: Cpu },
+  { index: 'usage', label: '用量管理', routeName: 'usage-management', icon: Histogram }
 ]
 
 const activeMenu = computed(() => (route.meta.menu as string | undefined) ?? 'prompt')

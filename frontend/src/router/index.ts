@@ -16,6 +16,18 @@ const router = createRouter({
       meta: { menu: 'prompt', title: 'Prompt 详情' }
     },
     {
+      path: '/tests/quick',
+      name: 'quick-test',
+      component: () => import('../views/QuickTestView.vue'),
+      meta: { menu: 'quick-test', title: '快速测试' }
+    },
+    {
+      path: '/tests/jobs',
+      name: 'test-job-management',
+      component: () => import('../views/TestJobManagementView.vue'),
+      meta: { menu: 'test-job', title: '测试任务' }
+    },
+    {
       path: '/classes',
       name: 'class-management',
       component: () => import('../views/PromptClassManagementView.vue'),
@@ -32,6 +44,12 @@ const router = createRouter({
       name: 'llm-management',
       component: () => import('../views/LLMManagementView.vue'),
       meta: { menu: 'llm', title: 'LLMs 管理' }
+    },
+    {
+      path: '/usage',
+      name: 'usage-management',
+      component: () => import('../views/UsageManagementView.vue'),
+      meta: { menu: 'usage', title: '用量管理' }
     },
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]

@@ -32,6 +32,11 @@
             {{ formatDateTime(row.updated_at) }}
           </template>
         </el-table-column>
+        <el-table-column label="操作" width="120" align="center">
+          <template #default="{ row }">
+            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
@@ -60,7 +65,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { mockPrompts } from '../mocks/prompts'
 import type { Prompt } from '../types/prompt'
 
@@ -149,6 +154,20 @@ function handleCreate() {
   ElMessage.info('后端接口建设中，提交数据暂未保存')
   dialogVisible.value = false
 }
+
+function handleDelete(row: ClassRow) {
+  ElMessageBox.confirm(`确认删除分类“${row.name}”及其关联关系？`, '删除确认', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消'
+  })
+    .then(() => {
+      ElMessage.info('后端接口建设中，暂未执行删除操作')
+    })
+    .catch(() => {
+      /* 用户取消 */
+    })
+}
 </script>
 
 <style scoped>
@@ -194,4 +213,3 @@ function handleCreate() {
   gap: 12px;
 }
 </style>
-

@@ -100,6 +100,13 @@
     </div>
 
     <el-dialog v-model="createDialogVisible" title="新建 Prompt" width="720px">
+      <el-alert
+        v-if="!classOptions.length"
+        title="当前还没有可用分类，请先在“分类管理”中新增分类。"
+        type="warning"
+        show-icon
+        class="dialog-alert"
+      />
       <el-form :model="promptForm" label-width="100px" class="dialog-form">
         <el-form-item label="标题">
           <el-input v-model="promptForm.name" placeholder="请输入 Prompt 标题" />
@@ -115,13 +122,7 @@
             placeholder="简要说明该 Prompt 的用途"
           />
         </el-form-item>
-        <el-form-item label="分类类型">
-          <el-radio-group v-model="promptForm.classMode">
-            <el-radio label="existing">选择已有分类</el-radio>
-            <el-radio label="new">创建新分类</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item v-if="promptForm.classMode === 'existing'" label="所属分类">
+        <el-form-item label="所属分类">
           <el-select v-model="promptForm.classId" placeholder="请选择分类">
             <el-option
               v-for="item in classOptions"
@@ -131,19 +132,6 @@
             />
           </el-select>
         </el-form-item>
-        <template v-else>
-          <el-form-item label="分类名称">
-            <el-input v-model="promptForm.className" placeholder="请输入分类名称" />
-          </el-form-item>
-          <el-form-item label="分类描述">
-            <el-input
-              v-model="promptForm.classDescription"
-              type="textarea"
-              :autosize="{ minRows: 2, maxRows: 4 }"
-              placeholder="请输入分类描述（可选）"
-            />
-          </el-form-item>
-        </template>
         <el-form-item label="标签">
           <el-select
             v-model="promptForm.tagIds"
@@ -189,16 +177,12 @@ import { mockPrompts } from '../mocks/prompts'
 import type { Prompt } from '../types/prompt'
 
 type SortKey = 'default' | 'created_at' | 'updated_at' | 'author'
-type ClassMode = 'existing' | 'new'
 
 interface PromptFormState {
   name: string
   description: string
   author: string
-  classMode: ClassMode
   classId: number | null
-  className: string
-  classDescription: string
   tagIds: number[]
   version: string
   content: string
@@ -321,10 +305,7 @@ const promptForm = reactive<PromptFormState>({
   name: '',
   description: '',
   author: '',
-  classMode: 'existing',
   classId: null,
-  className: '',
-  classDescription: '',
   tagIds: [],
   version: '',
   content: ''
@@ -334,10 +315,7 @@ function resetPromptForm() {
   promptForm.name = ''
   promptForm.description = ''
   promptForm.author = ''
-  promptForm.classMode = classOptions.value.length ? 'existing' : 'new'
   promptForm.classId = classOptions.value[0]?.id ?? null
-  promptForm.className = ''
-  promptForm.classDescription = ''
   promptForm.tagIds = []
   promptForm.version = ''
   promptForm.content = ''
@@ -353,15 +331,10 @@ function handleCreatePrompt() {
     ElMessage.warning('请至少填写标题、版本号和内容')
     return
   }
-  if (promptForm.classMode === 'existing' && !promptForm.classId) {
-    ElMessage.warning('请选择分类或切换至新建分类')
+  if (!promptForm.classId) {
+    ElMessage.warning('请先选择分类')
     return
   }
-  if (promptForm.classMode === 'new' && !promptForm.className.trim()) {
-    ElMessage.warning('请输入新分类名称')
-    return
-  }
-
   ElMessage.info('后端接口建设中，提交数据暂未保存')
   createDialogVisible.value = false
 }
@@ -535,5 +508,9 @@ function goDetail(id: number) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.dialog-alert {
+  margin-bottom: 12px;
 }
 </style>
