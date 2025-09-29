@@ -6,6 +6,9 @@ from app.schemas.llm_provider import (
 from app.schemas.metric import MetricCreate, MetricRead
 from app.schemas.prompt import (
     PromptClassRead,
+    PromptClassCreate,
+    PromptClassUpdate,
+    PromptClassStats,
     PromptCreate,
     PromptRead,
     PromptTagRead,
@@ -18,6 +21,9 @@ from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
 
 __all__ = [
     "PromptClassRead",
+    "PromptClassCreate",
+    "PromptClassUpdate",
+    "PromptClassStats",
     "PromptCreate",
     "PromptUpdate",
     "PromptRead",

@@ -29,6 +29,38 @@ class PromptClassRead(PromptClassBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PromptClassCreate(PromptClassBase):
+    """Prompt 分类创建入参"""
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        trimmed = self.name.strip()
+        if not trimmed:
+            raise ValueError("name 不能为空字符")
+        self.name = trimmed
+        return self
+
+
+class PromptClassUpdate(BaseModel):
+    """Prompt 分类更新入参"""
+
+    name: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        if self.name is not None and not self.name.strip():
+            raise ValueError("name 不能为空字符")
+        return self
+
+
+class PromptClassStats(PromptClassRead):
+    """带统计信息的 Prompt 分类出参"""
+
+    prompt_count: int = Field(default=0, ge=0)
+    latest_prompt_updated_at: datetime | None = None
+
+
 class PromptVersionBase(BaseModel):
     version: str = Field(..., max_length=50)
     content: str
