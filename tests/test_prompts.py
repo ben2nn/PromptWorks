@@ -48,7 +48,9 @@ def test_create_and_list_prompts(client: TestClient, db_session: Session):
     tag_list_resp = client.get("/api/v1/prompt-tags/")
     assert tag_list_resp.status_code == 200
     tag_list = tag_list_resp.json()
-    assert {tag["name"] for tag in tag_list} >= {"通知", "邮件"}
+    assert tag_list["tagged_prompt_total"] == 1
+    tag_names = {tag["name"] for tag in tag_list["items"]}
+    assert {"通知", "邮件"}.issubset(tag_names)
 
 
 def test_update_and_delete_prompt(client: TestClient, db_session: Session):

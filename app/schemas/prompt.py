@@ -16,6 +16,46 @@ class PromptTagRead(PromptTagBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PromptTagCreate(PromptTagBase):
+    """Prompt 标签创建入参"""
+
+    @model_validator(mode="after")
+    def normalize_payload(self):
+        trimmed = self.name.strip()
+        if not trimmed:
+            raise ValueError("name 不能为空字符")
+        self.name = trimmed
+        self.color = self.color.upper()
+        return self
+
+
+class PromptTagUpdate(BaseModel):
+    """Prompt 标签更新入参"""
+
+    name: str | None = Field(default=None, max_length=100)
+    color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @model_validator(mode="after")
+    def normalize_payload(self):
+        if self.name is not None:
+            trimmed = self.name.strip()
+            if not trimmed:
+                raise ValueError("name 不能为空字符")
+            self.name = trimmed
+        if self.color is not None:
+            self.color = self.color.upper()
+        return self
+
+
+class PromptTagStats(PromptTagRead):
+    prompt_count: int = Field(default=0, ge=0)
+
+
+class PromptTagListResponse(BaseModel):
+    items: list[PromptTagStats]
+    tagged_prompt_total: int = Field(default=0, ge=0)
+
+
 class PromptClassBase(BaseModel):
     name: str = Field(..., max_length=255)
     description: str | None = None

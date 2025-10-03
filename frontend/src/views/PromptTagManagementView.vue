@@ -14,7 +14,13 @@
           <span>共 {{ totalTags }} 个标签 · 覆盖 {{ totalTaggedPrompts }} 条 Prompt</span>
         </div>
       </template>
-      <el-table :data="tagRows" border stripe empty-text="暂无标签数据">
+      <el-table
+        :data="tagRows"
+        v-loading="tableLoading"
+        border
+        stripe
+        empty-text="暂无标签数据"
+      >
         <el-table-column label="标签" min-width="200">
           <template #default="{ row }">
             <span class="tag-cell">
@@ -30,7 +36,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="promptCount" label="引用 Prompt 数" width="140" align="center" />
+        <el-table-column prop="prompt_count" label="引用 Prompt 数" width="140" align="center" />
         <el-table-column label="创建时间" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
@@ -60,57 +66,39 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">提交</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleCreate">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockPrompts } from '../mocks/prompts'
-import type { Prompt, PromptTag } from '../types/prompt'
+import {
+  createPromptTag,
+  deletePromptTag,
+  listPromptTags,
+  type PromptTagStats
+} from '../api/promptTag'
 
-type TagRow = PromptTag & {
-  promptCount: number
-}
+const tableLoading = ref(false)
+const submitLoading = ref(false)
+const promptTags = ref<PromptTagStats[]>([])
+const taggedPromptTotal = ref(0)
 
-const prompts: Prompt[] = mockPrompts
-
-const tagRows = computed<TagRow[]>(() => {
-  const map = new Map<number, TagRow>()
-  prompts.forEach((prompt) => {
-    prompt.tags.forEach((tag) => {
-      if (!map.has(tag.id)) {
-        map.set(tag.id, {
-          ...tag,
-          promptCount: 0
-        })
-      }
-      const record = map.get(tag.id)!
-      record.promptCount += 1
-      if (new Date(tag.created_at).getTime() < new Date(record.created_at).getTime()) {
-        record.created_at = tag.created_at
-      }
-      const latestUpdated = [tag.updated_at, prompt.updated_at].reduce((acc, cur) => {
-        return new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
-      }, record.updated_at)
-      record.updated_at = latestUpdated
-    })
-  })
-
-  return Array.from(map.values()).sort((a, b) => {
-    if (b.promptCount !== a.promptCount) {
-      return b.promptCount - a.promptCount
+const tagRows = computed(() => {
+  return [...promptTags.value].sort((a, b) => {
+    if (b.prompt_count !== a.prompt_count) {
+      return b.prompt_count - a.prompt_count
     }
     return a.name.localeCompare(b.name, 'zh-CN')
   })
 })
 
 const totalTags = computed(() => tagRows.value.length)
-const totalTaggedPrompts = computed(() => prompts.filter((item) => item.tags.length > 0).length)
+const totalTaggedPrompts = computed(() => taggedPromptTotal.value)
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -132,6 +120,20 @@ const tagForm = reactive({
   color: '#409EFF'
 })
 
+async function fetchPromptTags() {
+  tableLoading.value = true
+  try {
+    const data = await listPromptTags()
+    promptTags.value = data.items
+    taggedPromptTotal.value = data.tagged_prompt_total
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('加载标签数据失败，请稍后重试')
+  } finally {
+    tableLoading.value = false
+  }
+}
+
 function resetTagForm() {
   tagForm.name = ''
   tagForm.color = '#409EFF'
@@ -142,28 +144,58 @@ function openDialog() {
   dialogVisible.value = true
 }
 
-function handleCreate() {
+async function handleCreate() {
   if (!tagForm.name.trim()) {
     ElMessage.warning('请填写标签名称')
     return
   }
-  ElMessage.info('后端接口建设中，提交数据暂未保存')
-  dialogVisible.value = false
+  submitLoading.value = true
+  try {
+    await createPromptTag({
+      name: tagForm.name.trim(),
+      color: tagForm.color.toUpperCase()
+    })
+    ElMessage.success('标签创建成功')
+    dialogVisible.value = false
+    await fetchPromptTags()
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '创建标签失败，请稍后重试'
+    ElMessage.error(message)
+  } finally {
+    submitLoading.value = false
+  }
 }
 
-function handleDelete(row: TagRow) {
-  ElMessageBox.confirm(`确认删除标签“${row.name}”并解除关联？`, '删除确认', {
-    type: 'warning',
-    confirmButtonText: '确认删除',
-    cancelButtonText: '取消'
-  })
-    .then(() => {
-      ElMessage.info('后端接口建设中，暂未执行删除操作')
+async function handleDelete(row: PromptTagStats) {
+  try {
+    await ElMessageBox.confirm(`确认删除标签“${row.name}”并解除关联？`, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
     })
-    .catch(() => {
-      /* 用户取消 */
-    })
+  } catch {
+    return
+  }
+
+  try {
+    await deletePromptTag(row.id)
+    ElMessage.success('标签已删除')
+    await fetchPromptTags()
+  } catch (error: any) {
+    if (error?.status === 409) {
+      ElMessage.error('仍有关联 Prompt 使用该标签，请先迁移或删除后再尝试')
+      return
+    }
+    console.error(error)
+    const message = error?.payload?.detail ?? '删除标签失败，请稍后重试'
+    ElMessage.error(message)
+  }
 }
+
+onMounted(() => {
+  fetchPromptTags()
+})
 </script>
 
 <style scoped>

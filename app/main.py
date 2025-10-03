@@ -23,10 +23,15 @@ def create_application() -> FastAPI:
 
     # 注册自定义请求日志中间件，捕获每一次请求信息
     app.add_middleware(RequestLoggingMiddleware)
+    allowed_origins = settings.BACKEND_CORS_ORIGINS or ["http://localhost:5173"]
+    allow_credentials = settings.BACKEND_CORS_ALLOW_CREDENTIALS
+    if "*" in allowed_origins:
+        allow_credentials = False
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=allowed_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )

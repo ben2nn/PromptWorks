@@ -14,22 +14,28 @@
           <span>共 {{ totalClasses }} 个分类 · 覆盖 {{ totalPrompts }} 条 Prompt</span>
         </div>
       </template>
-      <el-table :data="classRows" border stripe empty-text="暂无分类数据">
+      <el-table
+        :data="classRows"
+        v-loading="tableLoading"
+        border
+        stripe
+        empty-text="暂无分类数据"
+      >
         <el-table-column prop="name" label="分类名称" min-width="160" />
         <el-table-column prop="description" label="分类描述" min-width="220">
           <template #default="{ row }">
             {{ row.description ?? '暂无描述' }}
           </template>
         </el-table-column>
-        <el-table-column prop="promptCount" label="Prompt 数量" width="120" align="center" />
-        <el-table-column label="创建时间" min-width="160">
+        <el-table-column prop="prompt_count" label="Prompt 数量" width="120" align="center" />
+        <el-table-column prop="created_at" label="创建时间" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="最近更新" min-width="160">
+        <el-table-column prop="latest_prompt_updated_at" label="最近更新" min-width="160">
           <template #default="{ row }">
-            {{ formatDateTime(row.updated_at) }}
+            {{ formatDateTime(row.latest_prompt_updated_at ?? row.updated_at) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="120" align="center">
@@ -56,65 +62,40 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">提交</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleCreate">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockPrompts } from '../mocks/prompts'
-import type { Prompt } from '../types/prompt'
+import {
+  createPromptClass,
+  deletePromptClass,
+  listPromptClasses,
+  type PromptClassStats
+} from '../api/promptClass'
 
-type ClassRow = {
-  id: number
-  name: string
-  description: string | null
-  promptCount: number
-  created_at: string
-  updated_at: string
-}
+const tableLoading = ref(false)
+const submitLoading = ref(false)
+const promptClasses = ref<PromptClassStats[]>([])
 
-const prompts: Prompt[] = mockPrompts
-
-const classRows = computed<ClassRow[]>(() => {
-  const map = new Map<number, ClassRow>()
-  prompts.forEach((prompt) => {
-    const cls = prompt.prompt_class
-    if (!map.has(cls.id)) {
-      map.set(cls.id, {
-        id: cls.id,
-        name: cls.name,
-        description: cls.description ?? null,
-        promptCount: 0,
-        created_at: cls.created_at,
-        updated_at: cls.updated_at
-      })
-    }
-    const record = map.get(cls.id)!
-    record.promptCount += 1
-    if (new Date(cls.created_at).getTime() < new Date(record.created_at).getTime()) {
-      record.created_at = cls.created_at
-    }
-    const latestUpdated = [cls.updated_at, prompt.updated_at].reduce((acc, cur) => {
-      return new Date(cur).getTime() > new Date(acc).getTime() ? cur : acc
-    }, record.updated_at)
-    record.updated_at = latestUpdated
-  })
-
-  return Array.from(map.values()).sort((a, b) => {
-    if (b.promptCount !== a.promptCount) {
-      return b.promptCount - a.promptCount
+const classRows = computed(() => {
+  return [...promptClasses.value].sort((a, b) => {
+    if (b.prompt_count !== a.prompt_count) {
+      return b.prompt_count - a.prompt_count
     }
     return a.name.localeCompare(b.name, 'zh-CN')
   })
 })
 
 const totalClasses = computed(() => classRows.value.length)
-const totalPrompts = computed(() => prompts.length)
+const totalPrompts = computed(() =>
+  classRows.value.reduce((acc, item) => acc + (item.prompt_count ?? 0), 0)
+)
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -136,6 +117,18 @@ const classForm = reactive({
   description: ''
 })
 
+async function fetchPromptClasses() {
+  tableLoading.value = true
+  try {
+    promptClasses.value = await listPromptClasses()
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('加载分类数据失败，请稍后重试')
+  } finally {
+    tableLoading.value = false
+  }
+}
+
 function resetClassForm() {
   classForm.name = ''
   classForm.description = ''
@@ -146,28 +139,58 @@ function openDialog() {
   dialogVisible.value = true
 }
 
-function handleCreate() {
+async function handleCreate() {
   if (!classForm.name.trim()) {
     ElMessage.warning('请填写分类名称')
     return
   }
-  ElMessage.info('后端接口建设中，提交数据暂未保存')
-  dialogVisible.value = false
+  submitLoading.value = true
+  try {
+    await createPromptClass({
+      name: classForm.name.trim(),
+      description: classForm.description.trim() || null
+    })
+    ElMessage.success('分类创建成功')
+    dialogVisible.value = false
+    await fetchPromptClasses()
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '创建分类失败，请稍后重试'
+    ElMessage.error(message)
+  } finally {
+    submitLoading.value = false
+  }
 }
 
-function handleDelete(row: ClassRow) {
-  ElMessageBox.confirm(`确认删除分类“${row.name}”及其关联关系？`, '删除确认', {
-    type: 'warning',
-    confirmButtonText: '确认删除',
-    cancelButtonText: '取消'
-  })
-    .then(() => {
-      ElMessage.info('后端接口建设中，暂未执行删除操作')
+async function handleDelete(row: PromptClassStats) {
+  try {
+    await ElMessageBox.confirm(`确认删除分类“${row.name}”及其关联关系？`, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消'
     })
-    .catch(() => {
-      /* 用户取消 */
-    })
+  } catch {
+    return
+  }
+
+  try {
+    await deletePromptClass(row.id)
+    ElMessage.success('分类已删除')
+    await fetchPromptClasses()
+  } catch (error: any) {
+    if (error?.status === 409) {
+      ElMessage.error('仍有关联 Prompt 使用该分类，请先迁移或删除后再尝试')
+      return
+    }
+    console.error(error)
+    const message = error?.payload?.detail ?? '删除分类失败，请稍后重试'
+    ElMessage.error(message)
+  }
 }
+
+onMounted(() => {
+  fetchPromptClasses()
+})
 </script>
 
 <style scoped>
