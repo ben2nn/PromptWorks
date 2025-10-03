@@ -30,7 +30,7 @@
 
     <el-row :gutter="16" class="detail-row">
       <el-col :xs="24" :lg="10">
-        <el-card shadow="hover" class="model-card">
+        <el-card shadow="hover" class="model-card" v-loading="modelLoading">
           <template #header>
             <div class="model-card__header">
               <span>模型用量</span>
@@ -67,7 +67,7 @@
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="14">
-        <el-card shadow="hover" class="chart-card">
+        <el-card shadow="hover" class="chart-card" v-loading="chartLoading">
           <template #header>
             <div class="chart-card__header">
               <span>{{ activeModel?.modelName ?? '模型用量' }} - Token 趋势</span>
@@ -81,8 +81,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import { ElMessage } from 'element-plus'
+
+import {
+  getModelTimeseries,
+  getUsageOverview,
+  listModelUsage
+} from '../api/usage'
 
 interface UsagePoint {
   date: string
@@ -91,11 +98,21 @@ interface UsagePoint {
   callCount: number
 }
 
-interface ModelUsage {
+interface ModelSummary {
   modelKey: string
   modelName: string
   provider: string
-  metrics: UsagePoint[]
+  totalTokens: number
+  inputTokens: number
+  outputTokens: number
+  callCount: number
+}
+
+interface UsageOverviewTotals {
+  totalTokens: number
+  inputTokens: number
+  outputTokens: number
+  callCount: number
 }
 
 const now = new Date()
@@ -123,108 +140,44 @@ const dateShortcuts = [
   }
 ]
 
-const mockModelUsage: ModelUsage[] = [
-  {
-    modelKey: 'gpt-4o-mini',
-    modelName: 'gpt-4o-mini',
-    provider: 'OpenAI',
-    metrics: generateMockUsage(14, 1200, 800, 30)
-  },
-  {
-    modelKey: 'claude-3-sonnet',
-    modelName: 'Claude 3 Sonnet',
-    provider: 'Anthropic',
-    metrics: generateMockUsage(14, 900, 600, 20)
-  },
-  {
-    modelKey: 'gemini-1.5-pro',
-    modelName: 'Gemini 1.5 Pro',
-    provider: 'Google',
-    metrics: generateMockUsage(14, 700, 500, 18)
-  },
-  {
-    modelKey: 'azure-gpt-35',
-    modelName: 'Azure GPT-3.5',
-    provider: 'Azure OpenAI',
-    metrics: generateMockUsage(14, 650, 420, 15)
-  }
-]
+const overviewData = ref<UsageOverviewTotals | null>(null)
+const modelSummaries = ref<ModelSummary[]>([])
+const chartMetrics = ref<UsagePoint[]>([])
 
-function generateMockUsage(days: number, baseInput: number, baseOutput: number, baseCalls: number): UsagePoint[] {
-  const result: UsagePoint[] = []
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const date = new Date()
-    date.setDate(date.getDate() - i)
-    const factor = 0.8 + Math.random() * 0.4
-    result.push({
-      date: date.toISOString().slice(0, 10),
-      inputTokens: Math.round(baseInput * factor),
-      outputTokens: Math.round(baseOutput * factor * (0.9 + Math.random() * 0.2)),
-      callCount: Math.round(baseCalls * factor * (0.9 + Math.random() * 0.2))
-    })
-  }
-  return result
-}
-
-function withinRange(date: string, range: [Date, Date]): boolean {
-  if (!range[0] || !range[1]) return true
-  const [start, end] = range
-  const value = new Date(date)
-  return value >= start && value <= new Date(end.getTime() + 24 * 60 * 60 * 1000)
-}
-
-const enrichedModels = computed(() => {
-  return mockModelUsage.map((model) => {
-    const filtered = model.metrics.filter((point) => withinRange(point.date, dateRange.value))
-    const totals = filtered.reduce(
-      (acc, cur) => {
-        acc.inputTokens += cur.inputTokens
-        acc.outputTokens += cur.outputTokens
-        acc.totalTokens += cur.inputTokens + cur.outputTokens
-        acc.callCount += cur.callCount
-        return acc
-      },
-      { inputTokens: 0, outputTokens: 0, totalTokens: 0, callCount: 0 }
-    )
-    return {
-      ...model,
-      summary: totals,
-      filteredMetrics: filtered,
-      totalTokens: totals.totalTokens,
-      inputTokens: totals.inputTokens,
-      outputTokens: totals.outputTokens,
-      callCount: totals.callCount
-    }
-  })
-})
-
-const overviewCards = computed(() => {
-  const totals = enrichedModels.value.reduce(
-    (acc, model) => {
-      acc.totalTokens += model.summary.totalTokens
-      acc.inputTokens += model.summary.inputTokens
-      acc.outputTokens += model.summary.outputTokens
-      acc.callCount += model.summary.callCount
-      return acc
-    },
-    { totalTokens: 0, inputTokens: 0, outputTokens: 0, callCount: 0 }
-  )
-  return [
-    { key: 'totalTokens', title: '总 Token 数', value: totals.totalTokens },
-    { key: 'inputTokens', title: '输入 Token 数', value: totals.inputTokens },
-    { key: 'outputTokens', title: '输出 Token 数', value: totals.outputTokens },
-    { key: 'callCount', title: '调用次数', value: totals.callCount }
-  ]
-})
+const overviewLoading = ref(false)
+const modelLoading = ref(false)
+const chartLoading = ref(false)
 
 const sortKey = ref<'totalTokens' | 'callCount' | 'inputTokens' | 'outputTokens'>('totalTokens')
 
 const sortedModels = computed(() => {
-  const list = enrichedModels.value
-  return [...list].sort((a, b) => b.summary[sortKey.value] - a.summary[sortKey.value])
+  const list = modelSummaries.value
+  return [...list].sort((a, b) => b[sortKey.value] - a[sortKey.value])
 })
 
-const activeModelKey = ref(sortedModels.value[0]?.modelKey ?? '')
+const activeModelKey = ref('')
+
+const activeModel = computed(() =>
+  sortedModels.value.find((item) => item.modelKey === activeModelKey.value)
+)
+
+const rangeKey = computed(() => {
+  const [start, end] = dateRange.value
+  const startKey = start ? formatDateParam(start) : ''
+  const endKey = end ? formatDateParam(end) : ''
+  return `${startKey}|${endKey}`
+})
+
+let modelDataToken = 0
+let chartDataToken = 0
+
+watch(
+  rangeKey,
+  () => {
+    refreshUsageData()
+  },
+  { immediate: true }
+)
 
 watch(sortedModels, (list) => {
   if (!list.length) {
@@ -237,15 +190,154 @@ watch(sortedModels, (list) => {
   }
 })
 
-const activeModel = computed(() => sortedModels.value.find((item) => item.modelKey === activeModelKey.value))
+const overviewCards = computed(() => {
+  const fallback = modelSummaries.value.reduce(
+    (acc, item) => {
+      acc.totalTokens += item.totalTokens
+      acc.inputTokens += item.inputTokens
+      acc.outputTokens += item.outputTokens
+      acc.callCount += item.callCount
+      return acc
+    },
+    { totalTokens: 0, inputTokens: 0, outputTokens: 0, callCount: 0 }
+  )
+  const source: UsageOverviewTotals =
+    overviewData.value ?? {
+      totalTokens: fallback.totalTokens,
+      inputTokens: fallback.inputTokens,
+      outputTokens: fallback.outputTokens,
+      callCount: fallback.callCount
+    }
+  return [
+    { key: 'totalTokens', title: '总 Token 数', value: source.totalTokens },
+    { key: 'inputTokens', title: '输入 Token 数', value: source.inputTokens },
+    { key: 'outputTokens', title: '输出 Token 数', value: source.outputTokens },
+    { key: 'callCount', title: '调用次数', value: source.callCount }
+  ]
+})
 
-function handleModelSelect(row: (typeof sortedModels.value)[number] | undefined) {
-  if (row) {
-    activeModelKey.value = row.modelKey
+function formatDateParam(date: Date): string {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function getDateParams() {
+  const [start, end] = dateRange.value
+  return {
+    start_date: start ? formatDateParam(start) : undefined,
+    end_date: end ? formatDateParam(end) : undefined
   }
 }
 
-function rowClassName({ row }: { row: (typeof sortedModels.value)[number] }) {
+async function refreshUsageData() {
+  const currentToken = ++modelDataToken
+  const params = getDateParams()
+  overviewLoading.value = true
+  modelLoading.value = true
+  chartLoading.value = true
+  try {
+    const [overviewResp, modelResp] = await Promise.all([
+      getUsageOverview(params),
+      listModelUsage(params)
+    ])
+    if (currentToken !== modelDataToken) {
+      return
+    }
+
+    overviewData.value = overviewResp
+      ? {
+          totalTokens: overviewResp.total_tokens,
+          inputTokens: overviewResp.input_tokens,
+          outputTokens: overviewResp.output_tokens,
+          callCount: overviewResp.call_count
+        }
+      : null
+
+    const mappedModels = modelResp.map<ModelSummary>((item) => ({
+      modelKey: item.model_key,
+      modelName: item.model_name,
+      provider: item.provider,
+      totalTokens: item.total_tokens ?? 0,
+      inputTokens: item.input_tokens ?? 0,
+      outputTokens: item.output_tokens ?? 0,
+      callCount: item.call_count ?? 0
+    }))
+
+    modelSummaries.value = mappedModels
+
+    if (!mappedModels.length) {
+      activeModelKey.value = ''
+      chartMetrics.value = []
+      updateChart()
+      chartLoading.value = false
+      return
+    }
+
+    if (!mappedModels.some((item) => item.modelKey === activeModelKey.value)) {
+      activeModelKey.value = mappedModels[0].modelKey
+    }
+
+    await loadTimeseriesForActiveModel(params)
+  } catch (error) {
+    console.error(error)
+    if (currentToken === modelDataToken) {
+      ElMessage.error('加载用量数据失败，请稍后重试')
+    }
+  } finally {
+    if (currentToken === modelDataToken) {
+      overviewLoading.value = false
+      modelLoading.value = false
+    }
+  }
+}
+
+async function loadTimeseriesForActiveModel(params = getDateParams()) {
+  const modelKey = activeModelKey.value
+  const currentToken = ++chartDataToken
+  if (!modelKey) {
+    chartMetrics.value = []
+    chartLoading.value = false
+    updateChart()
+    return
+  }
+
+  chartLoading.value = true
+  try {
+    const response = await getModelTimeseries(modelKey, params)
+    if (currentToken !== chartDataToken) {
+      return
+    }
+    chartMetrics.value = response.map<UsagePoint>((item) => ({
+      date: item.date,
+      inputTokens: item.input_tokens ?? 0,
+      outputTokens: item.output_tokens ?? 0,
+      callCount: item.call_count ?? 0
+    }))
+    updateChart()
+  } catch (error) {
+    console.error(error)
+    if (currentToken === chartDataToken) {
+      ElMessage.error('加载趋势数据失败，请稍后重试')
+      chartMetrics.value = []
+      updateChart()
+    }
+  } finally {
+    if (currentToken === chartDataToken) {
+      chartLoading.value = false
+    }
+  }
+}
+
+function handleModelSelect(row: ModelSummary | undefined) {
+  if (!row) return
+  if (row.modelKey === activeModelKey.value) return
+  activeModelKey.value = row.modelKey
+  loadTimeseriesForActiveModel()
+}
+
+function rowClassName({ row }: { row: ModelSummary }) {
   return row.modelKey === activeModelKey.value ? 'is-active' : ''
 }
 
@@ -264,8 +356,8 @@ function initChart() {
 }
 
 function updateChart() {
-  if (!chartInstance || !activeModel.value) return
-  const metrics = activeModel.value.filteredMetrics
+  if (!chartInstance) return
+  const metrics = chartMetrics.value
   const dates = metrics.map((item) => item.date)
   const inputSeries = metrics.map((item) => item.inputTokens)
   const outputSeries = metrics.map((item) => item.outputTokens)
@@ -313,7 +405,7 @@ function updateChart() {
     ]
   }
 
-  chartInstance.setOption(option)
+  chartInstance.setOption(option, { notMerge: true })
 }
 
 onMounted(() => {
@@ -325,10 +417,6 @@ onMounted(() => {
 function resizeChart() {
   chartInstance?.resize()
 }
-
-watch([activeModel, dateRange], () => {
-  nextTick(updateChart)
-})
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)
@@ -413,6 +501,45 @@ onBeforeUnmount(() => {
 
 .detail-row {
   margin-top: 4px;
+  align-items: stretch;
+}
+
+.detail-row :deep(.el-col) {
+  display: flex;
+}
+
+.model-card,
+.chart-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.model-card :deep(.el-card__body),
+.chart-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.model-card :deep(.el-table) {
+  flex: 1;
+}
+
+.model-card :deep(.el-table__body-wrapper) {
+  flex: 1;
+}
+
+.model-card :deep(.el-table__inner-wrapper) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.usage-chart {
+  width: 100%;
+  flex: 1;
+  min-height: 340px;
 }
 
 .model-card__header,
@@ -437,14 +564,7 @@ onBeforeUnmount(() => {
   color: var(--text-weak-color);
 }
 
-.usage-chart {
-  width: 100%;
-  height: 340px;
-}
-
 :deep(.is-active) {
   font-weight: 600;
 }
 </style>
-
-
