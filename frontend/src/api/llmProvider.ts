@@ -5,10 +5,19 @@ import type {
   LLMModelCreatePayload,
   LLMProvider,
   LLMProviderCreatePayload,
-  LLMProviderUpdatePayload
+  LLMProviderUpdatePayload,
+  LLMInvokePayload
 } from '../types/llm'
 
 const BASE_PATH = '/llm-providers'
+const DEFAULT_INVOKE_TIMEOUT_MS = 15_000
+
+export class RequestTimeoutError extends Error {
+  constructor(message = '请求超时') {
+    super(message)
+    this.name = 'RequestTimeoutError'
+  }
+}
 
 export function listCommonLLMProviders(): Promise<KnownLLMProvider[]> {
   return request<KnownLLMProvider[]>(`${BASE_PATH}/common`, {
@@ -59,4 +68,28 @@ export function deleteLLMProvider(providerId: number): Promise<void> {
   return request<void>(`${BASE_PATH}/${providerId}`, {
     method: 'DELETE'
   })
+}
+
+export async function invokeLLMProvider(
+  providerId: number,
+  payload: LLMInvokePayload,
+  timeoutMs = DEFAULT_INVOKE_TIMEOUT_MS
+): Promise<unknown> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await request(`${BASE_PATH}/${providerId}/invoke`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    })
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new RequestTimeoutError()
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
 }

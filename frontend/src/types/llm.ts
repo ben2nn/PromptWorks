@@ -57,3 +57,15 @@ export interface LLMModelCreatePayload {
   capability?: string | null
   quota?: string | null
 }
+
+export interface ChatMessagePayload {
+  role: string
+  content: unknown
+}
+
+export interface LLMInvokePayload {
+  messages: ChatMessagePayload[]
+  parameters?: Record<string, unknown>
+  model?: string | null
+  model_id?: number | null
+}

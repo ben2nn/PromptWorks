@@ -109,15 +109,27 @@
                     <el-table-column prop="name" label="模型名称" min-width="140" />
                     <el-table-column prop="capability" label="能力标签" min-width="120" />
                     <el-table-column prop="quota" label="配额策略" min-width="140" />
-                    <el-table-column label="操作" width="90" align="center">
+                    <el-table-column label="操作" width="160" align="center">
                       <template #default="{ row }">
-                        <el-button
-                          type="danger"
-                          text
-                          size="small"
-                          :icon="Delete"
-                          @click="removeModel(card.id, row.id)"
-                        >删除</el-button>
+                        <div class="provider-card__model-actions">
+                          <el-button
+                            type="primary"
+                            text
+                            size="small"
+                            :icon="CircleCheck"
+                            :loading="checkingModelId === row.id"
+                            :disabled="checkingModelId !== null && checkingModelId !== row.id"
+                            @click="checkModel(card.id, row)">
+                            检测
+                          </el-button>
+                          <el-button
+                            type="danger"
+                            text
+                            size="small"
+                            :icon="Delete"
+                            @click="removeModel(card.id, row.id)"
+                          >删除</el-button>
+                        </div>
                       </template>
                     </el-table-column>
                   </el-table>
@@ -197,7 +209,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Delete, Edit, Expand, Fold, Hide, Plus, View } from '@element-plus/icons-vue'
+import { CircleCheck, Delete, Edit, Expand, Fold, Hide, Plus, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -207,7 +219,9 @@ import {
   deleteLLMProvider,
   listCommonLLMProviders,
   listLLMProviders,
-  updateLLMProvider
+  updateLLMProvider,
+  invokeLLMProvider,
+  RequestTimeoutError
 } from '../api/llmProvider'
 import type { KnownLLMProvider, LLMProvider } from '../types/llm'
 
@@ -238,6 +252,7 @@ interface ProviderCard {
 
 const loadingProviders = ref(false)
 const providerCards = ref<ProviderCard[]>([])
+const checkingModelId = ref<number | null>(null)
 
 const commonProviders = ref<KnownLLMProvider[]>([])
 const commonProviderMap = computed(() => {
@@ -355,6 +370,31 @@ async function fetchProviders() {
   } finally {
     loadingProviders.value = false
   }
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof RequestTimeoutError) {
+    return '检测超时，请稍后重试'
+  }
+  if (!error) {
+    return '检测失败，请稍后重试'
+  }
+  const maybeError = error as any
+  const detail = maybeError?.payload?.detail ?? maybeError?.detail
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+  if (detail && typeof detail === 'object') {
+    try {
+      return JSON.stringify(detail)
+    } catch (jsonError) {
+      console.error('序列化错误详情失败', jsonError)
+    }
+  }
+  if (typeof maybeError?.message === 'string' && maybeError.message.trim()) {
+    return maybeError.message
+  }
+  return '检测失败，请稍后重试'
 }
 
 function mapProviderToCard(
@@ -581,6 +621,34 @@ async function handleUpdateApiKey(card: ProviderCard) {
     ElMessage.error(detail)
   }
 }
+
+async function checkModel(providerId: number, model: ProviderCardModel) {
+  if (checkingModelId.value !== null) {
+    return
+  }
+  checkingModelId.value = model.id
+  const startedAt = performance.now()
+  try {
+    await invokeLLMProvider(providerId, {
+      messages: [
+        {
+          role: 'user',
+          content: 'hello'
+        }
+      ],
+      model_id: model.id,
+      parameters: {}
+    })
+    const elapsed = Math.round(performance.now() - startedAt)
+    ElMessage.success(`检测成功，用时 ${elapsed} ms`)
+  } catch (error) {
+    console.error('模型检测失败', error)
+    const message = extractErrorMessage(error)
+    ElMessage.error(message)
+  } finally {
+    checkingModelId.value = null
+  }
+}
 </script>
 
 <style scoped>
@@ -717,6 +785,12 @@ async function handleUpdateApiKey(card: ProviderCard) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.provider-card__model-actions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
 }
 
 .dialog-form {
