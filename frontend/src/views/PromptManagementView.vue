@@ -57,47 +57,82 @@
       </div>
     </div>
 
-    <div class="card-grid">
-      <div v-for="prompt in filteredPrompts" :key="prompt.id" class="card-grid__item">
-        <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
-          <div class="prompt-card__header">
-            <div>
-              <p class="prompt-class">{{ prompt.prompt_class.name }}</p>
-              <h3 class="prompt-title">{{ prompt.name }}</h3>
+    <el-alert
+      v-if="loadError"
+      :title="loadError"
+      type="error"
+      show-icon
+      class="data-alert"
+    />
+
+    <el-skeleton v-else-if="isLoading" animated :rows="6" />
+
+    <template v-else>
+      <div v-if="filteredPrompts.length" class="card-grid">
+        <div v-for="prompt in filteredPrompts" :key="prompt.id" class="card-grid__item">
+          <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
+            <div class="prompt-card__header">
+              <div>
+                <p class="prompt-class">{{ prompt.prompt_class.name }}</p>
+                <h3 class="prompt-title">{{ prompt.name }}</h3>
+              </div>
+              <el-tag type="success" round size="small">
+                当前版本 {{ prompt.current_version?.version ?? '未启用' }}
+              </el-tag>
             </div>
-            <el-tag type="success" round size="small">
-              当前版本 {{ prompt.current_version?.version ?? '未启用' }}
-            </el-tag>
-          </div>
-          <p class="prompt-desc">{{ prompt.description ?? '暂无描述' }}</p>
-          <div class="prompt-meta">
-            <div class="meta-item">
-              <span class="meta-label">作者</span>
-              <span>{{ prompt.author ?? '未设置' }}</span>
+            <p class="prompt-desc">{{ prompt.description ?? '暂无描述' }}</p>
+            <div class="prompt-meta">
+              <div class="meta-item">
+                <span class="meta-label">作者</span>
+                <span>{{ prompt.author ?? '未设置' }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">创建时间</span>
+                <span>{{ formatDate(prompt.created_at) }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="meta-label">更新时间</span>
+                <span>{{ formatDate(prompt.updated_at) }}</span>
+              </div>
             </div>
-            <div class="meta-item">
-              <span class="meta-label">创建时间</span>
-              <span>{{ formatDate(prompt.created_at) }}</span>
+            <div class="prompt-tags">
+              <div class="prompt-tags__list">
+                <el-tag
+                  v-for="tag in prompt.tags"
+                  :key="tag.id"
+                  size="small"
+                  effect="dark"
+                  :style="{ backgroundColor: tag.color, borderColor: tag.color }"
+                >
+                  {{ tag.name }}
+                </el-tag>
+              </div>
+              <el-popconfirm
+                :title="`确认删除「${prompt.name}」吗？`"
+                confirm-button-text="删除"
+                cancel-button-text="取消"
+                icon=""
+                @confirm="() => handleDeletePrompt(prompt)"
+              >
+                <template #reference>
+                  <el-button
+                    type="danger"
+                    text
+                    size="small"
+                    class="card-delete"
+                    :loading="isDeleting(prompt.id)"
+                    @click.stop
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </template>
+              </el-popconfirm>
             </div>
-            <div class="meta-item">
-              <span class="meta-label">更新时间</span>
-              <span>{{ formatDate(prompt.updated_at) }}</span>
-            </div>
-          </div>
-          <div class="prompt-tags">
-            <el-tag
-              v-for="tag in prompt.tags"
-              :key="tag.id"
-              size="small"
-              effect="dark"
-              :style="{ backgroundColor: tag.color, borderColor: tag.color }"
-            >
-              {{ tag.name }}
-            </el-tag>
-          </div>
-        </el-card>
+          </el-card>
+        </div>
       </div>
-    </div>
+      <el-empty v-else description="暂无 Prompt 数据，请点击右上角新建" />
+    </template>
 
     <el-dialog v-model="createDialogVisible" title="新建 Prompt" width="720px">
       <el-alert
@@ -162,18 +197,22 @@
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreatePrompt">提交</el-button>
+        <el-button type="primary" :loading="isSubmitting" @click="handleCreatePrompt">
+          提交
+        </el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { Delete, Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { mockPrompts } from '../mocks/prompts'
+import { listPrompts, createPrompt, deletePrompt, type HttpError } from '../api/prompt'
+import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
+import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 import type { Prompt } from '../types/prompt'
 
 type SortKey = 'default' | 'created_at' | 'updated_at' | 'author'
@@ -189,7 +228,15 @@ interface PromptFormState {
 }
 
 const router = useRouter()
-const prompts: Prompt[] = mockPrompts
+const prompts = ref<Prompt[]>([])
+const promptClasses = ref<PromptClassStats[]>([])
+const promptTags = ref<PromptTagStats[]>([])
+const isLoading = ref(false)
+const promptError = ref<string | null>(null)
+const collectionError = ref<string | null>(null)
+const loadError = computed(() => promptError.value ?? collectionError.value)
+const isSubmitting = ref(false)
+const deletingIds = ref<number[]>([])
 
 const activeClassKey = ref('all')
 const searchKeyword = ref('')
@@ -197,28 +244,15 @@ const selectedTagIds = ref<number[]>([])
 const sortKey = ref<SortKey>('default')
 
 const classOptions = computed(() => {
-  const map = new Map<number, { id: number; name: string }>()
-  prompts.forEach((item) => {
-    if (!map.has(item.prompt_class.id)) {
-      map.set(item.prompt_class.id, {
-        id: item.prompt_class.id,
-        name: item.prompt_class.name
-      })
-    }
-  })
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+  return promptClasses.value
+    .map((item) => ({ id: item.id, name: item.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 })
 
 const tagOptions = computed(() => {
-  const map = new Map<number, { id: number; name: string; color: string }>()
-  prompts.forEach((prompt) => {
-    prompt.tags.forEach((tag) => {
-      if (!map.has(tag.id)) {
-        map.set(tag.id, tag)
-      }
-    })
-  })
-  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+  return promptTags.value
+    .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
 })
 
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -281,7 +315,7 @@ const filteredPrompts = computed(() => {
   const activeClass = activeClassKey.value
   const tagIds = selectedTagIds.value
 
-  const list = prompts.filter((prompt) => {
+  const list = prompts.value.filter((prompt) => {
     if (activeClass !== 'all' && String(prompt.prompt_class.id) !== activeClass) {
       return false
     }
@@ -326,6 +360,10 @@ function openCreateDialog() {
   createDialogVisible.value = true
 }
 
+function isDeleting(id: number) {
+  return deletingIds.value.includes(id)
+}
+
 function handleCreatePrompt() {
   if (!promptForm.name.trim() || !promptForm.version.trim() || !promptForm.content.trim()) {
     ElMessage.warning('请至少填写标题、版本号和内容')
@@ -335,13 +373,146 @@ function handleCreatePrompt() {
     ElMessage.warning('请先选择分类')
     return
   }
-  ElMessage.info('后端接口建设中，提交数据暂未保存')
-  createDialogVisible.value = false
+  if (isSubmitting.value) {
+    return
+  }
+
+  if (!promptForm.classId) {
+    ElMessage.warning('请先选择分类')
+    return
+  }
+
+  isSubmitting.value = true
+  const payload = {
+    name: promptForm.name.trim(),
+    description: promptForm.description.trim() || null,
+    author: promptForm.author.trim() || null,
+    class_id: promptForm.classId,
+    version: promptForm.version.trim(),
+    content: promptForm.content,
+    tag_ids: promptForm.tagIds.length ? promptForm.tagIds : []
+  }
+
+  createPrompt(payload)
+    .then(async () => {
+      ElMessage.success('新建 Prompt 成功')
+      createDialogVisible.value = false
+      await Promise.all([fetchPrompts(), fetchCollections()])
+    })
+    .catch((error) => {
+      ElMessage.error(extractErrorMessage(error, '新建 Prompt 失败'))
+    })
+    .finally(() => {
+      isSubmitting.value = false
+    })
 }
 
 function goDetail(id: number) {
   router.push({ name: 'prompt-detail', params: { id: String(id) } })
 }
+
+async function handleDeletePrompt(target: Prompt) {
+  if (isDeleting(target.id)) {
+    return
+  }
+  deletingIds.value = [...deletingIds.value, target.id]
+  try {
+    await deletePrompt(target.id)
+    ElMessage.success(`已删除「${target.name}」`)
+    await Promise.all([fetchPrompts(), fetchCollections()])
+  } catch (error) {
+    ElMessage.error(extractErrorMessage(error, '删除 Prompt 失败'))
+  } finally {
+    deletingIds.value = deletingIds.value.filter((item) => item !== target.id)
+  }
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'status' in error) {
+    const httpError = error as HttpError
+    if (httpError.payload && typeof httpError.payload === 'object' && 'detail' in httpError.payload) {
+      const detail = (httpError.payload as Record<string, unknown>).detail
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail
+      }
+    }
+    if (httpError.status === 404) {
+      return '相关资源不存在'
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
+
+async function fetchPrompts() {
+  try {
+    const data = await listPrompts({ limit: 200 })
+    prompts.value = data
+    promptError.value = null
+  } catch (error) {
+    const message = extractErrorMessage(error, '加载 Prompt 列表失败')
+    promptError.value = message
+    ElMessage.error(message)
+    prompts.value = []
+  }
+}
+
+async function fetchCollections() {
+  try {
+    const [classes, tagResponse] = await Promise.all([
+      listPromptClasses(),
+      listPromptTags()
+    ])
+    promptClasses.value = classes
+    promptTags.value = tagResponse.items
+    collectionError.value = null
+  } catch (error) {
+    const message = extractErrorMessage(error, '加载分类或标签数据失败')
+    collectionError.value = message
+    ElMessage.error(message)
+    promptClasses.value = []
+    promptTags.value = []
+  }
+}
+
+async function bootstrap() {
+  isLoading.value = true
+  promptError.value = null
+  collectionError.value = null
+  await Promise.all([fetchPrompts(), fetchCollections()])
+  isLoading.value = false
+}
+
+watch(classOptions, (options) => {
+  if (activeClassKey.value !== 'all') {
+    const exists = options.some((item) => String(item.id) === activeClassKey.value)
+    if (!exists) {
+      activeClassKey.value = 'all'
+    }
+  }
+  if (!options.length) {
+    promptForm.classId = null
+    return
+  }
+  if (promptForm.classId === null || !options.some((item) => item.id === promptForm.classId)) {
+    promptForm.classId = options[0].id
+  }
+})
+
+watch(tagOptions, (options) => {
+  if (!options.length) {
+    selectedTagIds.value = []
+    return
+  }
+  const available = new Set(options.map((item) => item.id))
+  selectedTagIds.value = selectedTagIds.value.filter((id) => available.has(id))
+})
+
+onMounted(() => {
+  void bootstrap()
+})
 </script>
 
 <style scoped>
@@ -431,6 +602,10 @@ function goDetail(id: number) {
   align-items: stretch;
 }
 
+.data-alert {
+  margin-bottom: 12px;
+}
+
 .card-grid__item {
   height: 100%;
 }
@@ -500,8 +675,22 @@ function goDetail(id: number) {
 .prompt-tags {
   margin-top: auto;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-tags__list {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.card-delete {
+  color: var(--el-color-danger);
+  display: flex;
+  align-items: center;
+  padding: 4px;
 }
 
 .dialog-form {

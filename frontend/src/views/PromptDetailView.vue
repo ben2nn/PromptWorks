@@ -4,10 +4,22 @@
       <el-breadcrumb-item>
         <span class="breadcrumb-link" @click="goHome">Prompt 管理</span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>{{ detail.name }}</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ detail?.name ?? 'Prompt 详情' }}</el-breadcrumb-item>
     </el-breadcrumb>
 
-    <el-card class="info-card">
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      show-icon
+    />
+
+    <el-skeleton v-else-if="isLoading" animated :rows="6" />
+
+    <el-empty v-else-if="!detail" description="未找到 Prompt 详情" />
+
+    <template v-else>
+      <el-card class="info-card">
       <template #header>
         <div class="info-header">
           <div class="info-title-group">
@@ -27,20 +39,82 @@
         <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updated_at) }}</el-descriptions-item>
         <el-descriptions-item label="分类描述" :span="3">{{ detail.prompt_class.description ?? '暂无说明' }}</el-descriptions-item>
       </el-descriptions>
-      <div class="info-tags" v-if="detail.tags.length">
-        <el-tag
-          v-for="tag in detail.tags"
-          :key="tag.id"
-          size="small"
-          effect="dark"
-          :style="{ backgroundColor: tag.color, borderColor: tag.color }"
-        >
-          {{ tag.name }}
-        </el-tag>
+      <div class="info-tags">
+        <div class="info-tags__list">
+          <el-tag
+            v-for="tag in detail.tags"
+            :key="tag.id"
+            size="small"
+            effect="dark"
+            :style="{ backgroundColor: tag.color, borderColor: tag.color }"
+          >
+            {{ tag.name }}
+          </el-tag>
+        </div>
+        <el-button type="primary" link size="small" @click="openMetaDialog">
+          编辑分类与标签
+        </el-button>
       </div>
-    </el-card>
+      <el-dialog v-model="metaDialogVisible" title="编辑分类与标签" width="520px">
+        <el-alert
+          v-if="metaError"
+          :title="metaError"
+          type="warning"
+          show-icon
+          class="meta-alert"
+        />
+        <el-form label-width="80px" class="meta-form">
+          <el-form-item label="分类">
+            <el-select
+              v-model="selectedClassId"
+              placeholder="请选择分类"
+              :loading="isMetaLoading"
+              :disabled="isMetaLoading || !classOptions.length"
+            >
+              <el-option
+                v-for="option in classOptions"
+                :key="option.id"
+                :label="option.name"
+                :value="option.id"
+              />
+            </el-select>
+            <span v-if="!classOptions.length && !isMetaLoading" class="meta-empty-tip">
+              暂无分类，请先在“分类管理”中创建
+            </span>
+          </el-form-item>
+          <el-form-item label="标签">
+            <el-select
+              v-model="selectedTagIds"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="选择标签"
+              :loading="isMetaLoading"
+            >
+              <el-option
+                v-for="tag in tagOptions"
+                :key="tag.id"
+                :label="tag.name"
+                :value="tag.id"
+              >
+                <span class="tag-option">
+                  <span class="tag-dot" :style="{ backgroundColor: tag.color }" />
+                  {{ tag.name }}
+                </span>
+              </el-option>
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="closeMetaDialog" :disabled="isMetaSaving">取消</el-button>
+          <el-button type="primary" :loading="isMetaSaving" :disabled="!canSaveMeta" @click="handleSaveMeta">
+            保存
+          </el-button>
+        </template>
+      </el-dialog>
+      </el-card>
 
-    <el-card class="content-card">
+      <el-card class="content-card">
       <template #header>
         <div class="content-header">
           <div>
@@ -90,9 +164,9 @@
           </div>
         </aside>
       </div>
-    </el-card>
+      </el-card>
 
-    <el-card class="test-card">
+      <el-card class="test-card">
       <template #header>
         <div class="test-header">
           <div>
@@ -117,14 +191,19 @@
         </el-table-column>
       </el-table>
       <el-empty v-else description="暂无测试记录，点击右上角新增测试" />
-    </el-card>
+      </el-card>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { mockPrompts, getPromptById } from '../mocks/prompts'
+import { usePromptDetail } from '../composables/usePromptDetail'
+import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
+import { listPromptTags, type PromptTagStats } from '../api/promptTag'
+import { updatePrompt } from '../api/prompt'
+import { ElMessage } from 'element-plus'
 
 interface PromptTestRecord {
   id: number
@@ -138,13 +217,17 @@ interface PromptTestRecord {
 const router = useRouter()
 const route = useRoute()
 
-const fallbackId = mockPrompts[0]?.id ?? 1
 const currentId = computed(() => {
-  const value = Number(route.params.id)
-  return Number.isNaN(value) ? fallbackId : value
+  const raw = Number(route.params.id)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
 })
 
-const detail = computed(() => getPromptById(currentId.value) ?? mockPrompts[0])
+const {
+  prompt: detail,
+  loading: isLoading,
+  error: errorMessage,
+  refresh: refreshDetail
+} = usePromptDetail(currentId)
 
 const mockTestRecords: PromptTestRecord[] = [
   {
@@ -174,15 +257,39 @@ const mockTestRecords: PromptTestRecord[] = [
 ]
 
 const selectedVersionId = ref<number | null>(null)
+const promptClasses = ref<PromptClassStats[]>([])
+const promptTags = ref<PromptTagStats[]>([])
+const metaError = ref<string | null>(null)
+const isMetaLoading = ref(false)
+const isMetaSaving = ref(false)
+const selectedClassId = ref<number | null>(null)
+const selectedTagIds = ref<number[]>([])
+const metaDialogVisible = ref(false)
+
+const classOptions = computed(() =>
+  promptClasses.value
+    .map((item) => ({ id: item.id, name: item.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+)
+
+const tagOptions = computed(() =>
+  promptTags.value
+    .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+)
 
 watch(
-  detail,
+  () => detail.value,
   (value) => {
     if (!value) {
       selectedVersionId.value = null
+      selectedClassId.value = null
+      selectedTagIds.value = []
       return
     }
     selectedVersionId.value = value.current_version?.id ?? value.versions[0]?.id ?? null
+    selectedClassId.value = value.prompt_class.id
+    selectedTagIds.value = value.tags.map((tag) => tag.id)
   },
   { immediate: true }
 )
@@ -196,7 +303,38 @@ const selectedVersion = computed(() => {
   return match ?? prompt.current_version ?? null
 })
 
-const testRecords = computed(() => mockTestRecords.filter((item) => item.prompt_id === currentId.value))
+const testRecords = computed(() => {
+  if (!currentId.value) return []
+  return mockTestRecords.filter((item) => item.prompt_id === currentId.value)
+})
+
+watch(classOptions, (options) => {
+  if (!options.length) {
+    selectedClassId.value = null
+    return
+  }
+  if (selectedClassId.value === null) {
+    selectedClassId.value = options[0].id
+    return
+  }
+  const exists = options.some((item) => item.id === selectedClassId.value)
+  if (!exists) {
+    selectedClassId.value = options[0].id
+  }
+})
+
+watch(tagOptions, (options) => {
+  if (!options.length) {
+    selectedTagIds.value = []
+    return
+  }
+  const available = new Set(options.map((item) => item.id))
+  selectedTagIds.value = selectedTagIds.value.filter((id) => available.has(id))
+})
+
+onMounted(() => {
+  void fetchMeta()
+})
 
 const statusTagType = {
   success: 'success',
@@ -209,6 +347,109 @@ const statusLabel = {
   failed: '失败',
   running: '进行中'
 } as const
+
+const canSaveMeta = computed(() => {
+  const prompt = detail.value
+  if (!prompt) {
+    return false
+  }
+  if (selectedClassId.value === null) {
+    return false
+  }
+  const originalClassId = prompt.prompt_class.id
+  const originalTags = prompt.tags.map((tag) => tag.id).sort((a, b) => a - b)
+  const currentTags = [...selectedTagIds.value].sort((a, b) => a - b)
+  const tagsChanged =
+    originalTags.length !== currentTags.length ||
+    originalTags.some((value, index) => value !== currentTags[index])
+  return selectedClassId.value !== originalClassId || tagsChanged
+})
+
+function extractMetaError(error: unknown): string {
+  if (error && typeof error === 'object' && 'payload' in error) {
+    const httpError = error as { status?: number; payload?: unknown }
+    const payload = httpError.payload
+    if (payload && typeof payload === 'object' && 'detail' in payload) {
+      const detail = (payload as Record<string, unknown>).detail
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail
+      }
+    }
+    if (httpError.status === 404) {
+      return '分类或标签数据未找到'
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return '加载分类或标签数据失败'
+}
+
+async function fetchMeta() {
+  isMetaLoading.value = true
+  metaError.value = null
+  try {
+    const [classes, tagResponse] = await Promise.all([
+      listPromptClasses(),
+      listPromptTags()
+    ])
+    promptClasses.value = classes
+    promptTags.value = tagResponse.items
+  } catch (error) {
+    metaError.value = extractMetaError(error)
+  } finally {
+    isMetaLoading.value = false
+  }
+}
+
+function resetMetaSelections() {
+  const prompt = detail.value
+  if (!prompt) {
+    selectedClassId.value = null
+    selectedTagIds.value = []
+    return
+  }
+  selectedClassId.value = prompt.prompt_class.id
+  selectedTagIds.value = prompt.tags.map((tag) => tag.id)
+}
+
+async function handleSaveMeta() {
+  const prompt = detail.value
+  if (!prompt) {
+    return
+  }
+  if (selectedClassId.value === null) {
+    ElMessage.warning('请选择分类')
+    return
+  }
+  if (!canSaveMeta.value) {
+    ElMessage.info('分类与标签未发生变化')
+    return
+  }
+  isMetaSaving.value = true
+  try {
+    await updatePrompt(prompt.id, {
+      class_id: selectedClassId.value,
+      tag_ids: selectedTagIds.value
+    })
+    ElMessage.success('分类与标签已更新')
+    await refreshDetail()
+    await fetchMeta()
+  } catch (error) {
+    ElMessage.error(extractMetaError(error))
+  } finally {
+    isMetaSaving.value = false
+  }
+}
+
+function openMetaDialog() {
+  metaDialogVisible.value = true
+  resetMetaSelections()
+}
+
+function closeMetaDialog() {
+  metaDialogVisible.value = false
+}
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -242,14 +483,17 @@ function handleSelectVersion(id: number) {
 }
 
 function handleViewVersionCompare() {
+  if (!currentId.value) return
   router.push({ name: 'prompt-version-compare', params: { id: currentId.value } })
 }
 
 function handleCreateVersion() {
+  if (!currentId.value) return
   router.push({ name: 'prompt-version-create', params: { id: currentId.value } })
 }
 
 function handleCreateTest() {
+  if (!currentId.value) return
   router.push({ name: 'prompt-test-create', params: { id: currentId.value } })
 }
 
@@ -325,9 +569,55 @@ function goHome() {
 
 .info-tags {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.info-tags__list {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
+}
+
+.info-tags :deep(.el-button.is-link) {
+  padding: 0;
+}
+
+.meta-form {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.meta-alert {
+  margin-bottom: 12px;
+}
+
+.meta-empty-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--text-weak-color);
+}
+
+.meta-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tag-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #909399;
 }
 
 .content-card {

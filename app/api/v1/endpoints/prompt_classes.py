@@ -117,21 +117,11 @@ def update_prompt_class(
     "/{class_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
 def delete_prompt_class(*, db: Session = Depends(get_db), class_id: int) -> Response:
-    """删除指定 Prompt 分类，若仍有 Prompt 引用则阻止删除"""
+    """删除指定 Prompt 分类，同时清理其下所有 Prompt。"""
 
     prompt_class = db.get(PromptClass, class_id)
     if not prompt_class:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
-
-    has_prompt_stmt = (
-        select(func.count()).select_from(Prompt).where(Prompt.class_id == class_id)
-    )
-    remaining = db.scalar(has_prompt_stmt)
-    if remaining and remaining > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="仍有 Prompt 使用该分类，请先迁移或删除相关 Prompt",
-        )
 
     db.delete(prompt_class)
     db.commit()

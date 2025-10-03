@@ -5,12 +5,25 @@
         <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptDetail">{{ prompt?.name ?? '未命名 Prompt' }}</span>
+        <span class="breadcrumb-link" @click="goPromptDetail">
+          {{ promptDetail?.name ?? '未命名 Prompt' }}
+        </span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>新增测试</el-breadcrumb-item>
     </el-breadcrumb>
 
-    <el-card>
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      show-icon
+    />
+
+    <el-skeleton v-else-if="isLoading" animated :rows="4" />
+
+    <el-empty v-else-if="!promptDetail" description="未找到 Prompt 信息" />
+
+    <el-card v-else>
       <template #header>
         <div class="card-header">
           <h3>快速搭建测试任务</h3>
@@ -51,18 +64,21 @@
 import { computed, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { mockPrompts, getPromptById } from '../mocks/prompts'
+import { usePromptDetail } from '../composables/usePromptDetail'
 
 const router = useRouter()
 const route = useRoute()
 
-const fallbackId = mockPrompts[0]?.id ?? 1
 const currentId = computed(() => {
-  const value = Number(route.params.id)
-  return Number.isNaN(value) ? fallbackId : value
+  const raw = Number(route.params.id)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
 })
 
-const prompt = computed(() => getPromptById(currentId.value) ?? mockPrompts[0] ?? null)
+const {
+  prompt: promptDetail,
+  loading: isLoading,
+  error: errorMessage
+} = usePromptDetail(currentId)
 
 const form = reactive({
   name: '',
@@ -75,6 +91,10 @@ function handleSubmit() {
 }
 
 function goPromptDetail() {
+  if (!currentId.value) {
+    router.push({ name: 'prompt-management' })
+    return
+  }
   router.push({ name: 'prompt-detail', params: { id: currentId.value } })
 }
 

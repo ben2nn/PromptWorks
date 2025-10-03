@@ -5,20 +5,33 @@
         <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptDetail">{{ prompt?.name ?? '未命名 Prompt' }}</span>
+        <span class="breadcrumb-link" @click="goPromptDetail">
+          {{ promptDetail?.name ?? '未命名 Prompt' }}
+        </span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>版本对比</el-breadcrumb-item>
     </el-breadcrumb>
 
-    <el-card>
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      show-icon
+    />
+
+    <el-skeleton v-else-if="isLoading" animated :rows="5" />
+
+    <el-empty v-else-if="!promptDetail" description="未找到 Prompt 信息" />
+
+    <el-card v-else>
       <template #header>
         <div class="card-header">
           <div>
             <h3>版本差异对比</h3>
             <span class="card-subtitle">选择两个不同版本进行比对，左列为基准，右列为对比</span>
           </div>
-          <el-tag v-if="prompt?.current_version" size="small" type="success">
-            当前版本：{{ prompt.current_version.version }}
+          <el-tag v-if="promptDetail.current_version" size="small" type="success">
+            当前版本：{{ promptDetail.current_version.version }}
           </el-tag>
         </div>
       </template>
@@ -97,7 +110,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { diffLines, type Change } from 'diff'
-import { mockPrompts, getPromptById } from '../mocks/prompts'
+import { usePromptDetail } from '../composables/usePromptDetail'
 
 interface DiffRowSegment {
   text: string
@@ -112,23 +125,26 @@ interface DiffRow {
 const router = useRouter()
 const route = useRoute()
 
-const fallbackId = mockPrompts[0]?.id ?? 1
 const currentId = computed(() => {
-  const value = Number(route.params.id)
-  return Number.isNaN(value) ? fallbackId : value
+  const raw = Number(route.params.id)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
 })
 
-const prompt = computed(() => getPromptById(currentId.value) ?? mockPrompts[0] ?? null)
+const {
+  prompt: promptDetail,
+  loading: isLoading,
+  error: errorMessage
+} = usePromptDetail(currentId)
 
-const versionOptions = computed(() => prompt.value?.versions ?? [])
+const versionOptions = computed(() => promptDetail.value?.versions ?? [])
 
 const baseVersion = ref<number | null>(null)
 const targetVersion = ref<number | null>(null)
 
 watch(
-  prompt,
+  () => promptDetail.value,
   (value) => {
-    if (!value) {
+    if (!value || !value.versions.length) {
       baseVersion.value = null
       targetVersion.value = null
       return
@@ -153,9 +169,11 @@ watch([baseVersion, targetVersion], ([baseId, targetId]) => {
   }
 })
 
-const base = computed(() => versionOptions.value.find((item) => item.id === baseVersion.value) ?? null)
-const target = computed(
-  () => versionOptions.value.find((item) => item.id === targetVersion.value) ?? null
+const base = computed(() =>
+  versionOptions.value.find((item) => item.id === baseVersion.value) ?? null
+)
+const target = computed(() =>
+  versionOptions.value.find((item) => item.id === targetVersion.value) ?? null
 )
 
 const diffRows = computed<DiffRow[]>(() => {
@@ -200,6 +218,7 @@ function goPromptManagement() {
 }
 
 function goPromptDetail() {
+  if (!currentId.value) return
   router.push({ name: 'prompt-detail', params: { id: currentId.value } })
 }
 </script>

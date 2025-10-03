@@ -95,14 +95,19 @@ def test_update_prompt_class_not_found(client):
     assert resp.status_code == 404
 
 
-def test_delete_prompt_class_blocked_by_prompts(client, db_session, prompt_classes):
+def test_delete_prompt_class_cascades_prompts(client, db_session, prompt_classes):
     cls_a, _ = prompt_classes
     prompt = Prompt(name="阻塞用", prompt_class=cls_a)
     db_session.add(prompt)
     db_session.commit()
 
     delete_resp = client.delete(f"/api/v1/prompt-classes/{cls_a.id}")
-    assert delete_resp.status_code == 409
+    assert delete_resp.status_code == 204
+    assert db_session.get(Prompt, prompt.id) is None
+
+    confirm_resp = client.get("/api/v1/prompt-classes/")
+    names = [item["name"] for item in confirm_resp.json()]
+    assert "分类A" not in names
 
 
 def test_delete_prompt_class_success(client, prompt_classes):

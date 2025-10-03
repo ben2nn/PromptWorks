@@ -5,12 +5,25 @@
         <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptDetail">{{ prompt?.name ?? '未命名 Prompt' }}</span>
+        <span class="breadcrumb-link" @click="goPromptDetail">
+          {{ promptDetail?.name ?? '未命名 Prompt' }}
+        </span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>新增版本</el-breadcrumb-item>
     </el-breadcrumb>
 
-    <el-card>
+    <el-alert
+      v-if="errorMessage"
+      :title="errorMessage"
+      type="error"
+      show-icon
+    />
+
+    <el-skeleton v-else-if="isLoading" animated :rows="5" />
+
+    <el-empty v-else-if="!promptDetail" description="未找到 Prompt 信息" />
+
+    <el-card v-else>
       <template #header>
         <div class="card-header">
           <h3>新增版本基础表单</h3>
@@ -35,7 +48,7 @@
         <el-form-item label="引用版本">
           <el-select v-model="form.reference" clearable placeholder="可选择参考版本">
             <el-option
-              v-for="version in prompt?.versions ?? []"
+              v-for="version in promptDetail.versions"
               :key="version.id"
               :label="version.version"
               :value="version.id"
@@ -44,7 +57,9 @@
         </el-form-item>
         <el-form-item>
           <el-space>
-            <el-button type="primary" @click="handleSubmit">提交（演示）</el-button>
+            <el-button type="primary" :loading="isSubmitting" @click="handleSubmit">
+              提交
+            </el-button>
             <el-button @click="goPromptDetail">取消</el-button>
           </el-space>
         </el-form-item>
@@ -54,21 +69,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { mockPrompts, getPromptById } from '../mocks/prompts'
+import { usePromptDetail } from '../composables/usePromptDetail'
+import { updatePrompt, type HttpError } from '../api/prompt'
 
 const router = useRouter()
 const route = useRoute()
 
-const fallbackId = mockPrompts[0]?.id ?? 1
 const currentId = computed(() => {
-  const value = Number(route.params.id)
-  return Number.isNaN(value) ? fallbackId : value
+  const raw = Number(route.params.id)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
 })
 
-const prompt = computed(() => getPromptById(currentId.value) ?? mockPrompts[0] ?? null)
+const {
+  prompt: promptDetail,
+  loading: isLoading,
+  error: errorMessage
+} = usePromptDetail(currentId)
 
 const form = reactive({
   version: '',
@@ -77,12 +96,65 @@ const form = reactive({
   reference: undefined as number | undefined
 })
 
-function handleSubmit() {
-  // 基础示例：真实项目可通过 API 提交
-  ElMessage.success('已模拟提交，新版本创建逻辑待接入 API')
+const isSubmitting = ref(false)
+
+watch(
+  () => promptDetail.value?.current_version?.id,
+  (versionId) => {
+    if (typeof versionId === 'number') {
+      form.reference = versionId
+    }
+  },
+  { immediate: true }
+)
+
+function extractErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'payload' in error) {
+    const httpError = error as HttpError
+    const detail = (httpError.payload as Record<string, unknown> | null)?.detail
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail
+    }
+    if (httpError.status === 404) {
+      return '目标 Prompt 不存在'
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return '提交新版本失败'
+}
+
+async function handleSubmit() {
+  if (!currentId.value) {
+    ElMessage.error('无法识别当前 Prompt 编号')
+    return
+  }
+  if (!form.version.trim() || !form.content.trim()) {
+    ElMessage.warning('请填写版本号与内容')
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    await updatePrompt(currentId.value, {
+      version: form.version.trim(),
+      content: form.content
+    })
+    ElMessage.success('新增版本成功')
+    router.push({ name: 'prompt-detail', params: { id: currentId.value } })
+  } catch (error) {
+    ElMessage.error(extractErrorMessage(error))
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 function goPromptDetail() {
+  if (!currentId.value) {
+    router.push({ name: 'prompt-management' })
+    return
+  }
   router.push({ name: 'prompt-detail', params: { id: currentId.value } })
 }
 
