@@ -16,6 +16,24 @@ const router = createRouter({
       meta: { menu: 'prompt', title: 'Prompt 详情' }
     },
     {
+      path: '/prompts/:id/versions/compare',
+      name: 'prompt-version-compare',
+      component: () => import('../views/PromptVersionCompareView.vue'),
+      meta: { menu: 'prompt', title: '版本对比' }
+    },
+    {
+      path: '/prompts/:id/versions/new',
+      name: 'prompt-version-create',
+      component: () => import('../views/PromptVersionCreateView.vue'),
+      meta: { menu: 'prompt', title: '新增版本' }
+    },
+    {
+      path: '/prompts/:id/tests/new',
+      name: 'prompt-test-create',
+      component: () => import('../views/PromptTestCreateView.vue'),
+      meta: { menu: 'prompt', title: '新增测试' }
+    },
+    {
       path: '/tests/quick',
       name: 'quick-test',
       component: () => import('../views/QuickTestView.vue'),
