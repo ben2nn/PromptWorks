@@ -9,7 +9,7 @@
     </section>
 
     <template v-if="providerCards.length">
-      <el-row :gutter="0" class="provider-grid">
+      <el-row :gutter="0" class="provider-grid" v-loading="loadingProviders">
         <el-col
           v-for="card in providerCards"
           :key="card.id"
@@ -27,7 +27,6 @@
                 </el-avatar>
                 <div class="provider-card__text">
                   <h3>{{ card.providerName }}</h3>
-                  <p>{{ card.description }}</p>
                 </div>
               </div>
               <div class="provider-card__actions">
@@ -40,17 +39,36 @@
                     @click="toggleCollapse(card.id)"
                   />
                 </el-tooltip>
+                <el-tooltip content="更新 API Key" placement="top">
+                  <el-button
+                    class="collapse-button"
+                    text
+                    size="small"
+                    :icon="Edit"
+                    @click="handleUpdateApiKey(card)"
+                  />
+                </el-tooltip>
+                <el-tooltip content="删除提供方" placement="top">
+                  <el-button
+                    class="collapse-button"
+                    text
+                    type="danger"
+                    size="small"
+                    :icon="Delete"
+                    @click="handleDeleteProvider(card)"
+                  />
+                </el-tooltip>
               </div>
             </div>
 
             <transition name="fade">
               <div v-show="!card.collapsed" class="provider-card__body">
                 <el-form label-position="top" class="provider-card__form">
-                  <el-form-item label="API Key">
+                  <el-form-item label="API Key（仅展示脱敏信息）">
                     <el-input
                       class="provider-card__input"
                       :type="card.revealApiKey ? 'text' : 'password'"
-                      v-model="card.apiKey"
+                      :model-value="card.maskedApiKey"
                       readonly
                     >
                       <template #suffix>
@@ -66,6 +84,7 @@
                       v-model="card.baseUrl"
                       :readonly="!card.isCustom"
                       :placeholder="card.isCustom ? '请输入自定义 API 域名' : '官方默认地址自动读取'"
+                      @change="(value) => handleBaseUrlChange(card, value)"
                     />
                   </el-form-item>
                 </el-form>
@@ -114,7 +133,7 @@
     <el-dialog v-model="dialogVisible" title="新增模型提供方" width="620px">
       <el-form :model="llmForm" label-width="120px" class="dialog-form">
         <el-form-item label="提供方">
-          <el-select v-model="llmForm.provider_name" placeholder="请选择提供方" @change="handleProviderChange">
+          <el-select v-model="llmForm.provider_key" placeholder="请选择提供方" @change="handleProviderChange">
             <el-option
               v-for="item in providerOptions"
               :key="item.value"
@@ -122,6 +141,9 @@
               :value="item.value"
             />
           </el-select>
+        </el-form-item>
+        <el-form-item label="展示名称">
+          <el-input v-model="llmForm.provider_name" placeholder="请输入提供方名称" />
         </el-form-item>
         <el-form-item v-if="isCustomProvider" label="接口地址">
           <el-input v-model="llmForm.base_url" placeholder="请输入自定义提供方 API 地址" />
@@ -143,152 +165,142 @@
             </template>
           </el-popover>
         </el-form-item>
-        <el-form-item label="模型名称">
-          <el-input v-model="llmForm.model_name" placeholder="如 gpt-4o-mini" />
-        </el-form-item>
         <el-form-item label="API Key">
           <el-input v-model="llmForm.api_key" placeholder="请输入访问凭证" type="password" show-password />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCreate">提交</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreate">提交</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="modelDialogVisible" title="添加模型" width="560px">
+      <el-form :model="modelForm" label-width="120px" class="dialog-form">
+        <el-form-item label="模型名称">
+          <el-input v-model="modelForm.name" placeholder="请输入模型名称" />
+        </el-form-item>
+        <el-form-item label="能力标签">
+          <el-input v-model="modelForm.capability" placeholder="如 对话 / 推理（可选）" />
+        </el-form-item>
+        <el-form-item label="配额策略">
+          <el-input v-model="modelForm.quota" placeholder="如 团队共享 100k tokens/日（可选）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="modelDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="modelSubmitLoading" @click="submitModel">提交</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
-import { Delete, Expand, Fold, Hide, Plus, View } from '@element-plus/icons-vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Delete, Edit, Expand, Fold, Hide, Plus, View } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+import {
+  createLLMModel,
+  createLLMProvider,
+  deleteLLMModel,
+  deleteLLMProvider,
+  listCommonLLMProviders,
+  listLLMProviders,
+  updateLLMProvider
+} from '../api/llmProvider'
+import type { KnownLLMProvider, LLMProvider } from '../types/llm'
 
 interface ProviderOption {
   label: string
   value: string
 }
 
-interface ProviderModel {
-  id: string
+interface ProviderCardModel {
+  id: number
   name: string
-  capability: string
-  quota: string
+  capability: string | null
+  quota: string | null
 }
 
 interface ProviderCard {
-  id: string
+  id: number
+  providerKey?: string | null
   providerName: string
   logo: string
-  description: string
-  apiKey: string
+  maskedApiKey: string
   baseUrl: string
   isCustom: boolean
-  models: ProviderModel[]
+  models: ProviderCardModel[]
   collapsed: boolean
   revealApiKey: boolean
 }
 
-const providerCards = ref<ProviderCard[]>([
-  {
-    id: 'openai',
-    providerName: 'OpenAI',
-    logo: '🧠',
-    description: '客服机器人与编程助手的主力模型接入渠道。',
-    apiKey: 'sk-openai-demo-************',
-    baseUrl: 'https://api.openai.com/v1',
-    isCustom: false,
-    models: [
-      {
-        id: 'gpt-4o-mini',
-        name: 'gpt-4o-mini',
-        capability: '对话 / 代码',
-        quota: '团队共享 200k tokens/日'
-      },
-      {
-        id: 'gpt-4o',
-        name: 'gpt-4o',
-        capability: '推理 / 多模态',
-        quota: '项目 A 独享 80k tokens/日'
-      }
-    ],
-    collapsed: false,
-    revealApiKey: false
-  },
-  {
-    id: 'anthropic',
-    providerName: 'Anthropic',
-    logo: '🤖',
-    description: '长文本总结与合规审阅的优选模型。',
-    apiKey: 'sk-anthropic-demo-********',
-    baseUrl: 'https://api.anthropic.com/v1',
-    isCustom: false,
-    models: [
-      {
-        id: 'claude-3-sonnet',
-        name: 'Claude 3 Sonnet',
-        capability: '长文本 / 合规',
-        quota: '知识运营团队 50k tokens/日'
-      }
-    ],
-    collapsed: false,
-    revealApiKey: false
-  },
-  {
-    id: 'internal-hub',
-    providerName: '自建推理集群',
-    logo: '🏢',
-    description: '内网 LoRA 微调模型，支持业务特定问答。',
-    apiKey: 'sk-internal-demo-********',
-    baseUrl: 'https://llm.internal.company/api',
-    isCustom: true,
-    models: [
-      {
-        id: 'faq-bot-001',
-        name: 'FAQ-Bot-001',
-        capability: '客服 FAQ',
-        quota: '客服团队 20k tokens/日'
-      },
-      {
-        id: 'report-writer',
-        name: 'Report-Writer',
-        capability: '数据解读',
-        quota: '数据分析组 10k tokens/日'
-      }
-    ],
-    collapsed: false,
-    revealApiKey: false
-  }
-])
+const loadingProviders = ref(false)
+const providerCards = ref<ProviderCard[]>([])
 
-const providerOptions: ProviderOption[] = [
-  { label: 'OpenAI', value: 'openai' },
-  { label: 'Anthropic', value: 'anthropic' },
-  { label: 'Azure OpenAI', value: 'azure-openai' },
-  { label: 'Google', value: 'google' },
-  { label: '自定义提供方', value: 'custom' }
-]
+const commonProviders = ref<KnownLLMProvider[]>([])
+const commonProviderMap = computed(() => {
+  const map = new Map<string, KnownLLMProvider>()
+  for (const item of commonProviders.value) {
+    map.set(item.key, item)
+  }
+  return map
+})
+
+const providerOptions = computed<ProviderOption[]>(() => {
+  const options = commonProviders.value.map((item) => ({
+    label: item.name,
+    value: item.key
+  }))
+  options.push({ label: '自定义提供方', value: 'custom' })
+  return options
+})
 
 const emojiOptions = ['🚀', '🧠', '✨', '🔥', '🤖', '📦', '🛰️', '🏢', '🦾', '🧩']
 
 const dialogVisible = ref(false)
+const createLoading = ref(false)
 const emojiPopoverVisible = ref(false)
 const llmForm = reactive({
-  provider_name: providerOptions[0]?.value ?? '',
+  provider_key: '',
+  provider_name: '',
   base_url: '',
-  model_name: '',
   api_key: '',
-  logo_emoji: ''
+  logo_emoji: '',
+  is_custom: false
 })
 
-const isCustomProvider = computed(() => llmForm.provider_name === 'custom')
+const isCustomProvider = computed(() => llmForm.provider_key === 'custom')
 
 function resetForm() {
-  llmForm.provider_name = providerOptions[0]?.value ?? ''
-  llmForm.base_url = ''
-  llmForm.model_name = ''
+  const firstOption = providerOptions.value[0]
+  if (firstOption && firstOption.value !== 'custom') {
+    applyCommonProvider(firstOption.value)
+  } else {
+    llmForm.provider_key = 'custom'
+    llmForm.provider_name = ''
+    llmForm.base_url = ''
+    llmForm.logo_emoji = ''
+    llmForm.is_custom = true
+  }
   llmForm.api_key = ''
-  llmForm.logo_emoji = ''
   emojiPopoverVisible.value = false
+}
+
+function applyCommonProvider(key: string) {
+  const provider = commonProviderMap.value.get(key)
+  llmForm.provider_key = key
+  llmForm.is_custom = false
+  if (provider) {
+    llmForm.provider_name = provider.name
+    llmForm.base_url = provider.base_url ?? ''
+    llmForm.logo_emoji = provider.logo_emoji ?? '✨'
+  } else {
+    llmForm.provider_name = key
+    llmForm.base_url = ''
+    llmForm.logo_emoji = '✨'
+  }
 }
 
 function openDialog() {
@@ -297,11 +309,17 @@ function openDialog() {
 }
 
 function handleProviderChange(value: string) {
-  if (value !== 'custom') {
+  if (value === 'custom') {
+    llmForm.provider_key = 'custom'
+    llmForm.provider_name = ''
     llmForm.base_url = ''
     llmForm.logo_emoji = ''
+    llmForm.is_custom = true
     emojiPopoverVisible.value = false
+    return
   }
+  applyCommonProvider(value)
+  emojiPopoverVisible.value = false
 }
 
 function selectEmoji(emoji: string) {
@@ -309,49 +327,86 @@ function selectEmoji(emoji: string) {
   emojiPopoverVisible.value = false
 }
 
-function toggleCollapse(id: string) {
+function toggleCollapse(id: number) {
   const target = providerCards.value.find((item) => item.id === id)
   if (target) {
     target.collapsed = !target.collapsed
   }
 }
 
-function toggleApiVisible(id: string) {
+function toggleApiVisible(id: number) {
   const target = providerCards.value.find((item) => item.id === id)
   if (target) {
     target.revealApiKey = !target.revealApiKey
   }
 }
 
-async function removeModel(providerId: string, modelId: string) {
-  const provider = providerCards.value.find((item) => item.id === providerId)
-  if (!provider) return
+async function fetchProviders() {
+  loadingProviders.value = true
   try {
-    await ElMessageBox.confirm('确认删除该模型接入配置吗？删除后可在后续重新添加。', '提示', {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    provider.models = provider.models.filter((model) => model.id !== modelId)
-    ElMessage.success('模型已从当前提供方移除')
+    const existingCollapsed = new Map(providerCards.value.map((card) => [card.id, card.collapsed]))
+    const existingReveal = new Map(providerCards.value.map((card) => [card.id, card.revealApiKey]))
+
+    const providers = await listLLMProviders()
+    providerCards.value = providers.map((provider) => mapProviderToCard(provider, existingCollapsed, existingReveal))
   } catch (error) {
-    // 用户取消操作无需额外提示
+    console.error(error)
+    ElMessage.error('加载提供方信息失败，请稍后重试')
+  } finally {
+    loadingProviders.value = false
   }
 }
 
-function handleAddModel(providerId: string) {
-  const provider = providerCards.value.find((item) => item.id === providerId)
-  if (!provider) return
-  ElMessage.info(`暂未接入后端接口，先模拟向 ${provider.providerName} 添加模型的流程。`)
+function mapProviderToCard(
+  provider: LLMProvider,
+  collapsedState: Map<number, boolean>,
+  revealState: Map<number, boolean>
+): ProviderCard {
+  return {
+    id: provider.id,
+    providerKey: provider.provider_key,
+    providerName: provider.provider_name,
+    logo: provider.logo_emoji ?? '✨',
+    maskedApiKey: provider.masked_api_key,
+    baseUrl: provider.base_url ?? '',
+    isCustom: provider.is_custom,
+    models: provider.models.map((model) => ({
+      id: model.id,
+      name: model.name,
+      capability: model.capability,
+      quota: model.quota
+    })),
+    collapsed: collapsedState.get(provider.id) ?? false,
+    revealApiKey: revealState.get(provider.id) ?? false
+  }
 }
 
-function handleCreate() {
-  if (!llmForm.provider_name) {
-    ElMessage.warning('请选择提供方')
+async function fetchCommonOptions() {
+  try {
+    commonProviders.value = await listCommonLLMProviders()
+  } catch (error) {
+    console.error(error)
+    ElMessage.warning('加载常用提供方配置失败，仅提供自定义选项')
+    commonProviders.value = []
+  }
+}
+
+async function initialize() {
+  await fetchCommonOptions()
+  await fetchProviders()
+}
+
+onMounted(() => {
+  initialize()
+})
+
+async function handleCreate() {
+  if (!llmForm.provider_name.trim()) {
+    ElMessage.warning('请填写提供方名称')
     return
   }
-  if (!llmForm.model_name.trim() || !llmForm.api_key.trim()) {
-    ElMessage.warning('请填写模型名称和 API Key')
+  if (!llmForm.api_key.trim()) {
+    ElMessage.warning('请填写 API Key')
     return
   }
   if (isCustomProvider.value) {
@@ -359,49 +414,171 @@ function handleCreate() {
       ElMessage.warning('请输入自定义提供方的接口地址')
       return
     }
-    if (!llmForm.logo_emoji.trim()) {
-      ElMessage.warning('请选择一个 Logo Emoji')
-      return
-    }
   }
 
-  const newProviderId = `${llmForm.provider_name}-${Date.now()}`
-  providerCards.value.unshift({
-    id: newProviderId,
-    providerName: llmForm.provider_name === 'custom' ? '自定义提供方' : providerOptions.find((opt) => opt.value === llmForm.provider_name)?.label ?? '未命名提供方',
-    logo: isCustomProvider.value ? llmForm.logo_emoji : '✨',
-    description: '新接入的模型暂未补充描述，可后续在配置中心完善。',
-    apiKey: llmForm.api_key,
-    baseUrl: isCustomProvider.value ? llmForm.base_url : inferBaseUrl(llmForm.provider_name),
-    isCustom: isCustomProvider.value,
-    models: [
-      {
-        id: llmForm.model_name,
-        name: llmForm.model_name,
-        capability: '待标注',
-        quota: '待配置'
-      }
-    ],
-    collapsed: false,
-    revealApiKey: false
-  })
-
-  ElMessage.success('已模拟新增提供方配置，真实保存需接入后端接口')
-  dialogVisible.value = false
+  createLoading.value = true
+  try {
+    const payload = {
+      provider_name: llmForm.provider_name.trim(),
+      api_key: llmForm.api_key.trim(),
+      base_url: llmForm.base_url.trim() || undefined,
+      logo_emoji: llmForm.logo_emoji.trim() || undefined,
+      is_custom: isCustomProvider.value ? true : undefined,
+      provider_key: !isCustomProvider.value ? llmForm.provider_key : undefined
+    }
+    await createLLMProvider(payload)
+    ElMessage.success('提供方创建成功')
+    dialogVisible.value = false
+    await fetchProviders()
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '创建提供方失败，请稍后重试'
+    ElMessage.error(message)
+  } finally {
+    createLoading.value = false
+  }
 }
 
-function inferBaseUrl(providerName: string): string {
-  switch (providerName) {
-    case 'openai':
-      return 'https://api.openai.com/v1'
-    case 'anthropic':
-      return 'https://api.anthropic.com/v1'
-    case 'azure-openai':
-      return 'https://{your-resource-name}.openai.azure.com'
-    case 'google':
-      return 'https://generativelanguage.googleapis.com'
-    default:
-      return ''
+async function removeModel(providerId: number, modelId: number) {
+  try {
+    await ElMessageBox.confirm('确认删除该模型接入配置吗？删除后可在后续重新添加。', '提示', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch (error) {
+    return
+  }
+
+  try {
+    await deleteLLMModel(providerId, modelId)
+    ElMessage.success('模型已移除')
+    await fetchProviders()
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '删除模型失败，请稍后重试'
+    ElMessage.error(message)
+  }
+}
+
+const modelDialogVisible = ref(false)
+const modelSubmitLoading = ref(false)
+const activeProviderId = ref<number | null>(null)
+const modelForm = reactive({
+  name: '',
+  capability: '',
+  quota: ''
+})
+
+function handleAddModel(providerId: number) {
+  activeProviderId.value = providerId
+  modelForm.name = ''
+  modelForm.capability = ''
+  modelForm.quota = ''
+  modelDialogVisible.value = true
+}
+
+async function submitModel() {
+  if (!modelForm.name.trim()) {
+    ElMessage.warning('请填写模型名称')
+    return
+  }
+  const providerId = activeProviderId.value
+  if (!providerId) {
+    ElMessage.error('未找到对应的提供方，请重新操作')
+    return
+  }
+
+  modelSubmitLoading.value = true
+  try {
+    await createLLMModel(providerId, {
+      name: modelForm.name.trim(),
+      capability: modelForm.capability.trim() || undefined,
+      quota: modelForm.quota.trim() || undefined
+    })
+    ElMessage.success('模型添加成功')
+    modelDialogVisible.value = false
+    await fetchProviders()
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '添加模型失败，请稍后重试'
+    ElMessage.error(message)
+  } finally {
+    modelSubmitLoading.value = false
+  }
+}
+
+async function handleBaseUrlChange(card: ProviderCard, value: string) {
+  if (!card.isCustom) {
+    return
+  }
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) {
+    ElMessage.warning('自定义提供方必须配置访问地址')
+    await fetchProviders()
+    return
+  }
+  try {
+    await updateLLMProvider(card.id, { base_url: trimmed })
+    ElMessage.success('访问地址已更新')
+    card.baseUrl = trimmed
+  } catch (error: any) {
+    console.error(error)
+    const message = error?.payload?.detail ?? '更新访问地址失败，请稍后重试'
+    ElMessage.error(message)
+    await fetchProviders()
+  }
+}
+
+async function handleDeleteProvider(card: ProviderCard) {
+  const modelCount = card.models.length
+  const message = `确认删除提供方“${card.providerName}”吗？此操作会同时删除其下的 ${modelCount} 个模型配置，且不可恢复。`
+  try {
+    await ElMessageBox.confirm(message, '删除确认', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch (error) {
+    return
+  }
+
+  try {
+    await deleteLLMProvider(card.id)
+    ElMessage.success('提供方已删除')
+    await fetchProviders()
+  } catch (error: any) {
+    console.error(error)
+    const detail = error?.payload?.detail ?? '删除提供方失败，请稍后重试'
+    ElMessage.error(detail)
+  }
+}
+
+async function handleUpdateApiKey(card: ProviderCard) {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的 API Key', '更新 API Key', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputType: 'password',
+      inputPlaceholder: 'sk-...'
+    })
+
+    const newKey = value.trim()
+    if (!newKey) {
+      ElMessage.warning('请输入有效的 API Key')
+      return
+    }
+
+    await updateLLMProvider(card.id, { api_key: newKey })
+    ElMessage.success('API Key 已更新')
+    await fetchProviders()
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    console.error(error)
+    const detail = error?.payload?.detail ?? '更新 API Key 失败，请稍后重试'
+    ElMessage.error(detail)
   }
 }
 </script>
@@ -577,4 +754,3 @@ function inferBaseUrl(providerName: string): string {
   opacity: 0;
 }
 </style>
-

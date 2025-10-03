@@ -2,244 +2,156 @@ from datetime import timedelta
 from typing import Any
 
 import httpx
+import pytest
 
-from app.models.llm_provider import LLMProvider
+from app.models.llm_provider import LLMModel, LLMProvider
+
+
+API_PREFIX = "/api/v1/llm-providers"
 
 
 def create_provider(client, payload: dict[str, Any]) -> dict[str, Any]:
-    response = client.post("/api/v1/llms/", json=payload)
+    response = client.post(API_PREFIX + "/", json=payload)
     assert response.status_code == 201, response.text
     return response.json()
 
 
-def test_create_openai_provider_without_url(client):
+def create_model(client, provider_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    response = client.post(f"{API_PREFIX}/{provider_id}/models", json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_list_common_providers(client):
+    response = client.get(API_PREFIX + "/common")
+    assert response.status_code == 200
+    data = response.json()
+    keys = {item["key"] for item in data}
+    assert {"openai", "anthropic"}.issubset(keys)
+    openai = next(item for item in data if item["key"] == "openai")
+    assert openai["base_url"] == "https://api.openai.com/v1"
+
+
+def test_create_known_provider_without_base_url(client):
     payload = {
+        "provider_key": "openai",
         "provider_name": "OpenAI",
-        "model_name": "gpt-4o",
-        "api_key": "test-key",
-        "parameters": {"temperature": 0.3, "max_tokens": 128},
+        "api_key": "sk-test-openai",
     }
     provider = create_provider(client, payload)
 
+    assert provider["provider_key"] == "openai"
     assert provider["base_url"] == "https://api.openai.com/v1"
     assert provider["is_custom"] is False
-    assert provider["parameters"]["temperature"] == 0.3
+    assert provider["masked_api_key"].startswith(payload["api_key"][:4])
+    assert provider["masked_api_key"].endswith(payload["api_key"][-2:])
 
 
-def test_create_custom_provider_requires_url(client):
+def test_create_custom_provider_requires_base_url(client):
     payload = {
-        "provider_name": "MyCustom",
-        "model_name": "mistral",
+        "provider_name": "自建服务",
         "api_key": "secret",
+        "is_custom": True,
     }
-    response = client.post("/api/v1/llms/", json=payload)
+    response = client.post(API_PREFIX + "/", json=payload)
     assert response.status_code == 400
-    assert "自定义提供者必须提供基础 URL" in response.text
+    assert "基础 URL" in response.text
 
 
-def test_create_custom_with_emoji_logo(client):
-    payload = {
-        "provider_name": "CustomVendor",
-        "model_name": "local-model",
-        "api_key": "secret",
-        "base_url": "https://llm.internal/api/",
-        "logo_emoji": "🧠",
-        "parameters": {"temperature": 0.7},
-    }
-    provider = create_provider(client, payload)
-
-    assert provider["base_url"] == "https://llm.internal/api"
-    assert provider["logo_emoji"] == "🧠"
-    assert provider["is_custom"] is True
-
-
-# 场景：非自定义且未知厂商缺少 base_url 时应返回 400
-def test_create_non_custom_unknown_provider_requires_base_url(client):
-    payload = {
-        "provider_name": "LegacyVendor",
-        "model_name": "legacy-model",
-        "api_key": "secret",
-        "is_custom": False,
-    }
-    response = client.post("/api/v1/llms/", json=payload)
-    assert response.status_code == 400
-    assert "该提供者需要配置基础 URL" in response.text
-
-
-# 场景：验证列表接口的分页参数与模糊过滤
-def test_list_llms_supports_pagination_and_filter(client):
-    openai = create_provider(
-        client,
-        {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4o-mini",
-            "api_key": "key",
-        },
-    )
-    create_provider(
-        client,
-        {
-            "provider_name": "CustomVendor",
-            "model_name": "local-model",
-            "api_key": "secret",
-            "base_url": "https://llm.internal/api",
-            "is_custom": True,
-        },
-    )
-
-    response_all = client.get("/api/v1/llms/?limit=10&offset=0")
-    assert response_all.status_code == 200
-    assert any(item["id"] == openai["id"] for item in response_all.json())
-
-    response_filtered = client.get("/api/v1/llms/?provider=Custom")
-    assert response_filtered.status_code == 200
-    filtered = response_filtered.json()
-    assert len(filtered) == 1
-    assert filtered[0]["provider_name"] == "CustomVendor"
-
-
-# 场景：通过 ID 获取单个 LLM 提供者信息
-def test_get_llm_returns_single_provider(client):
+def test_provider_listing_excludes_archived(client):
     provider = create_provider(
         client,
         {
+            "provider_name": "Internal",
+            "api_key": "secret",
+            "is_custom": True,
+            "base_url": "https://llm.internal/api",
+            "logo_emoji": "🏢",
+        },
+    )
+    create_model(
+        client,
+        provider["id"],
+        {
+            "name": "chat-internal",
+            "capability": "对话",
+        },
+    )
+
+    response = client.get(API_PREFIX + "/")
+    assert response.status_code == 200
+    items = response.json()
+    assert any(item["id"] == provider["id"] for item in items)
+    provider_card = next(item for item in items if item["id"] == provider["id"])
+
+    # 删除唯一模型后应归档，列表中不再出现
+    model_id = provider_card["models"][0]["id"]
+    delete_resp = client.delete(f"{API_PREFIX}/{provider['id']}/models/{model_id}")
+    assert delete_resp.status_code == 204
+
+    response_after = client.get(API_PREFIX + "/")
+    assert response_after.status_code == 200
+    assert all(item["id"] != provider["id"] for item in response_after.json())
+
+    # 详情接口仍可访问，并标记为已归档
+    detail = client.get(f"{API_PREFIX}/{provider['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["is_archived"] is True
+
+
+def test_create_model_detects_duplicate_name(client):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "Azure OpenAI",
+            "provider_key": "azure-openai",
+            "api_key": "secret",
+            "base_url": "https://demo.openai.azure.com",
+        },
+    )
+
+    create_model(
+        client,
+        provider["id"],
+        {"name": "gpt-4o", "capability": "对话"},
+    )
+    response = client.post(
+        f"{API_PREFIX}/{provider['id']}/models",
+        json={"name": "gpt-4o"},
+    )
+    assert response.status_code == 400
+    assert "已存在" in response.text
+
+
+def test_update_provider_requires_base_url_when_non_custom(client):
+    provider = create_provider(
+        client,
+        {
+            "provider_key": "anthropic",
             "provider_name": "Anthropic",
-            "model_name": "claude-3",
             "api_key": "anthropic-key",
         },
     )
 
-    response = client.get(f"/api/v1/llms/{provider['id']}")
-    assert response.status_code == 200
-    assert response.json()["provider_name"] == "Anthropic"
+    response = client.patch(f"{API_PREFIX}/{provider['id']}", json={"base_url": None})
+    assert response.status_code == 400
+    assert "基础 URL" in response.text
 
 
-# 场景：查询不存在的提供者应返回 404
-def test_get_llm_not_found(client):
-    response = client.get("/api/v1/llms/9999")
-    assert response.status_code == 404
-    assert "未找到指定的提供者" in response.text
-
-
-def test_update_disallows_logo_emoji_for_known_provider(client):
+def test_invoke_llm_uses_request_parameters_only(client, monkeypatch):
     provider = create_provider(
         client,
         {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "key",
-        },
-    )
-
-    response = client.put(f"/api/v1/llms/{provider['id']}", json={"logo_emoji": "🤖"})
-    assert response.status_code == 400
-    assert "仅允许自定义提供者设置 logo 表情符号" in response.text
-
-
-# 场景：重复创建相同配置的提供者时触发唯一性校验
-def test_create_duplicate_provider_conflict(client):
-    payload = {
-        "provider_name": "OpenAI",
-        "model_name": "gpt-4",
-        "api_key": "dup-key",
-    }
-    create_provider(client, payload)
-
-    response = client.post("/api/v1/llms/", json=payload)
-    assert response.status_code == 400
-    assert "已存在具有相同名称、模型和基础 URL 的提供者" in response.text
-
-
-# 场景：更新时允许清空参数并规范化 base_url
-def test_update_llm_clears_parameters_and_normalizes_base_url(client):
-    provider = create_provider(
-        client,
-        {
-            "provider_name": "CustomVendor",
-            "model_name": "model-a",
-            "api_key": "secret",
-            "base_url": "https://custom.llm/api",
+            "provider_name": "Internal",
+            "api_key": "invoke-secret",
             "is_custom": True,
-            "parameters": {"temperature": 0.5},
+            "base_url": "https://llm.internal/api/",
         },
     )
-
-    response = client.put(
-        f"/api/v1/llms/{provider['id']}",
-        json={
-            "base_url": "https://custom.llm/api/",  # ensure normalization occurs
-            "model_name": "model-b",
-            "parameters": None,
-        },
-    )
-    assert response.status_code == 200
-    updated = response.json()
-    assert updated["model_name"] == "model-b"
-    assert updated["base_url"] == "https://custom.llm/api"
-    assert updated["parameters"] == {}
-
-
-# 场景：更新为与其他记录相同的组合应报重复错误
-def test_update_llm_detects_duplicate_combination(client):
-    primary = create_provider(
+    model = create_model(
         client,
-        {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "primary",
-        },
-    )
-    secondary = create_provider(
-        client,
-        {
-            "provider_name": "CustomVendor",
-            "model_name": "model-a",
-            "api_key": "secondary",
-            "base_url": "https://custom.llm/api",
-            "is_custom": True,
-        },
-    )
-
-    response = client.put(
-        f"/api/v1/llms/{secondary['id']}",
-        json={
-            "provider_name": primary["provider_name"],
-            "model_name": primary["model_name"],
-            "base_url": primary["base_url"],
-            "is_custom": False,
-        },
-    )
-    assert response.status_code == 400
-    assert "已存在具有相同名称、模型和基础 URL 的提供者" in response.text
-
-
-# 场景：删除后再次查询应返回 404
-def test_delete_llm_removes_provider(client):
-    provider = create_provider(
-        client,
-        {
-            "provider_name": "Anthropic",
-            "model_name": "claude-3-opus",
-            "api_key": "del-key",
-        },
-    )
-
-    response = client.delete(f"/api/v1/llms/{provider['id']}")
-    assert response.status_code == 204
-
-    follow_up = client.get(f"/api/v1/llms/{provider['id']}")
-    assert follow_up.status_code == 404
-
-
-def test_invoke_llm_uses_openai_schema(client, monkeypatch):
-    provider = create_provider(
-        client,
-        {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "invoke-key",
-            "parameters": {"temperature": 0.1},
-        },
+        provider["id"],
+        {"name": "chat-mini"},
     )
 
     captured: dict[str, Any] = {}
@@ -248,18 +160,13 @@ def test_invoke_llm_uses_openai_schema(client, monkeypatch):
         status_code = 200
 
         def __init__(self) -> None:
-            self.elapsed = timedelta(milliseconds=12)
+            self.elapsed = timedelta(milliseconds=5)
 
         def json(self) -> dict[str, Any]:
-            return {
-                "id": "chatcmpl-123",
-                "choices": [
-                    {"message": {"content": "This is a sample completion"}},
-                ],
-            }
+            return {"choices": []}
 
         @property
-        def text(self) -> str:  # pragma: no cover - parity with httpx response
+        def text(self) -> str:
             return ""
 
     def fake_post(
@@ -273,122 +180,54 @@ def test_invoke_llm_uses_openai_schema(client, monkeypatch):
     monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.post", fake_post)
 
     body = {
+        "model_id": model["id"],
         "messages": [
             {"role": "system", "content": "You are a test"},
-            {"role": "user", "content": "Hello"},
+            {"role": "user", "content": "ping"},
         ],
-        "parameters": {"temperature": 0.2},
+        "parameters": {"max_tokens": 128},
     }
-
-    response = client.post(f"/api/v1/llms/{provider['id']}/invoke", json=body)
+    response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=body)
     assert response.status_code == 200
-    assert response.json()["id"] == "chatcmpl-123"
 
-    assert captured["url"] == "https://api.openai.com/v1/chat/completions"
-    assert captured["headers"]["Authorization"] == "Bearer invoke-key"
-    assert captured["json"]["model"] == "gpt-4"
-    assert captured["json"]["messages"][0]["role"] == "system"
-    assert captured["json"]["temperature"] == 0.2
+    assert captured["url"] == "https://llm.internal/api/chat/completions"
+    assert captured["headers"]["Authorization"] == "Bearer invoke-secret"
+    assert captured["json"]["model"] == "chat-mini"
+    # 模型不再存储附加参数，仅沿用请求中提供的参数
+    assert "temperature" not in captured["json"]
+    assert captured["json"]["max_tokens"] == 128
     assert captured["timeout"] == 30.0
 
 
-# 场景：没有可用 base_url 的供应商调用时返回 400
-def test_invoke_llm_requires_configured_base_url(client, db_session):
-    provider = LLMProvider(
-        provider_name="LegacyVendor",
-        model_name="legacy",
-        api_key="legacy-key",
-        is_custom=False,
-        base_url=None,
-        parameters={},
+def test_invoke_llm_without_models_requires_model_argument(client):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "Empty",
+            "api_key": "invoke",
+            "is_custom": True,
+            "base_url": "https://mock.llm/api",
+        },
     )
-    db_session.add(provider)
-    db_session.commit()
 
     body = {
-        "messages": [{"role": "user", "content": "Ping"}],
-        "parameters": {},
+        "messages": [{"role": "user", "content": "hello"}],
     }
-    response = client.post(f"/api/v1/llms/{provider.id}/invoke", json=body)
+    response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=body)
     assert response.status_code == 400
-    assert "该提供者未配置基础 URL" in response.text
+    assert "未能确定调用模型" in response.text
 
 
-# 场景：HTTPX 抛出超时异常时返回 502
-def test_invoke_llm_handles_httpx_error(client, monkeypatch):
-    provider = create_provider(
-        client,
-        {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "invoke-error",
-        },
-    )
-
-    def fake_post(*_: Any, **__: Any) -> None:
-        raise httpx.TimeoutException("request timed out")
-
-    monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.post", fake_post)
-
-    body = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "parameters": {},
-    }
-    response = client.post(f"/api/v1/llms/{provider['id']}/invoke", json=body)
-    assert response.status_code == 502
-    assert "request timed out" in response.text
-
-
-# 场景：上游返回 JSON 错误体时需透传详情
-def test_invoke_llm_propagates_error_payload(client, monkeypatch):
-    provider = create_provider(
-        client,
-        {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "invoke-error",
-        },
-    )
-
-    class DummyErrorResponse:
-        status_code = 429
-
-        def json(self) -> dict[str, Any]:
-            return {"error": {"message": "rate limited"}}
-
-        @property
-        def text(self) -> str:  # pragma: no cover - mirrors httpx
-            return "rate limited"
-
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.llms.httpx.post", lambda *_, **__: DummyErrorResponse()
-    )
-
-    body = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "parameters": {},
-    }
-    response = client.post(f"/api/v1/llms/{provider['id']}/invoke", json=body)
-    assert response.status_code == 429
-    assert response.json()["detail"]["error"]["message"] == "rate limited"
-
-
-# 场景：已知厂商缺失 base_url 时应回落到内置默认值
-def test_invoke_llm_uses_fallback_base_url_for_known_provider(
-    client, db_session, monkeypatch
-):
+def test_invoke_llm_uses_known_base_url_when_missing(client, db_session, monkeypatch):
     provider = LLMProvider(
         provider_name="OpenAI",
-        model_name="gpt-4",
-        api_key="fallback",
+        provider_key="openai",
+        api_key="known-key",
         is_custom=False,
         base_url=None,
-        parameters={},
     )
     db_session.add(provider)
     db_session.commit()
-
-    captured: dict[str, Any] = {}
 
     class DummyResponse:
         status_code = 200
@@ -400,8 +239,10 @@ def test_invoke_llm_uses_fallback_base_url_for_known_provider(
             return {"choices": []}
 
         @property
-        def text(self) -> str:  # pragma: no cover - mirrors httpx
+        def text(self) -> str:
             return ""
+
+    captured: dict[str, Any] = {}
 
     def fake_post(
         url: str, headers: dict[str, str], json: dict[str, Any], timeout: float
@@ -415,81 +256,95 @@ def test_invoke_llm_uses_fallback_base_url_for_known_provider(
 
     body = {
         "messages": [{"role": "user", "content": "Hello"}],
-        "parameters": {},
+        "model": "gpt-4o",
     }
-    response = client.post(f"/api/v1/llms/{provider.id}/invoke", json=body)
+    response = client.post(f"{API_PREFIX}/{provider.id}/invoke", json=body)
     assert response.status_code == 200
+
     assert captured["url"] == "https://api.openai.com/v1/chat/completions"
-    assert captured["headers"]["Authorization"] == "Bearer fallback"
+    assert captured["headers"]["Authorization"] == "Bearer known-key"
+    assert captured["json"]["model"] == "gpt-4o"
 
 
-# 场景：上游返回非 JSON 错误内容时生成文本详情
-def test_invoke_llm_handles_non_json_error_body(client, monkeypatch):
+def test_delete_missing_model_returns_404(client):
     provider = create_provider(
         client,
         {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "invoke-error",
+            "provider_name": "Internal",
+            "api_key": "secret",
+            "is_custom": True,
+            "base_url": "https://inner/api",
         },
     )
 
-    class DummyTextResponse:
-        status_code = 500
-
-        def json(self) -> dict[str, Any]:  # pragma: no cover - intentional failure path
-            raise ValueError("invalid json")
-
-        @property
-        def text(self) -> str:  # pragma: no cover - mirrors httpx
-            return "Service unavailable"
-
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.llms.httpx.post", lambda *_, **__: DummyTextResponse()
-    )
-
-    body = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "parameters": {},
-    }
-    response = client.post(f"/api/v1/llms/{provider['id']}/invoke", json=body)
-    assert response.status_code == 500
-    assert response.json()["detail"]["message"] == "Service unavailable"
+    response = client.delete(f"{API_PREFIX}/{provider['id']}/models/999")
+    assert response.status_code == 404
+    assert "模型" in response.text
 
 
-# 场景：上游响应结构异常时仍返回原始 JSON
-def test_invoke_llm_handles_unexpected_payload_structure(client, monkeypatch):
+def test_delete_provider_cascades_models(client):
     provider = create_provider(
         client,
         {
-            "provider_name": "OpenAI",
-            "model_name": "gpt-4",
-            "api_key": "invoke-weird",
+            "provider_name": "ToBeDeleted",
+            "api_key": "secret",
+            "is_custom": True,
+            "base_url": "https://inner/delete",
         },
     )
+    create_model(client, provider["id"], {"name": "demo-a"})
+    create_model(client, provider["id"], {"name": "demo-b"})
 
-    class BrokenDict(dict):
-        def get(self, key, default=None):  # type: ignore[override]
-            raise AttributeError("broken mapping")
+    response = client.delete(f"{API_PREFIX}/{provider['id']}")
+    assert response.status_code == 204
 
-    class DummyWeirdResponse:
-        status_code = 200
+    follow_up = client.get(f"{API_PREFIX}/{provider['id']}")
+    assert follow_up.status_code == 404
 
-        def json(self) -> BrokenDict:
-            return BrokenDict({"unexpected": "format"})
+    listing = client.get(API_PREFIX + "/")
+    assert all(item["id"] != provider["id"] for item in listing.json())
 
-        @property
-        def text(self) -> str:  # pragma: no cover - mirrors httpx
-            return ""
 
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.llms.httpx.post", lambda *_, **__: DummyWeirdResponse()
+def test_update_allows_setting_default_model_name(client):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "Internal",
+            "api_key": "secret",
+            "is_custom": True,
+            "base_url": "https://internal/api",
+        },
+    )
+    model = create_model(
+        client,
+        provider["id"],
+        {"name": "chat-mini"},
     )
 
-    body = {
-        "messages": [{"role": "user", "content": "Hello"}],
-        "parameters": {},
-    }
-    response = client.post(f"/api/v1/llms/{provider['id']}/invoke", json=body)
+    response = client.patch(
+        f"{API_PREFIX}/{provider['id']}",
+        json={"default_model_name": model["name"]},
+    )
     assert response.status_code == 200
-    assert response.json() == {"unexpected": "format"}
+    assert response.json()["default_model_name"] == model["name"]
+
+
+@pytest.mark.parametrize(
+    "mask_value, expected",
+    [
+        ("123456", "******"),
+        ("abcd", "****"),
+        ("sk-abcdefghi", "sk-a******hi"),
+    ],
+)
+def test_masked_api_key_format(client, mask_value: str, expected: str):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "MaskTest",
+            "api_key": mask_value,
+            "is_custom": True,
+            "base_url": "https://mask/api",
+        },
+    )
+    assert provider["masked_api_key"] == expected

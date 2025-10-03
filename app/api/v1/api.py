@@ -4,7 +4,7 @@ from app.api.v1.endpoints import llms, prompt_classes, prompt_tags, prompts, tes
 
 
 api_router = APIRouter()
-api_router.include_router(llms.router, prefix="/llms", tags=["llms"])
+api_router.include_router(llms.router, prefix="/llm-providers", tags=["llm_providers"])
 api_router.include_router(
     prompt_classes.router, prefix="/prompt-classes", tags=["prompt_classes"]
 )

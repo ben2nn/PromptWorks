@@ -1,48 +1,80 @@
-from datetime import datetime
-from typing import Any
+from __future__ import annotations
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class LLMModelBase(BaseModel):
+    name: str = Field(..., description="模型唯一名称")
+    capability: str | None = Field(
+        default=None, description="可选的能力标签，例如对话、推理"
+    )
+    quota: str | None = Field(default=None, description="配额或调用策略说明")
+
+
+class LLMModelCreate(LLMModelBase):
+    pass
+
+
+class LLMModelRead(LLMModelBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LLMProviderBase(BaseModel):
-    provider_name: str = Field(..., description="Human readable or vendor name")
-    model_name: str = Field(..., description="Target model identifier")
-    base_url: AnyHttpUrl | None = Field(
-        None, description="Optional override of the API base URL"
+    provider_name: str = Field(..., description="展示用名称，例如 OpenAI")
+    provider_key: str | None = Field(
+        default=None, description="常用提供方标识，用于自动补全默认信息"
     )
-    api_key: str = Field(..., min_length=1)
-    parameters: dict[str, Any] = Field(default_factory=dict)
-    logo_url: AnyHttpUrl | None = None
+    base_url: str | None = Field(default=None, description="调用使用的基础 URL")
     logo_emoji: str | None = Field(
-        default=None,
-        description="Emoji representation used when no logo URL is provided",
-        max_length=16,
+        default=None, max_length=16, description="用于展示的表情符号"
     )
+    logo_url: str | None = Field(default=None, description="可选的品牌 Logo URL")
     is_custom: bool | None = Field(
-        default=None,
-        description="Optional flag to force custom-provider logic; autodetected when omitted.",
+        default=None, description="是否为自定义提供方，未指定时由后端推断"
     )
 
 
 class LLMProviderCreate(LLMProviderBase):
-    pass
+    api_key: str = Field(..., min_length=1, description="访问该提供方所需的密钥")
 
 
 class LLMProviderUpdate(BaseModel):
     provider_name: str | None = None
-    model_name: str | None = None
-    base_url: AnyHttpUrl | None = None
+    base_url: str | None = None
     api_key: str | None = None
-    parameters: dict[str, Any] | None = None
-    logo_url: AnyHttpUrl | None = None
     logo_emoji: str | None = Field(default=None, max_length=16)
+    logo_url: str | None = None
     is_custom: bool | None = None
+    default_model_name: str | None = None
 
 
-class LLMProviderRead(LLMProviderBase):
+class LLMProviderRead(BaseModel):
     id: int
+    provider_key: str | None
+    provider_name: str
+    base_url: str | None
+    logo_emoji: str | None
+    logo_url: str | None
+    is_custom: bool
+    is_archived: bool
+    default_model_name: str | None
+    masked_api_key: str
+    models: list[LLMModelRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
-    is_custom: bool
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class KnownLLMProvider(BaseModel):
+    key: str
+    name: str
+    description: str | None = None
+    base_url: str | None = None
+    logo_emoji: str | None = None
+    logo_url: str | None = None
