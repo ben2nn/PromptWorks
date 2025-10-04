@@ -2,14 +2,14 @@
   <div class="compare-page">
     <el-breadcrumb separator="/" class="compare-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
+        <span class="breadcrumb-link" @click="goPromptManagement">{{ t('menu.prompt') }}</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
         <span class="breadcrumb-link" @click="goPromptDetail">
-          {{ promptDetail?.name ?? '未命名 Prompt' }}
+          {{ promptDetail?.name ?? t('promptVersionCompare.breadcrumb.fallback') }}
         </span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>版本对比</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ t('promptVersionCompare.breadcrumb.current') }}</el-breadcrumb-item>
     </el-breadcrumb>
 
     <el-alert
@@ -21,28 +21,28 @@
 
     <el-skeleton v-else-if="isLoading" animated :rows="5" />
 
-    <el-empty v-else-if="!promptDetail" description="未找到 Prompt 信息" />
+    <el-empty v-else-if="!promptDetail" :description="t('promptVersionCompare.emptyPrompt')" />
 
     <el-card v-else>
       <template #header>
         <div class="card-header">
           <div>
-            <h3>版本差异对比</h3>
-            <span class="card-subtitle">选择两个不同版本进行比对，左列为基准，右列为对比</span>
+            <h3>{{ t('promptVersionCompare.card.title') }}</h3>
+            <span class="card-subtitle">{{ t('promptVersionCompare.card.subtitle') }}</span>
           </div>
           <el-tag v-if="promptDetail.current_version" size="small" type="success">
-            当前版本：{{ promptDetail.current_version.version }}
+            {{ t('promptVersionCompare.card.currentVersion', { version: promptDetail.current_version.version }) }}
           </el-tag>
         </div>
       </template>
       <el-form :inline="true" label-width="90px" class="compare-form">
         <el-form-item>
           <template #label>
-            <span>基准版本</span>
+            <span>{{ t('promptVersionCompare.form.baseLabel') }}</span>
           </template>
           <el-select
             v-model="baseVersion"
-            placeholder="请选择基准版本"
+            :placeholder="t('promptVersionCompare.form.basePlaceholder')"
             size="small"
             class="version-select"
           >
@@ -56,11 +56,11 @@
         </el-form-item>
         <el-form-item>
           <template #label>
-            <span>对比版本</span>
+            <span>{{ t('promptVersionCompare.form.targetLabel') }}</span>
           </template>
           <el-select
             v-model="targetVersion"
-            placeholder="请选择对比版本"
+            :placeholder="t('promptVersionCompare.form.targetPlaceholder')"
             size="small"
             class="version-select"
           >
@@ -75,13 +75,13 @@
       </el-form>
 
       <div v-if="base && target" class="diff-container">
-        <div class="diff-header">
+         <div class="diff-header">
           <div class="diff-header__cell">
-            <span>基准版本</span>
+            <span>{{ t('promptVersionCompare.diff.base') }}</span>
             <strong>{{ base.version }}</strong>
           </div>
           <div class="diff-header__cell">
-            <span>对比版本</span>
+            <span>{{ t('promptVersionCompare.diff.target') }}</span>
             <strong>{{ target.version }}</strong>
           </div>
         </div>
@@ -98,10 +98,10 @@
           </div>
         </div>
         <div v-else class="diff-empty">
-          <el-empty description="两个版本内容一致，暂无差异" />
+          <el-empty :description="t('promptVersionCompare.diff.identical')" />
         </div>
       </div>
-      <el-empty v-else description="请选择两个不同的版本进行对比" />
+      <el-empty v-else :description="t('promptVersionCompare.diff.selectTwo')" />
     </el-card>
   </div>
 </template>
@@ -111,6 +111,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { diffLines, type Change } from 'diff'
 import { usePromptDetail } from '../composables/usePromptDetail'
+import { useI18n } from 'vue-i18n'
 
 interface DiffRowSegment {
   text: string
@@ -124,6 +125,7 @@ interface DiffRow {
 
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 
 const currentId = computed(() => {
   const raw = Number(route.params.id)

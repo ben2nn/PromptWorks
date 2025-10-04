@@ -427,6 +427,320 @@ export const messages = {
         usageLoadFailed: '加载用量数据失败，请稍后重试',
         trendLoadFailed: '加载趋势数据失败，请稍后重试'
       }
+    },
+    promptVersionCreate: {
+      breadcrumb: {
+        root: 'Prompt 管理',
+        fallback: '未命名 Prompt',
+        current: '新增版本'
+      },
+      empty: '未找到 Prompt 信息',
+      card: {
+        title: '新增版本基础表单',
+        subtitle: '提交后可接入后端接口，现阶段用于演示输入结构'
+      },
+      form: {
+        versionLabel: '版本号',
+        versionPlaceholder: '例如 v1.5.0',
+        summaryLabel: '版本摘要',
+        summaryPlaceholder: '简要说明本次更新要点',
+        contentLabel: '内容正文',
+        contentPlaceholder: '在这里粘贴完整 Prompt 内容',
+        referenceLabel: '引用版本',
+        referencePlaceholder: '可选择参考版本'
+      },
+      actions: {
+        submit: '提交',
+        cancel: '取消'
+      },
+      messages: {
+        promptNotFound: '目标 Prompt 不存在',
+        submitFailed: '提交新版本失败',
+        idMissing: '无法识别当前 Prompt 编号',
+        required: '请填写版本号与内容',
+        success: '新增版本成功'
+      }
+    },
+    promptVersionCompare: {
+      breadcrumb: {
+        root: 'Prompt 管理',
+        fallback: '未命名 Prompt',
+        current: '版本对比'
+      },
+      emptyPrompt: '未找到 Prompt 信息',
+      card: {
+        title: '版本差异对比',
+        subtitle: '选择两个不同版本进行比对，左列为基准，右列为对比',
+        currentVersion: '当前版本：{version}'
+      },
+      form: {
+        baseLabel: '基准版本',
+        basePlaceholder: '请选择基准版本',
+        targetLabel: '对比版本',
+        targetPlaceholder: '请选择对比版本'
+      },
+      diff: {
+        base: '基准版本',
+        target: '对比版本',
+        identical: '两个版本内容一致，暂无差异',
+        selectTwo: '请选择两个不同的版本进行对比'
+      }
+    },
+    promptDetail: {
+      breadcrumb: {
+        root: 'Prompt 管理',
+        fallback: 'Prompt 详情'
+      },
+      empty: '未找到 Prompt 详情',
+      info: {
+        classLabel: '所属分类 · {name}',
+        descriptionFallback: '暂无描述',
+        currentVersion: '当前版本 {version}',
+        currentVersionFallback: '未启用',
+        updatedAt: '更新于 {time}',
+        fields: {
+          author: '作者',
+          createdAt: '创建时间',
+          updatedAt: '更新时间',
+          classDescription: '分类描述',
+          classDescriptionFallback: '暂无说明'
+        },
+        editButton: '编辑分类与标签',
+        dialogTitle: '编辑分类与标签',
+        dialog: {
+          classLabel: '分类',
+          classPlaceholder: '请选择分类',
+          noClassTip: '暂无分类，请先在“分类管理”中创建',
+          tagsLabel: '标签',
+          tagsPlaceholder: '选择标签'
+        },
+        actions: {
+          cancel: '取消',
+          save: '保存'
+        }
+      },
+      content: {
+        title: 'Prompt 内容',
+        subtitle: '左侧查看完整内容，右侧切换历史版本',
+        newVersion: '新增版本',
+        compare: '版本对比',
+        versionLabel: '版本号',
+        versionFallback: '未选择版本',
+        updatedLabel: '更新时间',
+        empty: '暂无版本内容',
+        historyTitle: '历史版本'
+      },
+      test: {
+        title: 'Prompt 测试记录',
+        subtitle: '记录历史测试结果，支持快速备案',
+        newTest: '新增测试',
+        empty: '暂无测试记录，点击右上角新增测试',
+        columns: {
+          version: 'Prompt 版本',
+          model: '模型',
+          temperature: '温度',
+          repetitions: '测试次数',
+          status: '状态',
+          createdAt: '发起时间',
+          actions: '操作'
+        },
+        viewResult: '查看结果'
+      },
+      messages: {
+        classRequired: '请选择分类',
+        noChange: '分类与标签未发生变化',
+        updateSuccess: '分类与标签已更新',
+        metaNotFound: '分类或标签数据未找到',
+        metaLoadFailed: '加载分类或标签数据失败',
+        testLoadFailed: '加载测试记录失败',
+        contentEmpty: '暂无内容摘要'
+      },
+      status: {
+        completed: '已完成',
+        running: '执行中',
+        failed: '失败',
+        pending: '排队中'
+      },
+      table: {
+        versionFallback: '版本 #{id}'
+      }
+    },
+    testJobResult: {
+      breadcrumb: {
+        root: '测试任务',
+        current: '测试结果'
+      },
+      empty: '未找到测试任务',
+      info: {
+        viewPrompt: '查看 Prompt',
+        fields: {
+          prompt: '关联 Prompt',
+          model: '使用模型',
+          repetitionsLabel: '测试次数',
+          repetitionsValue: '每个版本 {count} 次',
+          temperature: '温度',
+          topP: 'Top P',
+          createdAt: '创建时间',
+          updatedAt: '最近更新'
+        },
+        descriptionLabel: '任务说明：',
+        descriptionFallback: '暂无补充说明',
+        extraParams: '模型额外参数'
+      },
+      resultCard: {
+        title: '测试输出对比',
+        subtitle: '同模型下对比多个 Prompt 版本的响应表现',
+        roundLabel: '第 {current} / {total} 轮',
+        updatedAt: '版本更新时间：{time}',
+        promptContent: 'Prompt 内容',
+        modelOutput: '模型输出',
+        tokens: 'Tokens 用量',
+        latency: '响应耗时',
+        noResult: '当前轮次暂无结果'
+      },
+      analysis: {
+        title: '数据分析',
+        summary: '平均 Tokens：{tokens}，平均耗时：{latency}',
+        columns: {
+          version: '版本',
+          averageTokens: '平均 Tokens',
+          averageLatency: '平均耗时'
+        },
+        empty: '暂无统计数据'
+      },
+      summary: {
+        promptFallback: '未命名 Prompt',
+        defaultTitle: '{prompt} ｜ {model} 对比',
+        targetTitle: '{model} ｜ {version}'
+      },
+      modes: {
+        'same-model-different-version': '同模型不同版本',
+        'same-version-different-model': '同版本不同模型',
+        'multi-turn-same-model': '同版本同模型多轮'
+      },
+      status: {
+        completed: '已完成',
+        running: '执行中',
+        failed: '失败',
+        pending: '排队中'
+      },
+      messages: {
+        loadFailed: '加载测试任务失败',
+        noneSelected: '未选择任何测试任务',
+        notFound: '未找到测试任务',
+        promptContentEmpty: '暂无 Prompt 内容',
+        summaryEmpty: '暂无内容'
+      },
+      units: {
+        milliseconds: '{value} ms'
+      }
+    },
+    testJobCreate: {
+      breadcrumb: {
+        promptRoot: 'Prompt 管理',
+        testJobRoot: '测试任务',
+        current: '新建测试任务'
+      },
+      card: {
+        title: '配置测试模式',
+        subtitle: '根据实际需求选择合适的测试策略，后续可挂接真实任务编排'
+      },
+      modeOptions: {
+        'same-model-different-version': {
+          label: '同模型不同版本',
+          description: '固定模型，对比同一 Prompt 的多个版本，评估版本升级效果。'
+        },
+        'same-version-different-model': {
+          label: '同版本不同模型',
+          description: '固定 Prompt 版本，通过多模型对比评估成本与质量差异。'
+        },
+        'multi-turn-same-model': {
+          label: '同版本同模型多轮测试',
+          description: '按多轮会话脚本执行稳定性验证，适合客服、助理类场景。'
+        }
+      },
+      form: {
+        fields: {
+          name: '测试名称',
+          namePlaceholder: '例如：v1.4.2 回归测试',
+          description: '测试说明',
+          descriptionPlaceholder: '补充测试目标、覆盖场景与评估指标',
+          prompt: '关联 Prompt',
+          promptPlaceholder: '请选择或搜索 Prompt',
+          modelForComparison: '对比模型',
+          modelPlaceholder: '请选择测试模型',
+          versions: '对比版本',
+          versionsPlaceholder: '请选择要对比的版本',
+          testCount: '测试次数',
+          baseVersion: '基准版本',
+          baseVersionPlaceholder: '请选择基准版本',
+          compareModels: '选择模型',
+          compareModelsPlaceholder: '请选择参与对比的模型',
+          fixedVersion: '固定版本',
+          fixedVersionPlaceholder: '请选择执行版本',
+          executeModel: '执行模型',
+          executeModelPlaceholder: '请选择用于多轮对话的模型',
+          extraParams: '额外参数',
+          extraParamsPlaceholder: '请输入 JSON 格式的模型附加参数，例如 { "top_p": 0.8 }',
+          temperature: '温度',
+          topP: 'Top P'
+        },
+        tips: {
+          noVersions: '暂无可用版本，请先创建 Prompt 版本',
+          noVersionsMultiTurn: '暂无版本信息，无法配置多轮测试',
+          noModels: '暂无可用模型，请先在“LLMs 配置”中添加模型。',
+          testCountHint: '每个版本会按照设定次数重复请求，用于平滑随机波动。',
+          noPromptVersions: '当前 Prompt 暂无历史版本，可前往 Prompt 详情补充'
+        },
+        conversation: {
+          title: '多轮对话',
+          roundTag: '轮次 {index}',
+          addRound: '新增轮次',
+          removeRound: '删除',
+          roleOptions: {
+            system: '系统',
+            user: '用户',
+            assistant: '助手'
+          },
+          contentPlaceholder: '填写当前轮次的消息内容'
+        },
+        actions: {
+          create: '创建测试任务',
+          back: '返回'
+        }
+      },
+      summary: {
+        autoNameSuffix: '测试任务',
+        fallbackName: '{prompt} 对比测试'
+      },
+      messages: {
+        keepOneRound: '至少保留一轮对话',
+        nameRequired: '请填写测试名称',
+        promptRequired: '请选择关联 Prompt',
+        promptLoading: '正在加载 Prompt 详情，请稍候',
+        promptInvalid: '未获取到有效的 Prompt 信息',
+        noModels: '暂无可用模型，请先在“LLMs 配置”中添加',
+        selectModels: '请选择需要对比的模型',
+        selectTwoVersions: '请至少选择两个 Prompt 版本进行对比',
+        testCountMinimum: '测试次数至少为 1 次',
+        selectBaseVersion: '请选择基准版本',
+        selectAtLeastTwoModels: '请至少选择两个模型参与对比',
+        selectVersion: '请选择执行版本',
+        selectModel: '请选择执行模型',
+        roundContentRequired: '请至少填写一轮对话内容',
+        selectComparisonModels: '请选择参与对比的模型',
+        noModelsForComparison: '暂无可用模型，请先在“LLMs 配置”中添加模型',
+        noModelsForExecution: '暂无可用模型，请先在“LLMs 配置”中添加模型。',
+        cancelled: '未创建新的测试任务',
+        createSuccess: '测试任务已创建，正在跳转查看结果',
+        createFailed: '创建测试任务失败',
+        mockSuccess: '已模拟创建测试任务，可在任务列表中查看（演示）'
+      },
+      errors: {
+        promptList: '加载 Prompt 列表失败',
+        llmList: '加载模型配置失败',
+        promptDetail: '获取 Prompt 详情失败'
+      }
     }
   },
   'en-US': {
@@ -856,6 +1170,320 @@ export const messages = {
       messages: {
         usageLoadFailed: 'Failed to load usage data. Try again later.',
         trendLoadFailed: 'Failed to load trend data. Try again later.'
+      }
+    },
+    promptVersionCreate: {
+      breadcrumb: {
+        root: 'Prompt Management',
+        fallback: 'Untitled Prompt',
+        current: 'New Version'
+      },
+      empty: 'Prompt not found.',
+      card: {
+        title: 'New Version Form',
+        subtitle: 'Submit to integrate with backend services. Currently used to demonstrate the payload structure.'
+      },
+      form: {
+        versionLabel: 'Version',
+        versionPlaceholder: 'e.g. v1.5.0',
+        summaryLabel: 'Summary',
+        summaryPlaceholder: 'Briefly describe what changed in this version',
+        contentLabel: 'Content',
+        contentPlaceholder: 'Paste the full prompt content here',
+        referenceLabel: 'Reference Version',
+        referencePlaceholder: 'Optional: choose a version to reference'
+      },
+      actions: {
+        submit: 'Submit',
+        cancel: 'Cancel'
+      },
+      messages: {
+        promptNotFound: 'Target prompt was not found.',
+        submitFailed: 'Failed to submit the new version.',
+        idMissing: 'Prompt identifier is invalid.',
+        required: 'Please provide the version label and content.',
+        success: 'Version created successfully.'
+      }
+    },
+    promptVersionCompare: {
+      breadcrumb: {
+        root: 'Prompt Management',
+        fallback: 'Untitled Prompt',
+        current: 'Version Comparison'
+      },
+      emptyPrompt: 'Prompt not found.',
+      card: {
+        title: 'Version Diff Comparison',
+        subtitle: 'Select two versions to compare. The left column is the baseline, the right column the target.',
+        currentVersion: 'Current version: {version}'
+      },
+      form: {
+        baseLabel: 'Baseline',
+        basePlaceholder: 'Choose a baseline version',
+        targetLabel: 'Target',
+        targetPlaceholder: 'Choose a target version'
+      },
+      diff: {
+        base: 'Baseline',
+        target: 'Target',
+        identical: 'The two versions are identical. No differences found.',
+        selectTwo: 'Select two different versions to compare.'
+      }
+    },
+    promptDetail: {
+      breadcrumb: {
+        root: 'Prompt Management',
+        fallback: 'Prompt Detail'
+      },
+      empty: 'Prompt detail unavailable.',
+      info: {
+        classLabel: 'Category · {name}',
+        descriptionFallback: 'No description yet',
+        currentVersion: 'Current version {version}',
+        currentVersionFallback: 'Not enabled',
+        updatedAt: 'Updated on {time}',
+        fields: {
+          author: 'Author',
+          createdAt: 'Created At',
+          updatedAt: 'Updated At',
+          classDescription: 'Category Description',
+          classDescriptionFallback: 'No additional notes'
+        },
+        editButton: 'Edit category & tags',
+        dialogTitle: 'Edit category & tags',
+        dialog: {
+          classLabel: 'Category',
+          classPlaceholder: 'Choose a category',
+          noClassTip: 'No category available yet. Create one under “Class Management”.',
+          tagsLabel: 'Tags',
+          tagsPlaceholder: 'Select tags'
+        },
+        actions: {
+          cancel: 'Cancel',
+          save: 'Save'
+        }
+      },
+      content: {
+        title: 'Prompt Content',
+        subtitle: 'Review the full content on the left and browse history on the right.',
+        newVersion: 'New Version',
+        compare: 'Compare Versions',
+        versionLabel: 'Version',
+        versionFallback: 'No version selected',
+        updatedLabel: 'Updated At',
+        empty: 'No content for this version yet.',
+        historyTitle: 'Version History'
+      },
+      test: {
+        title: 'Prompt Test Records',
+        subtitle: 'Track historical test runs for quick reference.',
+        newTest: 'New Test',
+        empty: 'No test records yet. Click “New Test” to start.',
+        columns: {
+          version: 'Prompt Version',
+          model: 'Model',
+          temperature: 'Temperature',
+          repetitions: 'Runs',
+          status: 'Status',
+          createdAt: 'Created At',
+          actions: 'Actions'
+        },
+        viewResult: 'View Result'
+      },
+      messages: {
+        classRequired: 'Select a category first.',
+        noChange: 'No changes detected for category or tags.',
+        updateSuccess: 'Category and tags updated.',
+        metaNotFound: 'Category or tag information not found.',
+        metaLoadFailed: 'Failed to load category or tag data.',
+        testLoadFailed: 'Failed to load test records.',
+        contentEmpty: 'No summary available.'
+      },
+      status: {
+        completed: 'Completed',
+        running: 'Running',
+        failed: 'Failed',
+        pending: 'Queued'
+      },
+      table: {
+        versionFallback: 'Version #{id}'
+      }
+    },
+    testJobResult: {
+      breadcrumb: {
+        root: 'Test Jobs',
+        current: 'Test Result'
+      },
+      empty: 'Test job not found.',
+      info: {
+        viewPrompt: 'View Prompt',
+        fields: {
+          prompt: 'Prompt',
+          model: 'Model',
+          repetitionsLabel: 'Run Count',
+          repetitionsValue: '{count} runs per version',
+          temperature: 'Temperature',
+          topP: 'Top P',
+          createdAt: 'Created At',
+          updatedAt: 'Last Updated'
+        },
+        descriptionLabel: 'Description:',
+        descriptionFallback: 'No additional notes.',
+        extraParams: 'Extra Parameters'
+      },
+      resultCard: {
+        title: 'Output Comparison',
+        subtitle: 'Compare prompt versions under the same model.',
+        roundLabel: 'Round {current} / {total}',
+        updatedAt: 'Updated at {time}',
+        promptContent: 'Prompt Content',
+        modelOutput: 'Model Output',
+        tokens: 'Tokens Used',
+        latency: 'Latency',
+        noResult: 'No result for this round yet.'
+      },
+      analysis: {
+        title: 'Data Analysis',
+        summary: 'Average tokens: {tokens}, average latency: {latency}',
+        columns: {
+          version: 'Version',
+          averageTokens: 'Average Tokens',
+          averageLatency: 'Average Latency'
+        },
+        empty: 'No statistics available.'
+      },
+      summary: {
+        promptFallback: 'Untitled Prompt',
+        defaultTitle: '{prompt} | {model} comparison',
+        targetTitle: '{model} | {version}'
+      },
+      modes: {
+        'same-model-different-version': 'Same model, different versions',
+        'same-version-different-model': 'Same version, different models',
+        'multi-turn-same-model': 'Multi-turn, same model'
+      },
+      status: {
+        completed: 'Completed',
+        running: 'Running',
+        failed: 'Failed',
+        pending: 'Queued'
+      },
+      messages: {
+        loadFailed: 'Failed to load test job.',
+        noneSelected: 'No test job selected.',
+        notFound: 'Test job not found.',
+        promptContentEmpty: 'No prompt content.',
+        summaryEmpty: 'No content available.'
+      },
+      units: {
+        milliseconds: '{value} ms'
+      }
+    },
+    testJobCreate: {
+      breadcrumb: {
+        promptRoot: 'Prompt Management',
+        testJobRoot: 'Test Jobs',
+        current: 'New Test Job'
+      },
+      card: {
+        title: 'Configure Test Mode',
+        subtitle: 'Choose the right strategy for your evaluation. Workflow orchestration can be integrated later.'
+      },
+      modeOptions: {
+        'same-model-different-version': {
+          label: 'Same model, different versions',
+          description: 'Fix the model and compare multiple versions of the same prompt to evaluate upgrades.'
+        },
+        'same-version-different-model': {
+          label: 'Same version, different models',
+          description: 'Fix a prompt version and compare multiple models to balance quality and cost.'
+        },
+        'multi-turn-same-model': {
+          label: 'Multi-turn with same model',
+          description: 'Run scripted conversations to validate stability for assistant-style scenarios.'
+        }
+      },
+      form: {
+        fields: {
+          name: 'Test Name',
+          namePlaceholder: 'e.g. Regression test for v1.4.2',
+          description: 'Test Description',
+          descriptionPlaceholder: 'Document targets, coverage, and evaluation criteria.',
+          prompt: 'Linked Prompt',
+          promptPlaceholder: 'Search or select a prompt',
+          modelForComparison: 'Comparison Model',
+          modelPlaceholder: 'Pick a model for testing',
+          versions: 'Comparison Versions',
+          versionsPlaceholder: 'Select versions to compare',
+          testCount: 'Run Count',
+          baseVersion: 'Baseline Version',
+          baseVersionPlaceholder: 'Choose a baseline version',
+          compareModels: 'Select Models',
+          compareModelsPlaceholder: 'Select models to include',
+          fixedVersion: 'Fixed Version',
+          fixedVersionPlaceholder: 'Choose the execution version',
+          executeModel: 'Execution Model',
+          executeModelPlaceholder: 'Choose the model for multi-turn conversations',
+          extraParams: 'Extra Parameters',
+          extraParamsPlaceholder: 'Enter extra parameters in JSON, e.g. { "top_p": 0.8 }',
+          temperature: 'Temperature',
+          topP: 'Top P'
+        },
+        tips: {
+          noVersions: 'No versions available. Create prompt versions first.',
+          noVersionsMultiTurn: 'No version data available. Multi-turn tests cannot be configured.',
+          noModels: 'No models available. Please add models under “LLM Management”.',
+          testCountHint: 'Each version runs repeatedly to smooth out randomness.',
+          noPromptVersions: 'This prompt has no version history yet. Add versions from the prompt detail page.'
+        },
+        conversation: {
+          title: 'Conversation Rounds',
+          roundTag: 'Round {index}',
+          addRound: 'Add Round',
+          removeRound: 'Remove',
+          roleOptions: {
+            system: 'System',
+            user: 'User',
+            assistant: 'Assistant'
+          },
+          contentPlaceholder: 'Enter the message for this round'
+        },
+        actions: {
+          create: 'Create Test Job',
+          back: 'Back'
+        }
+      },
+      summary: {
+        autoNameSuffix: 'Test Job',
+        fallbackName: '{prompt} comparison test'
+      },
+      messages: {
+        keepOneRound: 'Keep at least one conversation round.',
+        nameRequired: 'Provide a test name.',
+        promptRequired: 'Select a prompt first.',
+        promptLoading: 'Prompt detail is still loading. Please wait.',
+        promptInvalid: 'Prompt detail is unavailable.',
+        noModels: 'No models available. Please add models under “LLM Management”.',
+        selectModels: 'Select models to compare.',
+        selectTwoVersions: 'Select at least two prompt versions.',
+        testCountMinimum: 'Run count must be at least 1.',
+        selectBaseVersion: 'Choose a baseline version.',
+        selectAtLeastTwoModels: 'Pick at least two models to compare.',
+        selectVersion: 'Choose an execution version.',
+        selectModel: 'Choose an execution model.',
+        roundContentRequired: 'Provide content for at least one round.',
+        selectComparisonModels: 'Select models to include in the comparison.',
+        noModelsForComparison: 'No models available. Please add models under “LLM Management”.',
+        noModelsForExecution: 'No models available. Please add models under “LLM Management”.',
+        cancelled: 'No test job was created.',
+        createSuccess: 'Test job created. Redirecting…',
+        createFailed: 'Failed to create test job.',
+        mockSuccess: 'Test job simulated. Review it from the job list.'
+      },
+      errors: {
+        promptList: 'Failed to load prompt list.',
+        llmList: 'Failed to load model configurations.',
+        promptDetail: 'Failed to fetch prompt detail.'
       }
     }
   }

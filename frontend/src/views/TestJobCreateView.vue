@@ -2,20 +2,20 @@
   <div class="job-create-page">
     <el-breadcrumb v-if="fromPromptDetail" separator="/" class="page-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
+        <span class="breadcrumb-link" @click="goPromptManagement">{{ t('menu.prompt') }}</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
         <span class="breadcrumb-link" @click="goPromptDetail">
           {{ currentPromptName }}
         </span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>新建测试任务</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ t('testJobCreate.breadcrumb.current') }}</el-breadcrumb-item>
     </el-breadcrumb>
     <el-breadcrumb v-else separator="/" class="page-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goTestManagement">测试任务</span>
+        <span class="breadcrumb-link" @click="goTestManagement">{{ t('menu.testJob') }}</span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>新建测试任务</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ t('testJobCreate.breadcrumb.current') }}</el-breadcrumb-item>
     </el-breadcrumb>
 
     <el-alert
@@ -29,8 +29,8 @@
       <template #header>
         <div class="card-header">
           <div>
-            <h3>配置测试模式</h3>
-            <p class="card-subtitle">根据实际需求选择合适的测试策略，后续可挂接真实任务编排</p>
+            <h3>{{ t('testJobCreate.card.title') }}</h3>
+            <p class="card-subtitle">{{ t('testJobCreate.card.subtitle') }}</p>
           </div>
           <el-radio-group v-model="currentMode" size="small" class="mode-selector">
             <el-radio-button
@@ -53,28 +53,28 @@
       </section>
 
       <el-form label-width="120px" class="test-form">
-        <el-form-item label="测试名称">
+        <el-form-item :label="t('testJobCreate.form.fields.name')">
           <el-input
             v-model="baseForm.name"
-            placeholder="例如：v1.4.2 回归测试"
+            :placeholder="t('testJobCreate.form.fields.namePlaceholder')"
             maxlength="60"
             show-word-limit
           />
         </el-form-item>
-        <el-form-item label="测试说明">
+        <el-form-item :label="t('testJobCreate.form.fields.description')">
           <el-input
             v-model="baseForm.description"
             type="textarea"
             :rows="3"
-            placeholder="补充测试目标、覆盖场景与评估指标"
+            :placeholder="t('testJobCreate.form.fields.descriptionPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="关联 Prompt">
+        <el-form-item :label="t('testJobCreate.form.fields.prompt')">
           <el-select
             v-model="selectedPromptId"
             filterable
             :loading="promptListLoading"
-            placeholder="请选择或搜索 Prompt"
+            :placeholder="t('testJobCreate.form.fields.promptPlaceholder')"
             :disabled="promptListLoading"
             @change="handlePromptChange"
           >
@@ -107,10 +107,10 @@
           />
 
           <template v-if="currentMode === 'same-model-different-version'">
-            <el-form-item label="对比模型">
+            <el-form-item :label="t('testJobCreate.form.fields.modelForComparison')">
               <el-select
                 v-model="sameModelForm.modelKey"
-                placeholder="请选择测试模型"
+                :placeholder="t('testJobCreate.form.fields.modelPlaceholder')"
                 :loading="llmLoading"
                 :disabled="llmLoading || !hasModelOptions"
                 filterable
@@ -129,10 +129,10 @@
                 </el-option-group>
               </el-select>
               <p v-if="!llmLoading && !hasModelOptions" class="form-tip">
-                暂无可用模型，请先在“LLMs 配置”中添加模型。
+                {{ t('testJobCreate.form.tips.noModels') }}
               </p>
             </el-form-item>
-            <el-form-item label="测试次数">
+            <el-form-item :label="t('testJobCreate.form.fields.testCount')">
               <el-input-number
                 v-model="sameModelForm.testCount"
                 :min="1"
@@ -140,9 +140,9 @@
                 :step="1"
                 :controls="false"
               />
-              <p class="form-tip">每个版本会按照设定次数重复请求，用于平滑随机波动。</p>
+              <p class="form-tip">{{ t('testJobCreate.form.tips.testCountHint') }}</p>
             </el-form-item>
-            <el-form-item label="温度">
+            <el-form-item :label="t('testJobCreate.form.fields.temperature')">
               <div class="temperature-group">
                 <el-slider
                   v-model="sameModelParams.temperature"
@@ -160,20 +160,20 @@
                 />
               </div>
             </el-form-item>
-            <el-form-item label="额外参数" :error="extraParamsError">
+            <el-form-item :label="t('testJobCreate.form.fields.extraParams')" :error="extraParamsError">
               <el-input
                 v-model="sameModelParams.extraParams"
                 type="textarea"
                 :autosize="{ minRows: 4, maxRows: 8 }"
-                placeholder="请输入 JSON 格式的模型附加参数，例如 { &quot;top_p&quot;: 0.8 }"
+                :placeholder="t('testJobCreate.form.fields.extraParamsPlaceholder')"
               />
             </el-form-item>
-            <el-form-item label="选择版本">
+            <el-form-item :label="t('testJobCreate.form.fields.versions')">
               <el-select
                 v-model="sameModelForm.versionIds"
                 multiple
                 collapse-tags
-                placeholder="请选择待对比的 Prompt 版本"
+                :placeholder="t('testJobCreate.form.fields.versionsPlaceholder')"
                 :disabled="!versionOptions.length"
               >
                 <el-option
@@ -183,15 +183,15 @@
                   :value="version.id"
                 />
               </el-select>
-              <p v-if="!versionOptions.length" class="form-tip">当前 Prompt 暂无历史版本，可前往 Prompt 详情补充</p>
+              <p v-if="!versionOptions.length" class="form-tip">{{ t('testJobCreate.form.tips.noPromptVersions') }}</p>
             </el-form-item>
           </template>
 
           <template v-else-if="currentMode === 'same-version-different-model'">
-            <el-form-item label="对比版本">
+            <el-form-item :label="t('testJobCreate.form.fields.baseVersion')">
               <el-select
                 v-model="sameVersionForm.versionId"
-                placeholder="请选择基准版本"
+                :placeholder="t('testJobCreate.form.fields.baseVersionPlaceholder')"
                 :disabled="!versionOptions.length"
               >
                 <el-option
@@ -201,14 +201,14 @@
                   :value="version.id"
                 />
               </el-select>
-              <p v-if="!versionOptions.length" class="form-tip">暂无可用版本，请先创建 Prompt 版本</p>
+              <p v-if="!versionOptions.length" class="form-tip">{{ t('testJobCreate.form.tips.noVersions') }}</p>
             </el-form-item>
-            <el-form-item label="选择模型">
+            <el-form-item :label="t('testJobCreate.form.fields.compareModels')">
               <el-select
                 v-model="sameVersionForm.modelKeys"
                 multiple
                 collapse-tags
-                placeholder="请选择参与对比的模型"
+                :placeholder="t('testJobCreate.form.fields.compareModelsPlaceholder')"
                 :loading="llmLoading"
                 :disabled="llmLoading || !hasModelOptions"
                 filterable
@@ -227,16 +227,16 @@
                 </el-option-group>
               </el-select>
               <p v-if="!llmLoading && !hasModelOptions" class="form-tip">
-                暂无可用模型，请先在“LLMs 配置”中添加模型。
+                {{ t('testJobCreate.form.tips.noModels') }}
               </p>
             </el-form-item>
           </template>
 
           <template v-else>
-            <el-form-item label="固定版本">
+            <el-form-item :label="t('testJobCreate.form.fields.fixedVersion')">
               <el-select
                 v-model="multiTurnForm.versionId"
-                placeholder="请选择执行版本"
+                :placeholder="t('testJobCreate.form.fields.fixedVersionPlaceholder')"
                 :disabled="!versionOptions.length"
               >
                 <el-option
@@ -246,12 +246,12 @@
                   :value="version.id"
                 />
               </el-select>
-              <p v-if="!versionOptions.length" class="form-tip">暂无版本信息，无法配置多轮测试</p>
+              <p v-if="!versionOptions.length" class="form-tip">{{ t('testJobCreate.form.tips.noVersionsMultiTurn') }}</p>
             </el-form-item>
-            <el-form-item label="执行模型">
+            <el-form-item :label="t('testJobCreate.form.fields.executeModel')">
               <el-select
                 v-model="multiTurnForm.modelKey"
-                placeholder="请选择用于多轮对话的模型"
+                :placeholder="t('testJobCreate.form.fields.executeModelPlaceholder')"
                 :loading="llmLoading"
                 :disabled="llmLoading || !hasModelOptions"
                 filterable
@@ -270,10 +270,10 @@
                 </el-option-group>
               </el-select>
               <p v-if="!llmLoading && !hasModelOptions" class="form-tip">
-                暂无可用模型，请先在“LLMs 配置”中添加模型。
+                {{ t('testJobCreate.form.tips.noModels') }}
               </p>
             </el-form-item>
-            <el-form-item label="多轮对话">
+            <el-form-item :label="t('testJobCreate.form.conversation.title')">
               <div class="conversation-editor">
                 <div
                   v-for="(round, index) in multiTurnRounds"
@@ -281,28 +281,30 @@
                   class="conversation-item"
                 >
                   <div class="conversation-item__header">
-                    <el-tag size="small" effect="light">轮次 {{ index + 1 }}</el-tag>
+                    <el-tag size="small" effect="light">
+                      {{ t('testJobCreate.form.conversation.roundTag', { index: index + 1 }) }}
+                    </el-tag>
                     <el-button
                       v-if="multiTurnRounds.length > 1"
                       type="primary"
                       link
                       size="small"
                       @click="removeConversationRound(round.id)"
-                    >删除</el-button>
+                    >{{ t('testJobCreate.form.conversation.removeRound') }}</el-button>
                   </div>
                   <el-select v-model="round.role" class="conversation-item__role" size="small">
-                    <el-option label="系统" value="system" />
-                    <el-option label="用户" value="user" />
-                    <el-option label="助手" value="assistant" />
+                    <el-option :label="t('testJobCreate.form.conversation.roleOptions.system')" value="system" />
+                    <el-option :label="t('testJobCreate.form.conversation.roleOptions.user')" value="user" />
+                    <el-option :label="t('testJobCreate.form.conversation.roleOptions.assistant')" value="assistant" />
                   </el-select>
                   <el-input
                     v-model="round.content"
                     type="textarea"
                     :rows="3"
-                    placeholder="填写当前轮次的消息内容"
+                    :placeholder="t('testJobCreate.form.conversation.contentPlaceholder')"
                   />
                 </div>
-                <el-button plain size="small" @click="addConversationRound">新增轮次</el-button>
+                <el-button plain size="small" @click="addConversationRound">{{ t('testJobCreate.form.conversation.addRound') }}</el-button>
               </div>
             </el-form-item>
           </template>
@@ -316,9 +318,9 @@
               :disabled="isSubmitting"
               @click="handleSubmit"
             >
-              创建测试任务
+              {{ t('testJobCreate.form.actions.create') }}
             </el-button>
-            <el-button :disabled="isSubmitting" @click="handleCancel">返回</el-button>
+            <el-button :disabled="isSubmitting" @click="handleCancel">{{ t('testJobCreate.form.actions.back') }}</el-button>
           </el-space>
         </el-form-item>
       </el-form>
@@ -336,6 +338,7 @@ import { createTestRun } from '../api/testRun'
 import type { Prompt, PromptVersion } from '../types/prompt'
 import { listLLMProviders } from '../api/llmProvider'
 import type { LLMProvider } from '../types/llm'
+import { useI18n } from 'vue-i18n'
 
 type TestMode =
   | 'same-model-different-version'
@@ -369,26 +372,9 @@ interface ModelOptionGroup {
   options: ModelOptionInfo[]
 }
 
-const MODE_OPTIONS: ModeOption[] = [
-  {
-    value: 'same-model-different-version',
-    label: '同模型不同版本',
-    description: '固定模型，对比同一 Prompt 的多个版本，评估版本升级效果。'
-  },
-  {
-    value: 'same-version-different-model',
-    label: '同版本不同模型',
-    description: '固定 Prompt 版本，通过多模型对比评估成本与质量差异。'
-  },
-  {
-    value: 'multi-turn-same-model',
-    label: '同版本同模型多轮测试',
-    description: '按多轮会话脚本执行稳定性验证，适合客服、助理类场景。'
-  }
-]
-
 const router = useRouter()
 const route = useRoute()
+const { t, locale } = useI18n()
 
 const currentMode = ref<TestMode>('same-model-different-version')
 const baseForm = reactive({
@@ -438,7 +424,23 @@ const llmProviders = ref<LLMProvider[]>([])
 const llmLoading = ref(false)
 const llmError = ref<string | null>(null)
 
-const modeOptions = MODE_OPTIONS
+const modeOptions = computed<ModeOption[]>(() => [
+  {
+    value: 'same-model-different-version',
+    label: t('testJobCreate.modeOptions.same-model-different-version.label'),
+    description: t('testJobCreate.modeOptions.same-model-different-version.description')
+  },
+  {
+    value: 'same-version-different-model',
+    label: t('testJobCreate.modeOptions.same-version-different-model.label'),
+    description: t('testJobCreate.modeOptions.same-version-different-model.description')
+  },
+  {
+    value: 'multi-turn-same-model',
+    label: t('testJobCreate.modeOptions.multi-turn-same-model.label'),
+    description: t('testJobCreate.modeOptions.multi-turn-same-model.description')
+  }
+])
 
 const modelOptionGroups = computed<ModelOptionGroup[]>(() =>
   llmProviders.value
@@ -472,7 +474,7 @@ const hasModelOptions = computed(() => modelOptionMap.value.size > 0)
 const fromPromptDetail = computed(() => route.name === 'prompt-test-create')
 
 const currentModeInfo = computed(() =>
-  modeOptions.find((item) => item.value === currentMode.value) ?? modeOptions[0]
+  modeOptions.value.find((item) => item.value === currentMode.value) ?? modeOptions.value[0]
 )
 
 const versionOptions = computed(() =>
@@ -481,7 +483,7 @@ const versionOptions = computed(() =>
   )
 )
 
-const currentPromptName = computed(() => promptDetail.value?.name ?? 'Prompt 详情')
+const currentPromptName = computed(() => promptDetail.value?.name ?? t('promptDetail.breadcrumb.fallback'))
 
 watch(
   () => route.params.id,
@@ -526,7 +528,7 @@ watch(
   () => promptDetail.value?.name,
   (name) => {
     if (name && !baseForm.name) {
-      baseForm.name = `${name} 测试任务`
+      baseForm.name = `${name} ${t('testJobCreate.summary.autoNameSuffix')}`
     }
   }
 )
@@ -562,7 +564,7 @@ async function fetchPromptOptions() {
       selectedPromptId.value = prompts[0].id
     }
   } catch (error) {
-    promptError.value = extractErrorMessage(error, '加载 Prompt 列表失败')
+    promptError.value = extractErrorMessage(error, t('testJobCreate.errors.promptList'))
   } finally {
     promptListLoading.value = false
   }
@@ -574,7 +576,7 @@ async function fetchLLMProviders() {
   try {
     llmProviders.value = await listLLMProviders()
   } catch (error) {
-    llmError.value = extractErrorMessage(error, '加载模型配置失败')
+    llmError.value = extractErrorMessage(error, t('testJobCreate.errors.llmList'))
     llmProviders.value = []
   } finally {
     llmLoading.value = false
@@ -600,7 +602,7 @@ async function fetchPromptDetail() {
       ]
     }
   } catch (error) {
-    detailError.value = extractErrorMessage(error, '获取 Prompt 详情失败')
+    detailError.value = extractErrorMessage(error, t('testJobCreate.errors.promptDetail'))
     promptDetail.value = null
   } finally {
     detailLoading.value = false
@@ -621,38 +623,44 @@ watch(
   () => sameModelParams.extraParams,
   (value) => {
     if (!value.trim()) {
-      extraParamsError.value = '请输入合法的 JSON 文本'
+      extraParamsError.value = t('quickTest.messages.extraInvalid')
       return
     }
     try {
       const parsed = JSON.parse(value)
       if (parsed === null || typeof parsed !== 'object') {
-        extraParamsError.value = '额外参数需为对象结构'
+        extraParamsError.value = t('quickTest.messages.extraObjectRequired')
       } else {
         extraParamsError.value = null
       }
     } catch (error) {
       void error
-      extraParamsError.value = 'JSON 格式解析失败'
+      extraParamsError.value = t('quickTest.messages.extraParseFailed')
     }
   },
   { immediate: true }
 )
 
 function handlePromptChange() {
-  // 交互上已经通过 watch 触发详情刷新，此处仅用于保留钩子以便后续扩展
+  // Watchers already refresh the detail on change; this hook is reserved for future use.
 }
+
+const versionDateFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function renderVersionLabel(version: PromptVersion) {
   const date = new Date(version.updated_at ?? version.created_at)
   const formatted = Number.isNaN(date.getTime())
     ? version.updated_at ?? version.created_at
-    : new Intl.DateTimeFormat('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      }).format(date)
+    : versionDateFormatter.value.format(date)
   return `${version.version}｜${formatted}`
 }
 
@@ -666,7 +674,7 @@ function addConversationRound() {
 
 function removeConversationRound(id: number) {
   if (multiTurnRounds.value.length <= 1) {
-    ElMessage.warning('至少保留一轮对话')
+    ElMessage.warning(t('testJobCreate.messages.keepOneRound'))
     return
   }
   multiTurnRounds.value = multiTurnRounds.value.filter((item) => item.id !== id)
@@ -701,37 +709,37 @@ function resolveModelInfo(key: string): ModelOptionInfo | null {
 
 function validateForm(): boolean {
   if (!baseForm.name.trim()) {
-    ElMessage.warning('请填写测试名称')
+    ElMessage.warning(t('testJobCreate.messages.nameRequired'))
     return false
   }
   if (!selectedPromptId.value) {
-    ElMessage.warning('请选择关联 Prompt')
+    ElMessage.warning(t('testJobCreate.messages.promptRequired'))
     return false
   }
   if (detailLoading.value) {
-    ElMessage.info('正在加载 Prompt 详情，请稍候')
+    ElMessage.info(t('testJobCreate.messages.promptLoading'))
     return false
   }
   if (!promptDetail.value) {
-    ElMessage.warning('未获取到有效的 Prompt 信息')
+    ElMessage.warning(t('testJobCreate.messages.promptInvalid'))
     return false
   }
 
   if (currentMode.value === 'same-model-different-version') {
     if (!hasModelOptions.value) {
-      ElMessage.warning('暂无可用模型，请先在“LLMs 配置”中添加')
+      ElMessage.warning(t('testJobCreate.messages.noModels'))
       return false
     }
     if (!sameModelForm.modelKey || !modelOptionMap.value.has(sameModelForm.modelKey)) {
-      ElMessage.warning('请选择需要对比的模型')
+      ElMessage.warning(t('testJobCreate.messages.selectModels'))
       return false
     }
     if (sameModelForm.versionIds.length < 2) {
-      ElMessage.warning('请至少选择两个 Prompt 版本进行对比')
+      ElMessage.warning(t('testJobCreate.messages.selectTwoVersions'))
       return false
     }
     if (sameModelForm.testCount < 1) {
-      ElMessage.warning('测试次数至少为 1 次')
+      ElMessage.warning(t('testJobCreate.messages.testCountMinimum'))
       return false
     }
     if (extraParamsError.value) {
@@ -740,33 +748,33 @@ function validateForm(): boolean {
     }
   } else if (currentMode.value === 'same-version-different-model') {
     if (!sameVersionForm.versionId) {
-      ElMessage.warning('请选择基准版本')
+      ElMessage.warning(t('testJobCreate.messages.selectBaseVersion'))
       return false
     }
     if (!hasModelOptions.value) {
-      ElMessage.warning('暂无可用模型，请先在“LLMs 配置”中添加')
+      ElMessage.warning(t('testJobCreate.messages.noModels'))
       return false
     }
     if (sameVersionForm.modelKeys.length < 2) {
-      ElMessage.warning('请至少选择两个模型参与对比')
+      ElMessage.warning(t('testJobCreate.messages.selectAtLeastTwoModels'))
       return false
     }
   } else if (currentMode.value === 'multi-turn-same-model') {
     if (!multiTurnForm.versionId) {
-      ElMessage.warning('请选择执行版本')
+      ElMessage.warning(t('testJobCreate.messages.selectVersion'))
       return false
     }
     if (!hasModelOptions.value) {
-      ElMessage.warning('暂无可用模型，请先在“LLMs 配置”中添加')
+      ElMessage.warning(t('testJobCreate.messages.noModels'))
       return false
     }
     if (!multiTurnForm.modelKey || !modelOptionMap.value.has(multiTurnForm.modelKey)) {
-      ElMessage.warning('请选择执行模型')
+      ElMessage.warning(t('testJobCreate.messages.selectModel'))
       return false
     }
     const hasContent = multiTurnRounds.value.some((round) => round.content.trim())
     if (!hasContent) {
-      ElMessage.warning('请至少填写一轮对话内容')
+      ElMessage.warning(t('testJobCreate.messages.roundContentRequired'))
       return false
     }
   }
@@ -780,19 +788,19 @@ async function handleSubmit() {
 
   if (currentMode.value === 'same-model-different-version' && promptDetail.value) {
     if (!hasModelOptions.value) {
-      ElMessage.warning('暂无可用模型，请先在“LLMs 配置”中添加模型')
+      ElMessage.warning(t('testJobCreate.messages.noModels'))
       return
     }
     const modelInfo = resolveModelInfo(sameModelForm.modelKey)
     if (!modelInfo) {
-      ElMessage.warning('请选择需要对比的模型')
+      ElMessage.warning(t('testJobCreate.messages.selectComparisonModels'))
       return
     }
     const { top_p, schema } = normalizeSameModelExtraParams()
     isSubmitting.value = true
     const createdRunIds: number[] = []
     const batchId = crypto.randomUUID()
-    const jobName = baseForm.name.trim() || `${promptDetail.value.name} 对比测试`
+const jobName = baseForm.name.trim() || t('testJobCreate.summary.fallbackName', { prompt: promptDetail.value.name })
     const notes = baseForm.description.trim() || undefined
 
     try {
@@ -803,7 +811,7 @@ async function handleSubmit() {
           job_name: jobName,
           mode: currentMode.value,
           version_id: versionId,
-          version_label: version?.version ?? `版本 #${versionId}`
+          version_label: version?.version ?? t('promptDetail.table.versionFallback', { id: versionId })
         }
         const payload = {
           prompt_version_id: versionId,
@@ -821,11 +829,11 @@ async function handleSubmit() {
       }
 
       if (createdRunIds.length === 0) {
-        ElMessage.info('未创建新的测试任务')
+    ElMessage.info(t('testJobCreate.messages.cancelled'))
         return
       }
 
-      ElMessage.success('测试任务已创建，正在跳转查看结果')
+      ElMessage.success(t('testJobCreate.messages.createSuccess'))
       const query: Record<string, string> = { mode: currentMode.value, runIds: createdRunIds.join(',') }
       if (createdRunIds.length > 1) {
         query.runIds = createdRunIds.join(',')
@@ -837,7 +845,7 @@ async function handleSubmit() {
       })
       return
     } catch (error) {
-      ElMessage.error(extractErrorMessage(error, '创建测试任务失败'))
+      ElMessage.error(extractErrorMessage(error, t('testJobCreate.messages.createFailed')))
       return
     } finally {
       isSubmitting.value = false
@@ -865,7 +873,7 @@ async function handleSubmit() {
   }
 
   console.debug('mock create test job payload', fallbackPayload)
-  ElMessage.success('已模拟创建测试任务，可在任务列表中查看（演示）')
+  ElMessage.success(t('testJobCreate.messages.mockSuccess'))
 }
 
 function handleCancel() {

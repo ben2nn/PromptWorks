@@ -2,9 +2,9 @@
   <div class="detail-page">
     <el-breadcrumb separator="/" class="detail-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goHome">Prompt 管理</span>
+        <span class="breadcrumb-link" @click="goHome">{{ t('menu.prompt') }}</span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>{{ detail?.name ?? 'Prompt 详情' }}</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ detail?.name ?? t('promptDetail.breadcrumb.fallback') }}</el-breadcrumb-item>
     </el-breadcrumb>
 
     <el-alert
@@ -16,28 +16,42 @@
 
     <el-skeleton v-else-if="isLoading" animated :rows="6" />
 
-    <el-empty v-else-if="!detail" description="未找到 Prompt 详情" />
+    <el-empty v-else-if="!detail" :description="t('promptDetail.empty')" />
 
     <template v-else>
       <el-card class="info-card">
       <template #header>
         <div class="info-header">
           <div class="info-title-group">
-            <p class="info-class">所属分类 · {{ detail.prompt_class.name }}</p>
+            <p class="info-class">{{ t('promptDetail.info.classLabel', { name: detail.prompt_class.name }) }}</p>
             <h2 class="info-title">{{ detail.name }}</h2>
-            <p class="info-desc">{{ detail.description ?? '暂无描述' }}</p>
+            <p class="info-desc">{{ detail.description ?? t('promptDetail.info.descriptionFallback') }}</p>
           </div>
           <div class="info-meta">
-            <el-tag type="success" effect="light">当前版本 {{ detail.current_version?.version ?? '未启用' }}</el-tag>
-            <span>更新于 {{ formatDateTime(detail.updated_at) }}</span>
+            <el-tag type="success" effect="light">
+              {{
+                detail.current_version?.version
+                  ? t('promptDetail.info.currentVersion', { version: detail.current_version.version })
+                  : t('promptDetail.info.currentVersionFallback')
+              }}
+            </el-tag>
+            <span>{{ t('promptDetail.info.updatedAt', { time: formatDateTime(detail.updated_at) }) }}</span>
           </div>
         </div>
       </template>
       <el-descriptions :column="3" border size="small" class="info-descriptions">
-        <el-descriptions-item label="作者">{{ detail.author ?? '未设置' }}</el-descriptions-item>
-        <el-descriptions-item label="创建时间">{{ formatDateTime(detail.created_at) }}</el-descriptions-item>
-        <el-descriptions-item label="更新时间">{{ formatDateTime(detail.updated_at) }}</el-descriptions-item>
-        <el-descriptions-item label="分类描述" :span="3">{{ detail.prompt_class.description ?? '暂无说明' }}</el-descriptions-item>
+        <el-descriptions-item :label="t('promptDetail.info.fields.author')">
+          {{ detail.author ?? t('common.notSet') }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('promptDetail.info.fields.createdAt')">
+          {{ formatDateTime(detail.created_at) }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('promptDetail.info.fields.updatedAt')">
+          {{ formatDateTime(detail.updated_at) }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('promptDetail.info.fields.classDescription')" :span="3">
+          {{ detail.prompt_class.description ?? t('promptDetail.info.fields.classDescriptionFallback') }}
+        </el-descriptions-item>
       </el-descriptions>
       <div class="info-tags">
         <div class="info-tags__list">
@@ -52,10 +66,10 @@
           </el-tag>
         </div>
         <el-button type="primary" link size="small" @click="openMetaDialog">
-          编辑分类与标签
+          {{ t('promptDetail.info.editButton') }}
         </el-button>
       </div>
-      <el-dialog v-model="metaDialogVisible" title="编辑分类与标签" width="520px">
+      <el-dialog v-model="metaDialogVisible" :title="t('promptDetail.info.dialogTitle')" width="520px">
         <el-alert
           v-if="metaError"
           :title="metaError"
@@ -64,10 +78,10 @@
           class="meta-alert"
         />
         <el-form label-width="80px" class="meta-form">
-          <el-form-item label="分类">
+          <el-form-item :label="t('promptDetail.info.dialog.classLabel')">
             <el-select
               v-model="selectedClassId"
-              placeholder="请选择分类"
+              :placeholder="t('promptDetail.info.dialog.classPlaceholder')"
               :loading="isMetaLoading"
               :disabled="isMetaLoading || !classOptions.length"
             >
@@ -79,16 +93,16 @@
               />
             </el-select>
             <span v-if="!classOptions.length && !isMetaLoading" class="meta-empty-tip">
-              暂无分类，请先在“分类管理”中创建
+              {{ t('promptDetail.info.dialog.noClassTip') }}
             </span>
           </el-form-item>
-          <el-form-item label="标签">
+          <el-form-item :label="t('promptDetail.info.dialog.tagsLabel')">
             <el-select
               v-model="selectedTagIds"
               multiple
               collapse-tags
               collapse-tags-tooltip
-              placeholder="选择标签"
+              :placeholder="t('promptDetail.info.dialog.tagsPlaceholder')"
               :loading="isMetaLoading"
             >
               <el-option
@@ -106,9 +120,9 @@
           </el-form-item>
         </el-form>
         <template #footer>
-          <el-button @click="closeMetaDialog" :disabled="isMetaSaving">取消</el-button>
+          <el-button @click="closeMetaDialog" :disabled="isMetaSaving">{{ t('common.cancel') }}</el-button>
           <el-button type="primary" :loading="isMetaSaving" :disabled="!canSaveMeta" @click="handleSaveMeta">
-            保存
+            {{ t('common.save') }}
           </el-button>
         </template>
       </el-dialog>
@@ -118,12 +132,12 @@
       <template #header>
         <div class="content-header">
           <div>
-            <h3 class="content-title">Prompt 内容</h3>
-            <span class="content-subtitle">左侧查看完整内容，右侧切换历史版本</span>
+            <h3 class="content-title">{{ t('promptDetail.content.title') }}</h3>
+            <span class="content-subtitle">{{ t('promptDetail.content.subtitle') }}</span>
           </div>
           <div class="content-actions">
-            <el-button size="small" @click="handleCreateVersion">新增版本</el-button>
-            <el-button size="small" type="primary" @click="handleViewVersionCompare">版本对比</el-button>
+            <el-button size="small" @click="handleCreateVersion">{{ t('promptDetail.content.newVersion') }}</el-button>
+            <el-button size="small" type="primary" @click="handleViewVersionCompare">{{ t('promptDetail.content.compare') }}</el-button>
           </div>
         </div>
       </template>
@@ -131,11 +145,13 @@
         <section class="content-main">
           <header class="content-main__meta">
             <div>
-              <span class="content-main__label">版本号</span>
-              <strong class="content-main__value">{{ selectedVersion?.version ?? '未选择版本' }}</strong>
+              <span class="content-main__label">{{ t('promptDetail.content.versionLabel') }}</span>
+              <strong class="content-main__value">
+                {{ selectedVersion?.version ?? t('promptDetail.content.versionFallback') }}
+              </strong>
             </div>
             <div>
-              <span class="content-main__label">更新时间</span>
+              <span class="content-main__label">{{ t('promptDetail.content.updatedLabel') }}</span>
               <strong class="content-main__value">{{ formatDateTime(selectedVersion?.updated_at ?? selectedVersion?.created_at) }}</strong>
             </div>
           </header>
@@ -143,11 +159,11 @@
             <template v-if="selectedVersion">
               <pre class="content-text">{{ selectedVersion.content }}</pre>
             </template>
-            <el-empty v-else description="暂无版本内容" />
+            <el-empty v-else :description="t('promptDetail.content.empty')" />
           </div>
         </section>
         <aside class="content-history">
-          <h4 class="history-title">历史版本</h4>
+          <h4 class="history-title">{{ t('promptDetail.content.historyTitle') }}</h4>
           <div class="history-scroll">
             <div
               v-for="version in detail.versions"
@@ -170,10 +186,10 @@
       <template #header>
         <div class="test-header">
           <div>
-            <h3 class="test-title">Prompt 测试记录</h3>
-            <span class="test-subtitle">记录历史测试结果，支持快速备案</span>
+            <h3 class="test-title">{{ t('promptDetail.test.title') }}</h3>
+            <span class="test-subtitle">{{ t('promptDetail.test.subtitle') }}</span>
           </div>
-          <el-button type="primary" size="small" @click="handleCreateTest">新增测试</el-button>
+          <el-button type="primary" size="small" @click="handleCreateTest">{{ t('promptDetail.test.newTest') }}</el-button>
         </div>
       </template>
       <el-alert
@@ -191,43 +207,43 @@
         border
         v-loading="testRunLoading"
       >
-        <el-table-column label="Prompt 版本" min-width="180">
+        <el-table-column :label="t('promptDetail.test.columns.version')" min-width="180">
           <template #default="{ row }">
             <div class="test-record-name">
-              <span>{{ row.prompt_version?.version ?? `版本 #${row.prompt_version_id}` }}</span>
+              <span>{{ row.prompt_version?.version ?? t('promptDetail.table.versionFallback', { id: row.prompt_version_id }) }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="模型" min-width="140">
+        <el-table-column :label="t('promptDetail.test.columns.model')" min-width="140">
           <template #default="{ row }">{{ row.model_name }}</template>
         </el-table-column>
-        <el-table-column label="温度" width="100">
+        <el-table-column :label="t('promptDetail.test.columns.temperature')" width="100">
           <template #default="{ row }">{{ formatTemperature(row.temperature) }}</template>
         </el-table-column>
-        <el-table-column label="测试次数" width="120">
+        <el-table-column :label="t('promptDetail.test.columns.repetitions')" width="120">
           <template #default="{ row }">{{ row.repetitions }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column :label="t('promptDetail.test.columns.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType[row.status] ?? 'info'" size="small">
-              {{ statusLabel[row.status] ?? row.status }}
+              {{ statusLabel.value[row.status] ?? row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="发起时间" min-width="160">
+        <el-table-column :label="t('promptDetail.test.columns.createdAt')" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column :label="t('promptDetail.test.columns.actions')" width="120">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleViewTestJob(row.id)">
-              查看结果
+              {{ t('promptDetail.test.viewResult') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-else description="暂无测试记录，点击右上角新增测试" />
+      <el-empty v-else :description="t('promptDetail.test.empty')" />
       </el-card>
     </template>
   </div>
@@ -243,9 +259,11 @@ import { updatePrompt } from '../api/prompt'
 import { listTestRuns } from '../api/testRun'
 import type { TestRun } from '../types/testRun'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const route = useRoute()
+const { t, locale } = useI18n()
 const currentId = computed(() => {
   const raw = Number(route.params.id)
   return Number.isFinite(raw) && raw > 0 ? raw : null
@@ -271,13 +289,13 @@ const metaDialogVisible = ref(false)
 const classOptions = computed(() =>
   promptClasses.value
     .map((item) => ({ id: item.id, name: item.name }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    .sort((a, b) => a.name.localeCompare(b.name, locale.value))
 )
 
 const tagOptions = computed(() =>
   promptTags.value
     .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    .sort((a, b) => a.name.localeCompare(b.name, locale.value))
 )
 
 watch(
@@ -360,12 +378,12 @@ const statusTagType = {
   pending: 'info'
 } as const
 
-const statusLabel = {
-  completed: '已完成',
-  failed: '失败',
-  running: '执行中',
-  pending: '排队中'
-} as const
+const statusLabel = computed<Record<string, string>>(() => ({
+  completed: t('promptDetail.status.completed'),
+  failed: t('promptDetail.status.failed'),
+  running: t('promptDetail.status.running'),
+  pending: t('promptDetail.status.pending')
+}))
 
 const canSaveMeta = computed(() => {
   const prompt = detail.value
@@ -395,13 +413,13 @@ function extractMetaError(error: unknown): string {
       }
     }
     if (httpError.status === 404) {
-      return '分类或标签数据未找到'
+      return t('promptDetail.messages.metaNotFound')
     }
   }
   if (error instanceof Error && error.message) {
     return error.message
   }
-  return '加载分类或标签数据失败'
+  return t('promptDetail.messages.metaLoadFailed')
 }
 
 async function fetchMeta() {
@@ -464,7 +482,7 @@ function extractTestRunError(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message
   }
-  return '加载测试记录失败'
+  return t('promptDetail.messages.testLoadFailed')
 }
 
 async function handleSaveMeta() {
@@ -473,11 +491,11 @@ async function handleSaveMeta() {
     return
   }
   if (selectedClassId.value === null) {
-    ElMessage.warning('请选择分类')
+    ElMessage.warning(t('promptDetail.messages.classRequired'))
     return
   }
   if (!canSaveMeta.value) {
-    ElMessage.info('分类与标签未发生变化')
+    ElMessage.info(t('promptDetail.messages.noChange'))
     return
   }
   isMetaSaving.value = true
@@ -486,7 +504,7 @@ async function handleSaveMeta() {
       class_id: selectedClassId.value,
       tag_ids: selectedTagIds.value
     })
-    ElMessage.success('分类与标签已更新')
+    ElMessage.success(t('promptDetail.messages.updateSuccess'))
     await refreshDetail()
     await fetchMeta()
   } catch (error) {
@@ -505,13 +523,17 @@ function closeMetaDialog() {
   metaDialogVisible.value = false
 }
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatTemperature(value: number | null | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
@@ -528,13 +550,13 @@ function formatDateTime(value: string | null | undefined) {
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  return dateTimeFormatter.format(date)
+  return dateTimeFormatter.value.format(date)
 }
 
 function summarizeContent(content: string) {
   const normalized = content.replace(/\s+/g, ' ').trim()
   if (!normalized) {
-    return '暂无内容摘要'
+    return t('promptDetail.messages.contentEmpty')
   }
   return normalized.length > 80 ? `${normalized.slice(0, 80)}…` : normalized
 }

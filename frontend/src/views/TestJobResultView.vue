@@ -2,10 +2,10 @@
   <div class="result-page">
     <el-breadcrumb separator="/" class="page-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goTestManagement">测试任务</span>
+        <span class="breadcrumb-link" @click="goTestManagement">{{ t('menu.testJob') }}</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item v-if="summary">{{ summary.title }}</el-breadcrumb-item>
-      <el-breadcrumb-item>测试结果</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ t('testJobResult.breadcrumb.current') }}</el-breadcrumb-item>
     </el-breadcrumb>
 
     <el-alert
@@ -17,7 +17,7 @@
 
     <el-skeleton v-else-if="isLoading" animated :rows="6" />
 
-    <el-empty v-else-if="!summary" description="未找到测试任务" />
+    <el-empty v-else-if="!summary" :description="t('testJobResult.empty')" />
 
     <template v-else>
       <el-card class="info-card">
@@ -38,25 +38,39 @@
               :disabled="!summary.promptId"
               @click="goPrompt(summary.promptId)"
             >
-              查看 Prompt
+              {{ t('testJobResult.info.viewPrompt') }}
             </el-button>
           </div>
         </template>
         <el-descriptions :column="3" border size="small">
-          <el-descriptions-item label="关联 Prompt">{{ summary.promptName }}</el-descriptions-item>
-          <el-descriptions-item label="使用模型">{{ summary.modelName }}</el-descriptions-item>
-          <el-descriptions-item label="测试次数">每个版本 {{ summary.repetitions }} 次</el-descriptions-item>
-          <el-descriptions-item label="温度">{{ formatTemperature(summary.temperature) }}</el-descriptions-item>
-          <el-descriptions-item label="Top P">{{ formatTopP(summary.top_p) }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatDateTime(summary.createdAt) }}</el-descriptions-item>
-          <el-descriptions-item label="最近更新">{{ formatDateTime(summary.updatedAt) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.prompt')">
+            {{ summary.promptName }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.model')">
+            {{ summary.modelName }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.repetitionsLabel')">
+            {{ t('testJobResult.info.fields.repetitionsValue', { count: summary.repetitions }) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.temperature')">
+            {{ formatTemperature(summary.temperature) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.topP')">
+            {{ formatTopP(summary.top_p) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.createdAt')">
+            {{ formatDateTime(summary.createdAt) }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('testJobResult.info.fields.updatedAt')">
+            {{ formatDateTime(summary.updatedAt) }}
+          </el-descriptions-item>
         </el-descriptions>
         <div class="info-description">
-          <span class="info-description__label">任务说明：</span>
-          <span>{{ summary.description || '暂无补充说明' }}</span>
+          <span class="info-description__label">{{ t('testJobResult.info.descriptionLabel') }}</span>
+          <span>{{ summary.description || t('testJobResult.info.descriptionFallback') }}</span>
         </div>
         <div class="extra-params">
-          <h4>模型额外参数</h4>
+          <h4>{{ t('testJobResult.info.extraParams') }}</h4>
           <pre>{{ formattedExtraParams }}</pre>
         </div>
       </el-card>
@@ -65,8 +79,8 @@
         <template #header>
           <div class="result-header">
             <div>
-              <h3 class="result-title">测试输出对比</h3>
-              <p class="result-subtitle">同模型下对比多个 Prompt 版本的响应表现</p>
+              <h3 class="result-title">{{ t('testJobResult.resultCard.title') }}</h3>
+              <p class="result-subtitle">{{ t('testJobResult.resultCard.subtitle') }}</p>
             </div>
             <div v-if="maxRounds > 1" class="round-switch">
               <el-button-group>
@@ -77,7 +91,9 @@
                   :disabled="currentRound === 1"
                   @click="handlePrevRound"
                 />
-                <span class="round-switch__label">第 {{ currentRound }} / {{ maxRounds }} 轮</span>
+                <span class="round-switch__label">
+                  {{ t('testJobResult.resultCard.roundLabel', { current: currentRound, total: maxRounds }) }}
+                </span>
                 <el-button
                   :icon="ArrowRight"
                   plain
@@ -99,31 +115,31 @@
             <header class="result-column__header">
               <h4>{{ target.title }}</h4>
               <span class="result-column__meta">
-                版本更新时间：{{ formatDateTime(target.updatedAt) }}
+                {{ t('testJobResult.resultCard.updatedAt', { time: formatDateTime(target.updatedAt) }) }}
               </span>
             </header>
             <section class="result-column__body">
               <div class="result-section">
-                <h5>Prompt 内容</h5>
+                <h5>{{ t('testJobResult.resultCard.promptContent') }}</h5>
                 <p>{{ target.promptPreview }}</p>
               </div>
               <template v-if="getCurrentRun(target.id)">
                 <div class="result-section">
-                  <h5>模型输出</h5>
+                  <h5>{{ t('testJobResult.resultCard.modelOutput') }}</h5>
                   <p>{{ getCurrentRun(target.id)!.output }}</p>
                 </div>
                 <ul class="metric-list">
                   <li>
-                    <span>Tokens 用量</span>
+                    <span>{{ t('testJobResult.resultCard.tokens') }}</span>
                     <strong>{{ formatNumber(getCurrentRun(target.id)!.tokensUsed) }}</strong>
                   </li>
                   <li>
-                    <span>响应耗时</span>
+                    <span>{{ t('testJobResult.resultCard.latency') }}</span>
                     <strong>{{ formatLatency(getCurrentRun(target.id)!.latencyMs) }}</strong>
                   </li>
                 </ul>
               </template>
-              <el-empty v-else description="当前轮次暂无结果" />
+              <el-empty v-else :description="t('testJobResult.resultCard.noResult')" />
             </section>
           </div>
         </div>
@@ -132,16 +148,23 @@
       <el-card class="analysis-card">
         <template #header>
           <div class="analysis-header">
-            <h3 class="analysis-title">数据分析</h3>
-            <span class="analysis-summary">平均 Tokens：{{ formatNumber(overallStats.averageTokens) }}，平均耗时：{{ formatLatency(overallStats.averageLatencyMs) }}</span>
+            <h3 class="analysis-title">{{ t('testJobResult.analysis.title') }}</h3>
+            <span class="analysis-summary">
+              {{
+                t('testJobResult.analysis.summary', {
+                  tokens: formatNumber(overallStats.averageTokens),
+                  latency: formatLatency(overallStats.averageLatencyMs)
+                })
+              }}
+            </span>
           </div>
         </template>
-        <el-table :data="analysisRows" size="small" border empty-text="暂无统计数据">
-          <el-table-column prop="title" label="版本" min-width="200" />
-          <el-table-column label="平均 Tokens" min-width="150">
+        <el-table :data="analysisRows" size="small" border :empty-text="t('testJobResult.analysis.empty')">
+          <el-table-column prop="title" :label="t('testJobResult.analysis.columns.version')" min-width="200" />
+          <el-table-column :label="t('testJobResult.analysis.columns.averageTokens')" min-width="150">
             <template #default="{ row }">{{ formatNumber(row.averageTokens) }}</template>
           </el-table-column>
-          <el-table-column label="平均耗时" min-width="140">
+          <el-table-column :label="t('testJobResult.analysis.columns.averageLatency')" min-width="140">
             <template #default="{ row }">{{ formatLatency(row.averageLatencyMs) }}</template>
           </el-table-column>
         </el-table>
@@ -156,6 +179,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getTestRun } from '../api/testRun'
 import type { TestResult, TestRun } from '../types/testRun'
+import { useI18n } from 'vue-i18n'
 
 type ComparisonMode =
   | 'same-model-different-version'
@@ -190,6 +214,7 @@ interface AnalysisRow {
 
 const route = useRoute()
 const router = useRouter()
+const { t, locale } = useI18n()
 
 const requestedRunIds = computed(() => {
   const ids = new Set<number>()
@@ -225,11 +250,11 @@ const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 const currentRound = ref(1)
 
-const modeLabelMap: Record<ComparisonMode, string> = {
-  'same-model-different-version': '同模型不同版本',
-  'same-version-different-model': '同版本不同模型',
-  'multi-turn-same-model': '同版本同模型多轮'
-}
+const modeLabelMap = computed<Record<ComparisonMode, string>>(() => ({
+  'same-model-different-version': t('testJobResult.modes.same-model-different-version'),
+  'same-version-different-model': t('testJobResult.modes.same-version-different-model'),
+  'multi-turn-same-model': t('testJobResult.modes.multi-turn-same-model')
+}))
 
 const statusTagType = {
   completed: 'success',
@@ -238,12 +263,12 @@ const statusTagType = {
   pending: 'info'
 } as const
 
-const statusLabel = {
-  completed: '已完成',
-  running: '执行中',
-  failed: '失败',
-  pending: '排队中'
-} as const
+const statusLabel = computed<Record<string, string>>(() => ({
+  completed: t('testJobResult.status.completed'),
+  running: t('testJobResult.status.running'),
+  failed: t('testJobResult.status.failed'),
+  pending: t('testJobResult.status.pending')
+}))
 
 watch(
   requestedRunIds,
@@ -258,13 +283,13 @@ const targets = computed<TargetView[]>(() =>
     const schema = (run.schema ?? {}) as Record<string, unknown>
     const versionLabel = typeof schema.version_label === 'string'
       ? schema.version_label
-      : run.prompt_version?.version ?? `版本 #${run.prompt_version_id}`
+      : run.prompt_version?.version ?? t('promptDetail.table.versionFallback', { id: run.prompt_version_id })
     const promptSnapshot = typeof schema.prompt_snapshot === 'string'
       ? schema.prompt_snapshot
-      : run.prompt_version?.content ?? '暂无 Prompt 内容'
+      : run.prompt_version?.content ?? t('testJobResult.messages.promptContentEmpty')
     return {
       id: run.id,
-      title: `${run.model_name} ｜ ${versionLabel}`,
+      title: t('testJobResult.summary.targetTitle', { model: run.model_name, version: versionLabel }),
       versionId: run.prompt_version_id,
       versionLabel,
       promptPreview: summarizeText(promptSnapshot),
@@ -315,10 +340,10 @@ const summary = computed(() => {
   }
   const first = runs.value[0]
   const schema = (first.schema ?? {}) as Record<string, unknown>
-  const promptName = first.prompt?.name ?? '未命名 Prompt'
+  const promptName = first.prompt?.name ?? t('testJobResult.summary.promptFallback')
   const modelName = first.model_name
   const jobNameCandidate = typeof schema.job_name === 'string' ? schema.job_name.trim() : ''
-  const jobName = jobNameCandidate || `${promptName} ｜ ${modelName} 对比`
+  const jobName = jobNameCandidate || t('testJobResult.summary.defaultTitle', { prompt: promptName, model: modelName })
   const status = deriveStatus(runs.value)
   const createdAt = runs.value
     .map((run) => run.created_at)
@@ -405,7 +430,7 @@ async function fetchRuns() {
   const ids = requestedRunIds.value
   if (!ids.length) {
     runs.value = []
-    errorMessage.value = '未选择任何测试任务'
+    errorMessage.value = t('testJobResult.messages.noneSelected')
     return
   }
   isLoading.value = true
@@ -414,10 +439,10 @@ async function fetchRuns() {
     const data = await Promise.all(ids.map((id) => getTestRun(id)))
     runs.value = data
     if (!data.length) {
-      errorMessage.value = '未找到测试任务'
+      errorMessage.value = t('testJobResult.messages.notFound')
     }
   } catch (error) {
-    errorMessage.value = extractErrorMessage(error, '加载测试任务失败')
+    errorMessage.value = extractErrorMessage(error, t('testJobResult.messages.loadFailed'))
     runs.value = []
   } finally {
     isLoading.value = false
@@ -491,13 +516,17 @@ function extractErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -507,21 +536,23 @@ function formatDateTime(value: string | null | undefined) {
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  return dateTimeFormatter.format(date)
+  return dateTimeFormatter.value.format(date)
 }
+
+const numberLocale = computed(() => (locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'))
 
 function formatNumber(value: number | null | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return '--'
   }
-  return value.toFixed(0)
+  return value.toLocaleString(numberLocale.value)
 }
 
 function formatLatency(value: number | null | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return '--'
   }
-  return `${Math.round(value)} ms`
+  return t('testJobResult.units.milliseconds', { value: Math.round(value) })
 }
 
 function formatTemperature(value: number | null | undefined) {
@@ -541,7 +572,7 @@ function formatTopP(value: number | null | undefined) {
 function summarizeText(value: string) {
   const normalized = value.replace(/\s+/g, ' ').trim()
   if (!normalized) {
-    return '暂无内容'
+    return t('testJobResult.messages.summaryEmpty')
   }
   return normalized.length > 120 ? `${normalized.slice(0, 120)}…` : normalized
 }

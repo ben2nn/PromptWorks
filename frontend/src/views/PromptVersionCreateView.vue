@@ -2,14 +2,14 @@
   <div class="version-create-page">
     <el-breadcrumb separator="/" class="version-breadcrumb">
       <el-breadcrumb-item>
-        <span class="breadcrumb-link" @click="goPromptManagement">Prompt 管理</span>
+        <span class="breadcrumb-link" @click="goPromptManagement">{{ t('menu.prompt') }}</span>
       </el-breadcrumb-item>
       <el-breadcrumb-item>
         <span class="breadcrumb-link" @click="goPromptDetail">
-          {{ promptDetail?.name ?? '未命名 Prompt' }}
+          {{ promptDetail?.name ?? t('promptVersionCreate.breadcrumb.fallback') }}
         </span>
       </el-breadcrumb-item>
-      <el-breadcrumb-item>新增版本</el-breadcrumb-item>
+      <el-breadcrumb-item>{{ t('promptVersionCreate.breadcrumb.current') }}</el-breadcrumb-item>
     </el-breadcrumb>
 
     <el-alert
@@ -21,32 +21,32 @@
 
     <el-skeleton v-else-if="isLoading" animated :rows="5" />
 
-    <el-empty v-else-if="!promptDetail" description="未找到 Prompt 信息" />
+    <el-empty v-else-if="!promptDetail" :description="t('promptVersionCreate.empty')" />
 
     <el-card v-else>
       <template #header>
         <div class="card-header">
-          <h3>新增版本基础表单</h3>
-          <span class="card-subtitle">提交后可接入后端接口，现阶段用于演示输入结构</span>
+          <h3>{{ t('promptVersionCreate.card.title') }}</h3>
+          <span class="card-subtitle">{{ t('promptVersionCreate.card.subtitle') }}</span>
         </div>
       </template>
       <el-form label-width="90px" class="version-form">
-        <el-form-item label="版本号">
-          <el-input v-model="form.version" placeholder="例如 v1.5.0" />
+        <el-form-item :label="t('promptVersionCreate.form.versionLabel')">
+          <el-input v-model="form.version" :placeholder="t('promptVersionCreate.form.versionPlaceholder')" />
         </el-form-item>
-        <el-form-item label="版本摘要">
-          <el-input v-model="form.summary" placeholder="简要说明本次更新要点" />
+        <el-form-item :label="t('promptVersionCreate.form.summaryLabel')">
+          <el-input v-model="form.summary" :placeholder="t('promptVersionCreate.form.summaryPlaceholder')" />
         </el-form-item>
-        <el-form-item label="内容正文">
+        <el-form-item :label="t('promptVersionCreate.form.contentLabel')">
           <el-input
             v-model="form.content"
             type="textarea"
             :rows="12"
-            placeholder="在这里粘贴完整 Prompt 内容"
+            :placeholder="t('promptVersionCreate.form.contentPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="引用版本">
-          <el-select v-model="form.reference" clearable placeholder="可选择参考版本">
+        <el-form-item :label="t('promptVersionCreate.form.referenceLabel')">
+          <el-select v-model="form.reference" clearable :placeholder="t('promptVersionCreate.form.referencePlaceholder')">
             <el-option
               v-for="version in promptDetail.versions"
               :key="version.id"
@@ -58,9 +58,9 @@
         <el-form-item>
           <el-space>
             <el-button type="primary" :loading="isSubmitting" @click="handleSubmit">
-              提交
+              {{ t('promptVersionCreate.actions.submit') }}
             </el-button>
-            <el-button @click="goPromptDetail">取消</el-button>
+            <el-button @click="goPromptDetail">{{ t('promptVersionCreate.actions.cancel') }}</el-button>
           </el-space>
         </el-form-item>
       </el-form>
@@ -74,9 +74,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { usePromptDetail } from '../composables/usePromptDetail'
 import { updatePrompt, type HttpError } from '../api/prompt'
+import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 
 const currentId = computed(() => {
   const raw = Number(route.params.id)
@@ -116,22 +118,22 @@ function extractErrorMessage(error: unknown): string {
       return detail
     }
     if (httpError.status === 404) {
-      return '目标 Prompt 不存在'
+      return t('promptVersionCreate.messages.promptNotFound')
     }
   }
   if (error instanceof Error && error.message) {
     return error.message
   }
-  return '提交新版本失败'
+  return t('promptVersionCreate.messages.submitFailed')
 }
 
 async function handleSubmit() {
   if (!currentId.value) {
-    ElMessage.error('无法识别当前 Prompt 编号')
+    ElMessage.error(t('promptVersionCreate.messages.idMissing'))
     return
   }
   if (!form.version.trim() || !form.content.trim()) {
-    ElMessage.warning('请填写版本号与内容')
+    ElMessage.warning(t('promptVersionCreate.messages.required'))
     return
   }
 
@@ -141,7 +143,7 @@ async function handleSubmit() {
       version: form.version.trim(),
       content: form.content
     })
-    ElMessage.success('新增版本成功')
+    ElMessage.success(t('promptVersionCreate.messages.success'))
     router.push({ name: 'prompt-detail', params: { id: currentId.value } })
   } catch (error) {
     ElMessage.error(extractErrorMessage(error))
