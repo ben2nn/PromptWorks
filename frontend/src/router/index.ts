@@ -30,7 +30,7 @@ const router = createRouter({
     {
       path: '/prompts/:id/tests/new',
       name: 'prompt-test-create',
-      component: () => import('../views/PromptTestCreateView.vue'),
+      component: () => import('../views/TestJobCreateView.vue'),
       meta: { menu: 'prompt', title: '新增测试' }
     },
     {
@@ -44,6 +44,18 @@ const router = createRouter({
       name: 'test-job-management',
       component: () => import('../views/TestJobManagementView.vue'),
       meta: { menu: 'test-job', title: '测试任务' }
+    },
+    {
+      path: '/tests/jobs/new',
+      name: 'test-job-create',
+      component: () => import('../views/TestJobCreateView.vue'),
+      meta: { menu: 'test-job', title: '新建测试任务' }
+    },
+    {
+      path: '/tests/jobs/:id',
+      name: 'test-job-result',
+      component: () => import('../views/TestJobResultView.vue'),
+      meta: { menu: 'test-job', title: '测试结果' }
     },
     {
       path: '/classes',

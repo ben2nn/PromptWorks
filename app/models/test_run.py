@@ -32,6 +32,7 @@ class TestRun(Base):
     prompt_version_id: Mapped[int] = mapped_column(
         ForeignKey("prompts_versions.id", ondelete="CASCADE"), nullable=False
     )
+    batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     model_name: Mapped[str] = mapped_column(String(100), nullable=False)
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.7)
@@ -39,7 +40,11 @@ class TestRun(Base):
     repetitions: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     schema: Mapped[dict | None] = mapped_column(JSONBCompat, nullable=True)
     status: Mapped[TestRunStatus] = mapped_column(
-        PgEnum(TestRunStatus, name="test_run_status"),
+        PgEnum(
+            TestRunStatus,
+            name="test_run_status",
+            values_callable=lambda enum: [member.value for member in enum],
+        ),
         nullable=False,
         default=TestRunStatus.PENDING,
         server_default=TestRunStatus.PENDING.value,

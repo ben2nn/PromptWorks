@@ -51,9 +51,7 @@ def _total_tokens_expr():
     return func.coalesce(LLMUsageLog.total_tokens, prompt_expr + completion_expr, 0)
 
 
-def _apply_date_filters(
-    stmt: Select, start_date: date | None, end_date: date | None
-):
+def _apply_date_filters(stmt: Select, start_date: date | None, end_date: date | None):
     if start_date:
         stmt = stmt.where(func.date(LLMUsageLog.created_at) >= start_date)
     if end_date:
@@ -114,9 +112,9 @@ def aggregate_usage_by_model(
         .outerjoin(LLMProvider, LLMProvider.id == LLMUsageLog.provider_id)
     )
     stmt = _apply_date_filters(stmt, start_date, end_date)
-    stmt = stmt.group_by(
-        provider_id_col, model_name_col, provider_name_col
-    ).order_by(total_tokens.desc())
+    stmt = stmt.group_by(provider_id_col, model_name_col, provider_name_col).order_by(
+        total_tokens.desc()
+    )
 
     rows = db.execute(stmt).all()
     summaries: list[ModelUsageSummary] = []

@@ -176,17 +176,54 @@
           <el-button type="primary" size="small" @click="handleCreateTest">新增测试</el-button>
         </div>
       </template>
-      <el-table v-if="testRecords.length" :data="testRecords" size="small" border>
-        <el-table-column prop="name" label="测试名称" min-width="140" />
-        <el-table-column prop="model" label="模型" min-width="120" />
-        <el-table-column prop="created_at" label="发起时间" min-width="160">
+      <el-alert
+        v-if="testRunError"
+        :title="testRunError"
+        type="error"
+        show-icon
+        class="test-alert"
+      />
+      <el-skeleton v-else-if="testRunLoading && !testRecords.length" animated :rows="3" />
+      <el-table
+        v-else-if="testRecords.length"
+        :data="testRecords"
+        size="small"
+        border
+        v-loading="testRunLoading"
+      >
+        <el-table-column label="Prompt 版本" min-width="180">
+          <template #default="{ row }">
+            <div class="test-record-name">
+              <span>{{ row.prompt_version?.version ?? `版本 #${row.prompt_version_id}` }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="模型" min-width="140">
+          <template #default="{ row }">{{ row.model_name }}</template>
+        </el-table-column>
+        <el-table-column label="温度" width="100">
+          <template #default="{ row }">{{ formatTemperature(row.temperature) }}</template>
+        </el-table-column>
+        <el-table-column label="测试次数" width="120">
+          <template #default="{ row }">{{ row.repetitions }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusTagType[row.status] ?? 'info'" size="small">
+              {{ statusLabel[row.status] ?? row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="发起时间" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" min-width="120">
+        <el-table-column label="操作" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusTagType[row.status]" size="small">{{ statusLabel[row.status] }}</el-tag>
+            <el-button type="primary" link size="small" @click="handleViewTestJob(row.id)">
+              查看结果
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -203,20 +240,12 @@ import { usePromptDetail } from '../composables/usePromptDetail'
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 import { updatePrompt } from '../api/prompt'
+import { listTestRuns } from '../api/testRun'
+import type { TestRun } from '../types/testRun'
 import { ElMessage } from 'element-plus'
-
-interface PromptTestRecord {
-  id: number
-  prompt_id: number
-  name: string
-  model: string
-  status: 'success' | 'failed' | 'running'
-  created_at: string
-}
 
 const router = useRouter()
 const route = useRoute()
-
 const currentId = computed(() => {
   const raw = Number(route.params.id)
   return Number.isFinite(raw) && raw > 0 ? raw : null
@@ -228,33 +257,6 @@ const {
   error: errorMessage,
   refresh: refreshDetail
 } = usePromptDetail(currentId)
-
-const mockTestRecords: PromptTestRecord[] = [
-  {
-    id: 1,
-    prompt_id: 1,
-    name: '新手客服测试',
-    model: 'gpt-4o',
-    status: 'success',
-    created_at: '2025-09-19T10:30:00+08:00'
-  },
-  {
-    id: 2,
-    prompt_id: 1,
-    name: '版本 v1.3 回归',
-    model: 'claude-3.5-sonnet',
-    status: 'failed',
-    created_at: '2025-09-15T16:20:00+08:00'
-  },
-  {
-    id: 3,
-    prompt_id: 2,
-    name: '英文邮件场景验证',
-    model: 'gpt-4.1-mini',
-    status: 'running',
-    created_at: '2025-09-22T09:05:00+08:00'
-  }
-]
 
 const selectedVersionId = ref<number | null>(null)
 const promptClasses = ref<PromptClassStats[]>([])
@@ -303,10 +305,25 @@ const selectedVersion = computed(() => {
   return match ?? prompt.current_version ?? null
 })
 
+const testRuns = ref<TestRun[]>([])
+const testRunLoading = ref(false)
+const testRunError = ref<string | null>(null)
+
 const testRecords = computed(() => {
-  if (!currentId.value) return []
-  return mockTestRecords.filter((item) => item.prompt_id === currentId.value)
+  const promptId = currentId.value
+  if (!promptId) return []
+  return testRuns.value
+    .filter((item) => item.prompt?.id === promptId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 })
+
+watch(
+  currentId,
+  () => {
+    void fetchTestRuns()
+  },
+  { immediate: true }
+)
 
 watch(classOptions, (options) => {
   if (!options.length) {
@@ -337,15 +354,17 @@ onMounted(() => {
 })
 
 const statusTagType = {
-  success: 'success',
+  completed: 'success',
   failed: 'danger',
-  running: 'warning'
+  running: 'warning',
+  pending: 'info'
 } as const
 
 const statusLabel = {
-  success: '成功',
+  completed: '已完成',
   failed: '失败',
-  running: '进行中'
+  running: '执行中',
+  pending: '排队中'
 } as const
 
 const canSaveMeta = computed(() => {
@@ -402,6 +421,25 @@ async function fetchMeta() {
   }
 }
 
+async function fetchTestRuns() {
+  if (!currentId.value) {
+    testRuns.value = []
+    testRunError.value = null
+    return
+  }
+  testRunLoading.value = true
+  testRunError.value = null
+  try {
+    const runs = await listTestRuns({ limit: 200 })
+    testRuns.value = runs.filter((run) => run.prompt?.id === currentId.value)
+  } catch (error) {
+    testRunError.value = extractTestRunError(error)
+    testRuns.value = []
+  } finally {
+    testRunLoading.value = false
+  }
+}
+
 function resetMetaSelections() {
   const prompt = detail.value
   if (!prompt) {
@@ -411,6 +449,22 @@ function resetMetaSelections() {
   }
   selectedClassId.value = prompt.prompt_class.id
   selectedTagIds.value = prompt.tags.map((tag) => tag.id)
+}
+
+function extractTestRunError(error: unknown): string {
+  if (error && typeof error === 'object' && 'payload' in error) {
+    const payload = (error as { payload?: unknown }).payload
+    if (payload && typeof payload === 'object' && 'detail' in payload) {
+      const detail = (payload as Record<string, unknown>).detail
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail
+      }
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return '加载测试记录失败'
 }
 
 async function handleSaveMeta() {
@@ -459,6 +513,13 @@ const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   minute: '2-digit'
 })
 
+function formatTemperature(value: number | null | undefined) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '--'
+  }
+  return value.toFixed(2)
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return '--'
@@ -495,6 +556,10 @@ function handleCreateVersion() {
 function handleCreateTest() {
   if (!currentId.value) return
   router.push({ name: 'prompt-test-create', params: { id: currentId.value } })
+}
+
+function handleViewTestJob(jobId: number) {
+  router.push({ name: 'test-job-result', params: { id: jobId } })
 }
 
 function goHome() {
@@ -790,5 +855,15 @@ function goHome() {
 
 .test-card :deep(.el-table__cell) {
   font-size: 13px;
+}
+
+.test-record-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.test-alert {
+  margin-bottom: 12px;
 }
 </style>

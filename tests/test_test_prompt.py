@@ -49,7 +49,7 @@ def test_create_and_retrieve_test_prompt(client: TestClient):
     )
     assert create_resp.status_code == 201
     test_prompt = create_resp.json()
-    assert test_prompt["status"] == "pending"
+    assert test_prompt["status"] == "completed"
     assert test_prompt["prompt_version_id"] == prompt_version_id
     assert test_prompt["prompt_version"]["version"] == "v1"
     assert test_prompt["prompt"]["name"] == prompt_payload["name"]
@@ -65,8 +65,12 @@ def test_create_and_retrieve_test_prompt(client: TestClient):
     detail = detail_resp.json()
     assert detail["prompt_version"]["id"] == prompt_version_id
     assert detail["prompt"]["id"] == prompt_payload["id"]
-    assert detail["results"] == []
+    assert len(detail["results"]) == 2
+    assert all(result["run_index"] in (1, 2) for result in detail["results"])
+    assert detail["results"][0]["tokens_used"] is not None
 
     list_results_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}/results")
     assert list_results_resp.status_code == 200
-    assert list_results_resp.json() == []
+    results_payload = list_results_resp.json()
+    assert len(results_payload) == 2
+    assert {item["run_index"] for item in results_payload} == {1, 2}

@@ -18,6 +18,7 @@ class TestRunBase(BaseModel):
         default=None, alias="schema", serialization_alias="schema"
     )
     notes: str | None = None
+    batch_id: str | None = Field(default=None, max_length=64)
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
@@ -39,6 +40,7 @@ class TestRunUpdate(BaseModel):
     )
     notes: str | None = None
     status: TestRunStatus | None = None
+    batch_id: str | None = Field(default=None, max_length=64)
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

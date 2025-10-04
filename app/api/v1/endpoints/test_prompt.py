@@ -12,6 +12,7 @@ from app.models.result import Result
 from app.models.test_run import TestRun, TestRunStatus
 from app.schemas.result import ResultRead
 from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
+from app.services.test_run import complete_with_mock_results
 
 router = APIRouter()
 
@@ -62,8 +63,12 @@ def create_test_prompt(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prompt 版本不存在"
         )
 
-    test_run = TestRun(**payload.model_dump(), status=TestRunStatus.PENDING)
+    data = payload.model_dump(by_alias=True, exclude_none=True)
+    test_run = TestRun(**data)
+    test_run.prompt_version = prompt_version
     db.add(test_run)
+    db.flush()
+    complete_with_mock_results(db, test_run)
     db.commit()
     db.refresh(test_run)
     return test_run

@@ -128,7 +128,10 @@ def test_usage_timeseries_and_filters(client: TestClient, db_session: Session) -
 
     range_resp = client.get(
         f"/api/v1/usage/models/{model_key}/timeseries",
-        params={"start_date": date(2024, 1, 1), "end_date": date(2024, 1, 31)},
+        params={
+            "start_date": date(2024, 1, 1).isoformat(),
+            "end_date": date(2024, 1, 31).isoformat(),
+        },
     )
     assert range_resp.status_code == 200
     ranged_series = range_resp.json()
@@ -136,7 +139,10 @@ def test_usage_timeseries_and_filters(client: TestClient, db_session: Session) -
 
     overview_resp = client.get(
         "/api/v1/usage/overview",
-        params={"start_date": date(2024, 1, 1), "end_date": date(2024, 1, 4)},
+        params={
+            "start_date": date(2024, 1, 1).isoformat(),
+            "end_date": date(2024, 1, 4).isoformat(),
+        },
     )
     assert overview_resp.status_code == 200
     assert overview_resp.json() == {

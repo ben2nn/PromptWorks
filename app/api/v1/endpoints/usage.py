@@ -76,9 +76,7 @@ def read_usage_overview(
     """汇总全局用量指标。"""
 
     _validate_date_range(start_date, end_date)
-    overview = calculate_usage_overview(
-        db, start_date=start_date, end_date=end_date
-    )
+    overview = calculate_usage_overview(db, start_date=start_date, end_date=end_date)
     if overview is None:
         return None
     return UsageOverview(
@@ -99,9 +97,7 @@ def read_model_usage(
     """按模型聚合用量数据。"""
 
     _validate_date_range(start_date, end_date)
-    summaries = aggregate_usage_by_model(
-        db, start_date=start_date, end_date=end_date
-    )
+    summaries = aggregate_usage_by_model(db, start_date=start_date, end_date=end_date)
     return [_map_model_summary(item) for item in summaries]
 
 
