@@ -2,14 +2,14 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>快速测试</h2>
-        <p class="page-desc">针对单个 Prompt 快速发起临时调用，验证模型输出效果。</p>
+        <h2>{{ t('quickTest.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('quickTest.headerDescription') }}</p>
       </div>
       <div class="page-header__actions">
         <el-select
           class="history-select"
           :model-value="activeSessionId"
-          placeholder="历史记录"
+          :placeholder="t('quickTest.historyPlaceholder')"
           filterable
           @change="handleSessionChange"
         >
@@ -21,7 +21,7 @@
           />
         </el-select>
         <el-button type="primary" @click="handleNewChat" :disabled="!canCreateNewChat">
-          新建对话
+          {{ t('quickTest.newChat') }}
         </el-button>
       </div>
     </section>
@@ -30,11 +30,11 @@
       <el-card class="model-card">
         <template #header>
           <div class="card-header">
-            <span>模型与参数</span>
+            <span>{{ t('quickTest.sections.model') }}</span>
           </div>
         </template>
         <el-form label-position="top" class="model-form">
-          <el-form-item label="模型选择">
+          <el-form-item :label="t('quickTest.form.modelLabel')">
             <el-cascader
               v-model="selectedModelPath"
               :options="modelOptions"
@@ -42,11 +42,11 @@
               :show-all-levels="false"
               clearable
               filterable
-              placeholder="先选择厂商，再选择模型"
+              :placeholder="t('quickTest.form.modelPlaceholder')"
               :disabled="isModelLoading"
             />
           </el-form-item>
-          <el-form-item label="温度">
+          <el-form-item :label="t('quickTest.form.temperatureLabel')">
             <div class="temperature-box">
               <el-slider
                 v-model="temperature"
@@ -63,12 +63,12 @@
               />
             </div>
           </el-form-item>
-          <el-form-item label="额外参数" :error="extraParamsError">
+          <el-form-item :label="t('quickTest.form.extraParamsLabel')" :error="extraParamsError">
             <el-input
               v-model="extraParams"
               type="textarea"
               :autosize="{ minRows: 6, maxRows: 10 }"
-              placeholder="请输入 JSON 格式的模型附加参数"
+              :placeholder="t('quickTest.form.extraParamsPlaceholder')"
             />
           </el-form-item>
         </el-form>
@@ -77,13 +77,13 @@
       <el-card class="chat-card">
         <template #header>
           <div class="card-header">
-            <span>对话调试</span>
+            <span>{{ t('quickTest.sections.chat') }}</span>
           </div>
         </template>
         <div class="chat-panel">
           <div class="chat-messages" ref="chatScrollRef">
             <template v-if="!messages.length">
-              <el-empty description="发送首条消息以查看模型响应" />
+              <el-empty :description="t('quickTest.chat.empty')" />
             </template>
             <template v-else>
               <div
@@ -97,8 +97,8 @@
                     <span v-else>{{ message.avatarEmoji ?? message.avatarFallback }}</span>
                   </template>
                   <template v-else>
-                    <img v-if="userAvatar" :src="userAvatar" alt="用户" />
-                    <span v-else>我</span>
+                    <img v-if="userAvatar" :src="userAvatar" :alt="t('quickTest.chat.avatar.user')" />
+                    <span v-else>{{ t('quickTest.chat.avatar.self') }}</span>
                   </template>
                 </el-avatar>
                 <div class="chat-message__bubble">
@@ -108,9 +108,9 @@
                     <span v-else v-text="message.content" />
                   </div>
                   <div v-if="message.tokens" class="chat-message__meta">
-                    <span>输入 Token：{{ formatTokenValue(message.tokens.input) }}</span>
-                    <span>输出 Token：{{ formatTokenValue(message.tokens.output) }}</span>
-                    <span>总计：{{ formatTokenValue(message.tokens.total) }}</span>
+                    <span>{{ t('quickTest.chat.tokens.input') }}：{{ formatTokenValue(message.tokens.input) }}</span>
+                    <span>{{ t('quickTest.chat.tokens.output') }}：{{ formatTokenValue(message.tokens.output) }}</span>
+                    <span>{{ t('quickTest.chat.tokens.total') }}：{{ formatTokenValue(message.tokens.total) }}</span>
                   </div>
                 </div>
               </div>
@@ -121,7 +121,7 @@
               v-model="chatInput"
               type="textarea"
               :autosize="{ minRows: 3, maxRows: 6 }"
-              placeholder="在此输入测试内容，支持多行输入"
+              :placeholder="t('quickTest.chat.inputPlaceholder')"
               :disabled="isSending"
               @keydown.enter="handleEnterKey"
               @compositionstart="handleCompositionStart"
@@ -136,12 +136,14 @@
                 class="prompt-selector"
                 clearable
                 filterable
-                placeholder="选择历史 Prompt 与版本"
+                :placeholder="t('quickTest.chat.promptPlaceholder')"
                 :disabled="isPromptLoading"
               />
               <div class="chat-input__actions">
-                <el-button plain @click="handleSaveAsPrompt">保存为 Prompt</el-button>
-                <el-button type="primary" @click="handleSend" :loading="isSending">发送</el-button>
+                <el-button plain @click="handleSaveAsPrompt">{{ t('quickTest.chat.save') }}</el-button>
+                <el-button type="primary" @click="handleSend" :loading="isSending">
+                  {{ t('quickTest.chat.send') }}
+                </el-button>
               </div>
             </div>
           </div>
@@ -151,27 +153,27 @@
 
     <el-dialog
       v-model="savePromptDialogVisible"
-      title="保存为 Prompt"
+      :title="t('quickTest.dialog.title')"
       width="560px"
       :close-on-click-modal="false"
     >
       <el-form label-width="96px" class="save-prompt-form">
-        <el-form-item label="保存方式">
+        <el-form-item :label="t('quickTest.dialog.modeLabel')">
           <el-radio-group v-model="savePromptMode">
-            <el-radio-button label="new">新建 Prompt</el-radio-button>
-            <el-radio-button label="existing">追加版本</el-radio-button>
+            <el-radio-button label="new">{{ t('quickTest.dialog.modes.new') }}</el-radio-button>
+            <el-radio-button label="existing">{{ t('quickTest.dialog.modes.existing') }}</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
         <template v-if="savePromptMode === 'new'">
-          <el-form-item label="分类">
+          <el-form-item :label="t('quickTest.dialog.classLabel')">
             <div class="save-prompt-class">
               <el-select
                 v-model="savePromptForm.promptClassId"
                 class="save-prompt-select"
                 clearable
                 filterable
-                placeholder="选择已有分类"
+                :placeholder="t('quickTest.dialog.classPlaceholder')"
               >
                 <el-option
                   v-for="option in promptClassOptions"
@@ -182,20 +184,20 @@
               </el-select>
             </div>
           </el-form-item>
-          <el-form-item label="名称">
+          <el-form-item :label="t('quickTest.dialog.nameLabel')">
             <el-input
               v-model="savePromptForm.promptName"
-              placeholder="请输入 Prompt 名称"
+              :placeholder="t('quickTest.dialog.namePlaceholder')"
             />
           </el-form-item>
-          <el-form-item label="标签">
+          <el-form-item :label="t('quickTest.dialog.tagsLabel')">
             <el-select
               v-model="savePromptForm.promptTagIds"
               class="save-prompt-select"
               multiple
               filterable
               clearable
-              placeholder="可选择一个或多个标签"
+              :placeholder="t('quickTest.dialog.tagsPlaceholder')"
             >
               <el-option
                 v-for="option in promptTagOptions"
@@ -205,28 +207,28 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="版本标签">
+          <el-form-item :label="t('quickTest.dialog.versionLabel')">
             <el-input
               v-model="savePromptForm.promptVersion"
-              placeholder="例如 v1"
+              :placeholder="t('quickTest.dialog.versionPlaceholderNew')"
             />
           </el-form-item>
-          <el-form-item label="描述">
+          <el-form-item :label="t('quickTest.dialog.descriptionLabel')">
             <el-input
               v-model="savePromptForm.promptDescription"
               type="textarea"
               :autosize="{ minRows: 2, maxRows: 4 }"
-              placeholder="可选：补充说明"
+              :placeholder="t('quickTest.dialog.descriptionPlaceholder')"
             />
           </el-form-item>
         </template>
         <template v-else>
-          <el-form-item label="选择 Prompt">
+          <el-form-item :label="t('quickTest.dialog.promptLabel')">
             <el-select
               v-model="savePromptForm.promptId"
               class="save-prompt-select"
               filterable
-              placeholder="请选择 Prompt"
+              :placeholder="t('quickTest.dialog.promptPlaceholder')"
             >
               <el-option
                 v-for="option in existingPromptOptions"
@@ -236,15 +238,15 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="版本标签">
+          <el-form-item :label="t('quickTest.dialog.versionLabel')">
             <el-input
               v-model="savePromptForm.promptVersion"
-              placeholder="例如 v2"
+              :placeholder="t('quickTest.dialog.versionPlaceholderExisting')"
             />
           </el-form-item>
         </template>
 
-        <el-form-item label="内容">
+        <el-form-item :label="t('quickTest.dialog.contentLabel')">
           <el-input
             v-model="savePromptForm.promptContent"
             type="textarea"
@@ -254,9 +256,9 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="handleSavePromptCancel">取消</el-button>
+        <el-button @click="handleSavePromptCancel">{{ t('quickTest.dialog.actions.cancel') }}</el-button>
         <el-button type="primary" :loading="savePromptSubmitting" @click="handleSavePromptConfirm">
-          保存
+          {{ t('quickTest.dialog.actions.save') }}
         </el-button>
       </template>
     </el-dialog>
@@ -282,6 +284,7 @@ import type { PromptCreatePayload } from '../api/prompt'
 import type { ChatMessagePayload } from '../types/llm'
 import type { Prompt } from '../types/prompt'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
+import { useI18n } from 'vue-i18n'
 
 interface CascaderOptionNode {
   value: number | string
@@ -343,6 +346,8 @@ const promptCascaderProps = reactive({
   expandTrigger: 'hover' as const,
   emitPath: true
 })
+
+const { t } = useI18n()
 
 const PROMPT_FETCH_LIMIT = 200
 
@@ -456,19 +461,19 @@ const selectedModel = computed(() => {
 
 watch(extraParams, (value) => {
   if (!value.trim()) {
-    extraParamsError.value = '请输入合法的 JSON 文本'
+    extraParamsError.value = t('quickTest.messages.extraInvalid')
     return
   }
   try {
     const parsed = JSON.parse(value)
     if (parsed === null || typeof parsed !== 'object') {
-      extraParamsError.value = '额外参数需为对象结构'
+      extraParamsError.value = t('quickTest.messages.extraObjectRequired')
     } else {
       extraParamsError.value = null
     }
   } catch (error) {
     void error
-    extraParamsError.value = 'JSON 格式解析失败'
+    extraParamsError.value = t('quickTest.messages.extraParseFailed')
   }
 }, { immediate: true })
 
@@ -578,7 +583,7 @@ function handleSessionChange(value: number | null) {
 
 function handleNewChat() {
   if (!canCreateNewChat.value) {
-    ElMessage.info('当前新建对话尚未使用，请先发送消息')
+    ElMessage.info(t('quickTest.messages.draftNotUsed'))
     return
   }
   cancelActiveStream()
@@ -610,7 +615,7 @@ function createDraftSession(title?: string): ChatSession {
   const identifier = Math.abs(sessionSeed)
   const session: ChatSession = {
     id: sessionSeed,
-    title: title && title.trim() ? title : `新的对话 ${identifier}`,
+    title: title && title.trim() ? title : t('quickTest.session.newTitle', { id: identifier }),
     messages: sessionMessages,
     createdAt: now,
     updatedAt: now,
@@ -667,8 +672,12 @@ function updateActiveSessionTimestamp() {
 
 function formatSessionOptionLabel(session: ChatSession): string {
   const timestamp = formatSessionTime(session.updatedAt)
-  const prefix = session.isPersisted ? '' : '草稿·'
-  return `${prefix}${session.title}（${timestamp}）`
+  const prefix = session.isPersisted ? '' : t('quickTest.session.draftPrefix')
+  return t('quickTest.session.optionLabel', {
+    prefix,
+    title: session.title,
+    timestamp
+  })
 }
 
 function formatSessionTime(timestamp: number): string {
@@ -751,7 +760,7 @@ function deriveHistoryTitle(log: QuickTestHistoryItem): string {
   if (log.provider_name) {
     return `${log.provider_name}-${log.model_name}`
   }
-  return `历史对话 ${log.id}`
+  return t('quickTest.session.historyTitle', { id: log.id })
 }
 
 function convertHistoryLogToSession(log: QuickTestHistoryItem): ChatSession {
@@ -761,11 +770,19 @@ function convertHistoryLogToSession(log: QuickTestHistoryItem): ChatSession {
   const providerLogoUrl = log.provider_logo_url
 
   const historyMessages = Array.isArray(log.messages) ? log.messages : []
+  const assistantLabel = t('quickTest.chat.avatar.assistant')
+  const systemLabel = t('quickTest.chat.avatar.system')
+  const selfLabel = t('quickTest.chat.avatar.self')
+
   for (const entry of historyMessages) {
     const role = typeof entry.role === 'string' ? entry.role : 'user'
     const normalizedRole = role === 'assistant' || role === 'system' ? 'assistant' : 'user'
     const displayName =
-      role === 'assistant' ? providerName ?? '助手' : role === 'system' ? '系统' : '我'
+      role === 'assistant'
+        ? providerName ?? assistantLabel
+        : role === 'system'
+          ? systemLabel
+          : selfLabel
     sessionMessages.push({
       id: nextMessageId(),
       role: normalizedRole,
@@ -775,9 +792,9 @@ function convertHistoryLogToSession(log: QuickTestHistoryItem): ChatSession {
       avatarEmoji: normalizedRole === 'assistant' ? providerEmoji ?? undefined : undefined,
       avatarFallback:
         normalizedRole === 'assistant'
-          ? (providerName ?? '助手').slice(0, 1).toUpperCase()
+          ? (providerName ?? assistantLabel).slice(0, 1).toUpperCase()
           : undefined,
-      avatarAlt: normalizedRole === 'assistant' ? providerName ?? '助手' : '我',
+      avatarAlt: normalizedRole === 'assistant' ? providerName ?? assistantLabel : selfLabel,
       isStreaming: false,
       tokens: undefined,
     })
@@ -788,11 +805,11 @@ function convertHistoryLogToSession(log: QuickTestHistoryItem): ChatSession {
       id: nextMessageId(),
       role: 'assistant',
       content: normalizeMessageContent(log.response_text),
-      displayName: providerName ?? '助手',
+      displayName: providerName ?? assistantLabel,
       avatarUrl: providerLogoUrl ?? undefined,
       avatarEmoji: providerEmoji ?? undefined,
-      avatarFallback: (providerName ?? '助手').slice(0, 1).toUpperCase(),
-      avatarAlt: providerName ?? '助手',
+      avatarFallback: (providerName ?? assistantLabel).slice(0, 1).toUpperCase(),
+      avatarAlt: providerName ?? assistantLabel,
       isStreaming: false,
       tokens: undefined,
     }
@@ -905,7 +922,7 @@ async function refreshHistory(match?: HistoryMatchCriteria): Promise<void> {
     syncActiveSessionSelection()
   } catch (error) {
     void error
-    ElMessage.warning('加载历史记录失败，请稍后再试')
+    ElMessage.warning(t('quickTest.messages.historyLoadFailed'))
   }
 }
 function handleEnterKey(event: KeyboardEvent) {
@@ -948,7 +965,7 @@ async function fetchLLMProviders() {
     }))
     syncActiveSessionSelection()
   } catch (error) {
-    ElMessage.error('加载模型列表失败，请稍后再试')
+    ElMessage.error(t('quickTest.messages.modelsLoadFailed'))
   } finally {
     isModelLoading.value = false
   }
@@ -980,7 +997,7 @@ async function fetchPromptOptions() {
       }))
     }))
   } catch (error) {
-    ElMessage.error('加载 Prompt 列表失败，请稍后再试')
+    ElMessage.error(t('quickTest.messages.promptsLoadFailed'))
   } finally {
     isPromptLoading.value = false
   }
@@ -991,7 +1008,7 @@ async function fetchPromptTags() {
     const response = await listPromptTags()
     promptTags.value = response.items
   } catch (error) {
-    ElMessage.warning('加载标签列表失败')
+    ElMessage.warning(t('quickTest.messages.tagsLoadFailed'))
   }
 }
 
@@ -1052,11 +1069,11 @@ function formatTokenValue(value: number | null | undefined) {
 async function handleSend() {
   const model = selectedModel.value
   if (!model) {
-    ElMessage.warning('请先选择要调用的模型')
+    ElMessage.warning(t('quickTest.messages.modelRequired'))
     return
   }
   if (extraParamsError.value) {
-    ElMessage.warning('额外参数格式有误，请修正后再发送')
+    ElMessage.warning(t('quickTest.messages.extraFixRequired'))
     return
   }
   const content = chatInput.value.trim()

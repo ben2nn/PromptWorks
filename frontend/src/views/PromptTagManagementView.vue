@@ -2,16 +2,18 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>标签管理</h2>
-        <p class="page-desc">维护标签名称与颜色，掌握标签在 Prompt 中的使用频次。</p>
+        <h2>{{ t('promptTagManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('promptTagManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDialog">新建标签</el-button>
+      <el-button type="primary" :icon="Plus" @click="openDialog">
+        {{ t('promptTagManagement.newTag') }}
+      </el-button>
     </section>
 
     <el-card class="table-card">
       <template #header>
         <div class="table-card__header">
-          <span>共 {{ totalTags }} 个标签 · 覆盖 {{ totalTaggedPrompts }} 条 Prompt</span>
+          <span>{{ t('promptTagManagement.summary', { totalTags, totalPrompts: totalTaggedPrompts }) }}</span>
         </div>
       </template>
       <el-table
@@ -19,9 +21,9 @@
         v-loading="tableLoading"
         border
         stripe
-        empty-text="暂无标签数据"
+        :empty-text="t('promptTagManagement.empty')"
       >
-        <el-table-column label="标签" min-width="200">
+        <el-table-column :label="t('promptTagManagement.columns.tag')" min-width="200">
           <template #default="{ row }">
             <span class="tag-cell">
               <span class="tag-dot" :style="{ backgroundColor: row.color }" />
@@ -29,44 +31,53 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="color" label="颜色" width="140">
+        <el-table-column prop="color" :label="t('promptTagManagement.columns.color')" width="140">
           <template #default="{ row }">
             <el-tag :style="{ backgroundColor: row.color, borderColor: row.color }" effect="dark" size="small">
               {{ row.color }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="prompt_count" label="引用 Prompt 数" width="140" align="center" />
-        <el-table-column label="创建时间" min-width="160">
+        <el-table-column
+          prop="prompt_count"
+          :label="t('promptTagManagement.columns.promptCount')"
+          width="140"
+          align="center"
+        />
+        <el-table-column :label="t('promptTagManagement.columns.createdAt')" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="最近更新" min-width="160">
+        <el-table-column :label="t('promptTagManagement.columns.updatedAt')" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.updated_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
+        <el-table-column :label="t('promptTagManagement.columns.actions')" width="120" align="center">
           <template #default="{ row }">
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="danger" link @click="handleDelete(row)">
+              {{ t('promptTagManagement.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" title="新建标签" width="520px">
+    <el-dialog v-model="dialogVisible" :title="t('promptTagManagement.dialogTitle')" width="520px">
       <el-form :model="tagForm" label-width="100px" class="dialog-form">
-        <el-form-item label="标签名称">
-          <el-input v-model="tagForm.name" placeholder="请输入标签名称" />
+        <el-form-item :label="t('promptTagManagement.form.name')">
+          <el-input v-model="tagForm.name" :placeholder="t('promptTagManagement.form.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="标签颜色">
+        <el-form-item :label="t('promptTagManagement.form.color')">
           <el-color-picker v-model="tagForm.color" :show-alpha="false" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="handleCreate">提交</el-button>
+        <el-button @click="dialogVisible = false">{{ t('promptTagManagement.footer.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleCreate">
+          {{ t('promptTagManagement.footer.submit') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -82,36 +93,42 @@ import {
   listPromptTags,
   type PromptTagStats
 } from '../api/promptTag'
+import { useI18n } from 'vue-i18n'
 
 const tableLoading = ref(false)
 const submitLoading = ref(false)
 const promptTags = ref<PromptTagStats[]>([])
 const taggedPromptTotal = ref(0)
+const { t, locale } = useI18n()
 
 const tagRows = computed(() => {
   return [...promptTags.value].sort((a, b) => {
     if (b.prompt_count !== a.prompt_count) {
       return b.prompt_count - a.prompt_count
     }
-    return a.name.localeCompare(b.name, 'zh-CN')
+    return a.name.localeCompare(b.name, locale.value)
   })
 })
 
 const totalTags = computed(() => tagRows.value.length)
 const totalTaggedPrompts = computed(() => taggedPromptTotal.value)
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '--'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.format(date)
+  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.value.format(date)
 }
 
 const dialogVisible = ref(false)
@@ -128,7 +145,7 @@ async function fetchPromptTags() {
     taggedPromptTotal.value = data.tagged_prompt_total
   } catch (error) {
     console.error(error)
-    ElMessage.error('加载标签数据失败，请稍后重试')
+    ElMessage.error(t('promptTagManagement.messages.loadFailed'))
   } finally {
     tableLoading.value = false
   }
@@ -146,7 +163,7 @@ function openDialog() {
 
 async function handleCreate() {
   if (!tagForm.name.trim()) {
-    ElMessage.warning('请填写标签名称')
+    ElMessage.warning(t('promptTagManagement.messages.nameRequired'))
     return
   }
   submitLoading.value = true
@@ -155,12 +172,12 @@ async function handleCreate() {
       name: tagForm.name.trim(),
       color: tagForm.color.toUpperCase()
     })
-    ElMessage.success('标签创建成功')
+    ElMessage.success(t('promptTagManagement.messages.createSuccess'))
     dialogVisible.value = false
     await fetchPromptTags()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '创建标签失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('promptTagManagement.messages.createFailed')
     ElMessage.error(message)
   } finally {
     submitLoading.value = false
@@ -169,26 +186,30 @@ async function handleCreate() {
 
 async function handleDelete(row: PromptTagStats) {
   try {
-    await ElMessageBox.confirm(`确认删除标签“${row.name}”并解除关联？`, '删除确认', {
+    await ElMessageBox.confirm(
+      t('promptTagManagement.messages.deleteConfirmMessage', { name: row.name }),
+      t('promptTagManagement.messages.deleteConfirmTitle'),
+      {
       type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消'
-    })
+        confirmButtonText: t('promptTagManagement.messages.confirmDelete'),
+        cancelButtonText: t('common.cancel')
+      }
+    )
   } catch {
     return
   }
 
   try {
     await deletePromptTag(row.id)
-    ElMessage.success('标签已删除')
+    ElMessage.success(t('promptTagManagement.messages.deleteSuccess'))
     await fetchPromptTags()
   } catch (error: any) {
     if (error?.status === 409) {
-      ElMessage.error('仍有关联 Prompt 使用该标签，请先迁移或删除后再尝试')
+      ElMessage.error(t('promptTagManagement.messages.deleteBlocked'))
       return
     }
     console.error(error)
-    const message = error?.payload?.detail ?? '删除标签失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('promptTagManagement.messages.deleteFailed')
     ElMessage.error(message)
   }
 }

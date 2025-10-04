@@ -1,16 +1,16 @@
 ﻿<template>
-  <el-config-provider :locale="locale">
+  <el-config-provider :locale="elementLocale">
     <div class="app-shell">
       <el-container class="app-container">
         <el-header class="app-header" height="64px">
           <div class="header-left">
-            <span class="app-title">PromptWorks 控制台</span>
+            <span class="app-title">{{ t('app.title') }}</span>
           </div>
           <div class="header-right">
-            <el-button type="primary" :icon="Setting" text>设置</el-button>
+            <el-button type="primary" :icon="Setting" text>{{ t('app.settings') }}</el-button>
             <el-select v-model="language" size="small" class="language-select">
-              <el-option label="中文" value="zh-CN" />
-              <el-option label="English" value="en-US" />
+              <el-option :label="t('app.languageCn')" value="zh-CN" />
+              <el-option :label="t('app.languageEn')" value="en-US" />
             </el-select>
             <el-switch
               v-model="isDark"
@@ -60,6 +60,9 @@ import {
 } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import enUs from 'element-plus/es/locale/lang/en'
+import { useI18n } from 'vue-i18n'
+import { setLocale } from './i18n'
+import type { SupportedLocale } from './i18n/messages'
 
 interface MenuItem {
   index: string
@@ -71,21 +74,26 @@ interface MenuItem {
 const router = useRouter()
 const route = useRoute()
 
-const language = ref<'zh-CN' | 'en-US'>('zh-CN')
-const locale = computed(() => (language.value === 'zh-CN' ? zhCn : enUs))
+const { t, locale } = useI18n()
+const language = ref<SupportedLocale>(locale.value as SupportedLocale)
+const elementLocale = computed(() => (language.value === 'zh-CN' ? zhCn : enUs))
 const isDark = ref(false)
 
-const menuItems: MenuItem[] = [
-  { index: 'prompt', label: 'Prompt 管理', routeName: 'prompt-management', icon: Collection },
-  { index: 'quick-test', label: '快速测试', routeName: 'quick-test', icon: MagicStick },
-  { index: 'test-job', label: '测试任务', routeName: 'test-job-management', icon: Memo },
-  { index: 'class', label: '分类管理', routeName: 'class-management', icon: Files },
-  { index: 'tag', label: '标签管理', routeName: 'tag-management', icon: Tickets },
-  { index: 'llm', label: 'LLMs 管理', routeName: 'llm-management', icon: Cpu },
-  { index: 'usage', label: '用量管理', routeName: 'usage-management', icon: Histogram }
-]
+const menuItems = computed<MenuItem[]>(() => [
+  { index: 'prompt', label: t('menu.prompt'), routeName: 'prompt-management', icon: Collection },
+  { index: 'quick-test', label: t('menu.quickTest'), routeName: 'quick-test', icon: MagicStick },
+  { index: 'test-job', label: t('menu.testJob'), routeName: 'test-job-management', icon: Memo },
+  { index: 'class', label: t('menu.class'), routeName: 'class-management', icon: Files },
+  { index: 'tag', label: t('menu.tag'), routeName: 'tag-management', icon: Tickets },
+  { index: 'llm', label: t('menu.llm'), routeName: 'llm-management', icon: Cpu },
+  { index: 'usage', label: t('menu.usage'), routeName: 'usage-management', icon: Histogram }
+])
 
 const activeMenu = computed(() => (route.meta.menu as string | undefined) ?? 'prompt')
+
+watch(language, (value) => {
+  setLocale(value)
+})
 
 watch(isDark, (value) => toggleTheme(value), { immediate: true })
 
@@ -99,7 +107,7 @@ function toggleTheme(value: boolean) {
 }
 
 function handleMenuSelect(index: string) {
-  const target = menuItems.find((item) => item.index === index)
+  const target = menuItems.value.find((item) => item.index === index)
   if (target) {
     router.push({ name: target.routeName })
   }

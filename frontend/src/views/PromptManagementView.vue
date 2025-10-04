@@ -2,15 +2,17 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>Prompt 管理</h2>
-        <p class="page-desc">集中管理提示词资产，快速检索分类、标签与作者信息。</p>
+        <h2>{{ t('promptManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('promptManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openCreateDialog">新建 Prompt</el-button>
+      <el-button type="primary" :icon="Plus" @click="openCreateDialog">
+        {{ t('promptManagement.createPrompt') }}
+      </el-button>
     </section>
 
     <div class="page-filters">
       <el-tabs v-model="activeClassKey" type="card" class="class-tabs">
-        <el-tab-pane label="全部分类" name="all" />
+        <el-tab-pane :label="t('promptManagement.allClasses')" name="all" />
         <el-tab-pane
           v-for="item in classOptions"
           :key="item.id"
@@ -22,7 +24,7 @@
       <div class="filter-row">
         <el-input
           v-model="searchKeyword"
-          placeholder="搜索标题 / 内容 / 作者"
+          :placeholder="t('promptManagement.searchPlaceholder')"
           clearable
           class="filter-item search-input"
           :prefix-icon="Search"
@@ -33,7 +35,7 @@
           collapse-tags
           collapse-tags-tooltip
           class="filter-item tag-select"
-          placeholder="选择标签筛选"
+          :placeholder="t('promptManagement.tagPlaceholder')"
           clearable
         >
           <el-option
@@ -48,11 +50,11 @@
             </span>
           </el-option>
         </el-select>
-        <el-select v-model="sortKey" class="filter-item sort-select" placeholder="排序方式">
-          <el-option label="默认排序" value="default" />
-          <el-option label="按创建时间" value="created_at" />
-          <el-option label="按更新时间" value="updated_at" />
-          <el-option label="按作者" value="author" />
+        <el-select v-model="sortKey" class="filter-item sort-select" :placeholder="t('promptManagement.sortPlaceholder')">
+          <el-option :label="t('promptManagement.sortDefault')" value="default" />
+          <el-option :label="t('promptManagement.sortCreatedAt')" value="created_at" />
+          <el-option :label="t('promptManagement.sortUpdatedAt')" value="updated_at" />
+          <el-option :label="t('promptManagement.sortAuthor')" value="author" />
         </el-select>
       </div>
     </div>
@@ -77,21 +79,22 @@
                 <h3 class="prompt-title">{{ prompt.name }}</h3>
               </div>
               <el-tag type="success" round size="small">
-                当前版本 {{ prompt.current_version?.version ?? '未启用' }}
+                {{ t('promptManagement.currentVersion') }}
+                {{ prompt.current_version?.version ?? t('common.notEnabled') }}
               </el-tag>
             </div>
-            <p class="prompt-desc">{{ prompt.description ?? '暂无描述' }}</p>
+            <p class="prompt-desc">{{ prompt.description ?? t('common.descriptionNone') }}</p>
             <div class="prompt-meta">
               <div class="meta-item">
-                <span class="meta-label">作者</span>
-                <span>{{ prompt.author ?? '未设置' }}</span>
+                <span class="meta-label">{{ t('promptManagement.author') }}</span>
+                <span>{{ prompt.author ?? t('common.notSet') }}</span>
               </div>
               <div class="meta-item">
-                <span class="meta-label">创建时间</span>
+                <span class="meta-label">{{ t('promptManagement.createdAt') }}</span>
                 <span>{{ formatDate(prompt.created_at) }}</span>
               </div>
               <div class="meta-item">
-                <span class="meta-label">更新时间</span>
+                <span class="meta-label">{{ t('promptManagement.updatedAt') }}</span>
                 <span>{{ formatDate(prompt.updated_at) }}</span>
               </div>
             </div>
@@ -108,9 +111,9 @@
                 </el-tag>
               </div>
               <el-popconfirm
-                :title="`确认删除「${prompt.name}」吗？`"
-                confirm-button-text="删除"
-                cancel-button-text="取消"
+                :title="t('promptManagement.confirmDelete', { name: prompt.name })"
+                :confirm-button-text="t('promptManagement.delete')"
+                :cancel-button-text="t('promptManagement.cancel')"
                 icon=""
                 @confirm="() => handleDeletePrompt(prompt)"
               >
@@ -131,34 +134,34 @@
           </el-card>
         </div>
       </div>
-      <el-empty v-else description="暂无 Prompt 数据，请点击右上角新建" />
+      <el-empty v-else :description="t('promptManagement.emptyDescription')" />
     </template>
 
-    <el-dialog v-model="createDialogVisible" title="新建 Prompt" width="720px">
+    <el-dialog v-model="createDialogVisible" :title="t('promptManagement.dialogTitle')" width="720px">
       <el-alert
         v-if="!classOptions.length"
-        title="当前还没有可用分类，请先在“分类管理”中新增分类。"
+        :title="t('promptManagement.dialogAlert')"
         type="warning"
         show-icon
         class="dialog-alert"
       />
       <el-form :model="promptForm" label-width="100px" class="dialog-form">
-        <el-form-item label="标题">
-          <el-input v-model="promptForm.name" placeholder="请输入 Prompt 标题" />
+        <el-form-item :label="t('promptManagement.form.title')">
+          <el-input v-model="promptForm.name" :placeholder="t('promptManagement.form.titlePlaceholder')" />
         </el-form-item>
-        <el-form-item label="作者">
-          <el-input v-model="promptForm.author" placeholder="请输入作者（可选）" />
+        <el-form-item :label="t('promptManagement.form.author')">
+          <el-input v-model="promptForm.author" :placeholder="t('promptManagement.form.authorPlaceholder')" />
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="t('promptManagement.form.description')">
           <el-input
             v-model="promptForm.description"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 4 }"
-            placeholder="简要说明该 Prompt 的用途"
+            :placeholder="t('promptManagement.form.descriptionPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="所属分类">
-          <el-select v-model="promptForm.classId" placeholder="请选择分类">
+        <el-form-item :label="t('promptManagement.form.class')">
+          <el-select v-model="promptForm.classId" :placeholder="t('promptManagement.form.classPlaceholder')">
             <el-option
               v-for="item in classOptions"
               :key="item.id"
@@ -167,13 +170,13 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="标签">
+        <el-form-item :label="t('promptManagement.form.tags')">
           <el-select
             v-model="promptForm.tagIds"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            placeholder="请选择标签"
+            :placeholder="t('promptManagement.form.tagsPlaceholder')"
           >
             <el-option
               v-for="tag in tagOptions"
@@ -183,22 +186,22 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="版本号">
-          <el-input v-model="promptForm.version" placeholder="如 v1.0.0" />
+        <el-form-item :label="t('promptManagement.form.version')">
+          <el-input v-model="promptForm.version" :placeholder="t('promptManagement.form.versionPlaceholder')" />
         </el-form-item>
-        <el-form-item label="内容">
+        <el-form-item :label="t('promptManagement.form.content')">
           <el-input
             v-model="promptForm.content"
             type="textarea"
             :autosize="{ minRows: 6, maxRows: 12 }"
-            placeholder="请输入 Prompt 文本内容"
+            :placeholder="t('promptManagement.form.contentPlaceholder')"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button @click="createDialogVisible = false">{{ t('promptManagement.footer.cancel') }}</el-button>
         <el-button type="primary" :loading="isSubmitting" @click="handleCreatePrompt">
-          提交
+          {{ t('promptManagement.footer.submit') }}
         </el-button>
       </template>
     </el-dialog>
@@ -214,6 +217,7 @@ import { listPrompts, createPrompt, deletePrompt, type HttpError } from '../api/
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 import type { Prompt } from '../types/prompt'
+import { useI18n } from 'vue-i18n'
 
 type SortKey = 'default' | 'created_at' | 'updated_at' | 'author'
 
@@ -228,6 +232,7 @@ interface PromptFormState {
 }
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const prompts = ref<Prompt[]>([])
 const promptClasses = ref<PromptClassStats[]>([])
 const promptTags = ref<PromptTagStats[]>([])
@@ -246,27 +251,31 @@ const sortKey = ref<SortKey>('default')
 const classOptions = computed(() => {
   return promptClasses.value
     .map((item) => ({ id: item.id, name: item.name }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    .sort((a, b) => a.name.localeCompare(b.name, locale.value))
 })
 
 const tagOptions = computed(() => {
   return promptTags.value
     .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    .sort((a, b) => a.name.localeCompare(b.name, locale.value))
 })
 
-const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '--'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : dateFormatter.format(date)
+  return Number.isNaN(date.getTime()) ? value : dateFormatter.value.format(date)
 }
 
 function matchKeyword(keyword: string, prompt: Prompt) {
@@ -295,7 +304,7 @@ function sortPrompts(list: Prompt[]) {
       sorted.sort((a, b) => {
         const authorA = a.author ?? ''
         const authorB = b.author ?? ''
-        const cmp = authorA.localeCompare(authorB, 'zh-CN')
+        const cmp = authorA.localeCompare(authorB, locale.value)
         if (cmp !== 0) return cmp
         return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
       })
@@ -304,7 +313,7 @@ function sortPrompts(list: Prompt[]) {
       sorted.sort((a, b) => {
         const diff = new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         if (diff !== 0) return diff
-        return a.name.localeCompare(b.name, 'zh-CN')
+        return a.name.localeCompare(b.name, locale.value)
       })
   }
   return sorted
@@ -366,11 +375,11 @@ function isDeleting(id: number) {
 
 function handleCreatePrompt() {
   if (!promptForm.name.trim() || !promptForm.version.trim() || !promptForm.content.trim()) {
-    ElMessage.warning('请至少填写标题、版本号和内容')
+    ElMessage.warning(t('promptManagement.messages.missingRequired'))
     return
   }
   if (!promptForm.classId) {
-    ElMessage.warning('请先选择分类')
+    ElMessage.warning(t('promptManagement.messages.selectClass'))
     return
   }
   if (isSubmitting.value) {
@@ -378,7 +387,7 @@ function handleCreatePrompt() {
   }
 
   if (!promptForm.classId) {
-    ElMessage.warning('请先选择分类')
+    ElMessage.warning(t('promptManagement.messages.selectClass'))
     return
   }
 
@@ -395,12 +404,12 @@ function handleCreatePrompt() {
 
   createPrompt(payload)
     .then(async () => {
-      ElMessage.success('新建 Prompt 成功')
+      ElMessage.success(t('promptManagement.messages.createSuccess'))
       createDialogVisible.value = false
       await Promise.all([fetchPrompts(), fetchCollections()])
     })
     .catch((error) => {
-      ElMessage.error(extractErrorMessage(error, '新建 Prompt 失败'))
+      ElMessage.error(extractErrorMessage(error, t('promptManagement.messages.createFailed')))
     })
     .finally(() => {
       isSubmitting.value = false
@@ -418,10 +427,10 @@ async function handleDeletePrompt(target: Prompt) {
   deletingIds.value = [...deletingIds.value, target.id]
   try {
     await deletePrompt(target.id)
-    ElMessage.success(`已删除「${target.name}」`)
+    ElMessage.success(t('promptManagement.messages.deleteSuccess', { name: target.name }))
     await Promise.all([fetchPrompts(), fetchCollections()])
   } catch (error) {
-    ElMessage.error(extractErrorMessage(error, '删除 Prompt 失败'))
+    ElMessage.error(extractErrorMessage(error, t('promptManagement.messages.deleteFailed')))
   } finally {
     deletingIds.value = deletingIds.value.filter((item) => item !== target.id)
   }
@@ -437,7 +446,7 @@ function extractErrorMessage(error: unknown, fallback: string): string {
       }
     }
     if (httpError.status === 404) {
-      return '相关资源不存在'
+      return t('promptManagement.messages.resourceNotFound')
     }
   }
   if (error instanceof Error && error.message) {
@@ -452,7 +461,7 @@ async function fetchPrompts() {
     prompts.value = data
     promptError.value = null
   } catch (error) {
-    const message = extractErrorMessage(error, '加载 Prompt 列表失败')
+    const message = extractErrorMessage(error, t('promptManagement.messages.loadPromptFailed'))
     promptError.value = message
     ElMessage.error(message)
     prompts.value = []
@@ -469,7 +478,7 @@ async function fetchCollections() {
     promptTags.value = tagResponse.items
     collectionError.value = null
   } catch (error) {
-    const message = extractErrorMessage(error, '加载分类或标签数据失败')
+    const message = extractErrorMessage(error, t('promptManagement.messages.loadCollectionFailed'))
     collectionError.value = message
     ElMessage.error(message)
     promptClasses.value = []

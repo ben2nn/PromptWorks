@@ -2,16 +2,18 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>分类管理</h2>
-        <p class="page-desc">集中维护 Prompt 分类结构，查看各分类下的提示词数量与更新时间。</p>
+        <h2>{{ t('promptClassManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('promptClassManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDialog">新建分类</el-button>
+      <el-button type="primary" :icon="Plus" @click="openDialog">
+        {{ t('promptClassManagement.newClass') }}
+      </el-button>
     </section>
 
     <el-card class="table-card">
       <template #header>
         <div class="table-card__header">
-          <span>共 {{ totalClasses }} 个分类 · 覆盖 {{ totalPrompts }} 条 Prompt</span>
+          <span>{{ t('promptClassManagement.summary', { totalClasses, totalPrompts }) }}</span>
         </div>
       </template>
       <el-table
@@ -19,50 +21,63 @@
         v-loading="tableLoading"
         border
         stripe
-        empty-text="暂无分类数据"
+        :empty-text="t('promptClassManagement.empty')"
       >
-        <el-table-column prop="name" label="分类名称" min-width="160" />
-        <el-table-column prop="description" label="分类描述" min-width="220">
+        <el-table-column prop="name" :label="t('promptClassManagement.columns.name')" min-width="160" />
+        <el-table-column prop="description" :label="t('promptClassManagement.columns.description')" min-width="220">
           <template #default="{ row }">
-            {{ row.description ?? '暂无描述' }}
+            {{ row.description ?? t('common.descriptionNone') }}
           </template>
         </el-table-column>
-        <el-table-column prop="prompt_count" label="Prompt 数量" width="120" align="center" />
-        <el-table-column prop="created_at" label="创建时间" min-width="160">
+        <el-table-column
+          prop="prompt_count"
+          :label="t('promptClassManagement.columns.promptCount')"
+          width="120"
+          align="center"
+        />
+        <el-table-column prop="created_at" :label="t('promptClassManagement.columns.createdAt')" min-width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column prop="latest_prompt_updated_at" label="最近更新" min-width="160">
+        <el-table-column
+          prop="latest_prompt_updated_at"
+          :label="t('promptClassManagement.columns.latestUpdated')"
+          min-width="160"
+        >
           <template #default="{ row }">
             {{ formatDateTime(row.latest_prompt_updated_at ?? row.updated_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120" align="center">
+        <el-table-column :label="t('promptClassManagement.columns.actions')" width="120" align="center">
           <template #default="{ row }">
-            <el-button type="danger" link @click="handleDelete(row)">删除</el-button>
+            <el-button type="danger" link @click="handleDelete(row)">
+              {{ t('promptClassManagement.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" title="新建分类" width="520px">
+    <el-dialog v-model="dialogVisible" :title="t('promptClassManagement.dialogTitle')" width="520px">
       <el-form :model="classForm" label-width="100px" class="dialog-form">
-        <el-form-item label="分类名称">
-          <el-input v-model="classForm.name" placeholder="请输入分类名称" />
+        <el-form-item :label="t('promptClassManagement.form.name')">
+          <el-input v-model="classForm.name" :placeholder="t('promptClassManagement.form.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="分类描述">
+        <el-form-item :label="t('promptClassManagement.form.description')">
           <el-input
             v-model="classForm.description"
             type="textarea"
             :autosize="{ minRows: 3, maxRows: 6 }"
-            placeholder="请输入分类描述（可选）"
+            :placeholder="t('promptClassManagement.form.descriptionPlaceholder')"
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitLoading" @click="handleCreate">提交</el-button>
+        <el-button @click="dialogVisible = false">{{ t('promptClassManagement.footer.cancel') }}</el-button>
+        <el-button type="primary" :loading="submitLoading" @click="handleCreate">
+          {{ t('promptClassManagement.footer.submit') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -78,17 +93,19 @@ import {
   listPromptClasses,
   type PromptClassStats
 } from '../api/promptClass'
+import { useI18n } from 'vue-i18n'
 
 const tableLoading = ref(false)
 const submitLoading = ref(false)
 const promptClasses = ref<PromptClassStats[]>([])
+const { t, locale } = useI18n()
 
 const classRows = computed(() => {
   return [...promptClasses.value].sort((a, b) => {
     if (b.prompt_count !== a.prompt_count) {
       return b.prompt_count - a.prompt_count
     }
-    return a.name.localeCompare(b.name, 'zh-CN')
+    return a.name.localeCompare(b.name, locale.value)
   })
 })
 
@@ -97,18 +114,22 @@ const totalPrompts = computed(() =>
   classRows.value.reduce((acc, item) => acc + (item.prompt_count ?? 0), 0)
 )
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '--'
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.format(date)
+  return Number.isNaN(date.getTime()) ? value : dateTimeFormatter.value.format(date)
 }
 
 const dialogVisible = ref(false)
@@ -123,7 +144,7 @@ async function fetchPromptClasses() {
     promptClasses.value = await listPromptClasses()
   } catch (error) {
     console.error(error)
-    ElMessage.error('加载分类数据失败，请稍后重试')
+    ElMessage.error(t('promptClassManagement.messages.loadFailed'))
   } finally {
     tableLoading.value = false
   }
@@ -141,7 +162,7 @@ function openDialog() {
 
 async function handleCreate() {
   if (!classForm.name.trim()) {
-    ElMessage.warning('请填写分类名称')
+    ElMessage.warning(t('promptClassManagement.messages.nameRequired'))
     return
   }
   submitLoading.value = true
@@ -150,12 +171,12 @@ async function handleCreate() {
       name: classForm.name.trim(),
       description: classForm.description.trim() || null
     })
-    ElMessage.success('分类创建成功')
+    ElMessage.success(t('promptClassManagement.messages.createSuccess'))
     dialogVisible.value = false
     await fetchPromptClasses()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '创建分类失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('promptClassManagement.messages.createFailed')
     ElMessage.error(message)
   } finally {
     submitLoading.value = false
@@ -164,26 +185,30 @@ async function handleCreate() {
 
 async function handleDelete(row: PromptClassStats) {
   try {
-    await ElMessageBox.confirm(`确认删除分类“${row.name}”及其关联关系？`, '删除确认', {
+    await ElMessageBox.confirm(
+      t('promptClassManagement.messages.deleteConfirmMessage', { name: row.name }),
+      t('promptClassManagement.messages.deleteConfirmTitle'),
+      {
       type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消'
-    })
+        confirmButtonText: t('promptClassManagement.messages.confirmDelete'),
+        cancelButtonText: t('common.cancel')
+      }
+    )
   } catch {
     return
   }
 
   try {
     await deletePromptClass(row.id)
-    ElMessage.success('分类已删除')
+    ElMessage.success(t('promptClassManagement.messages.deleteSuccess'))
     await fetchPromptClasses()
   } catch (error: any) {
     if (error?.status === 409) {
-      ElMessage.error('仍有关联 Prompt 使用该分类，请先迁移或删除后再尝试')
+      ElMessage.error(t('promptClassManagement.messages.deleteBlocked'))
       return
     }
     console.error(error)
-    const message = error?.payload?.detail ?? '删除分类失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('promptClassManagement.messages.deleteFailed')
     ElMessage.error(message)
   }
 }
