@@ -5,6 +5,25 @@
         <h2>快速测试</h2>
         <p class="page-desc">针对单个 Prompt 快速发起临时调用，验证模型输出效果。</p>
       </div>
+      <div class="page-header__actions">
+        <el-select
+          class="history-select"
+          :model-value="activeSessionId"
+          placeholder="历史记录"
+          filterable
+          @change="handleSessionChange"
+        >
+          <el-option
+            v-for="option in sessionOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+        <el-button type="primary" @click="handleNewChat" :disabled="!canCreateNewChat">
+          新建对话
+        </el-button>
+      </div>
     </section>
 
     <div class="test-layout">
@@ -104,6 +123,7 @@
               :autosize="{ minRows: 3, maxRows: 6 }"
               placeholder="在此输入测试内容，支持多行输入"
               :disabled="isSending"
+              @keydown.enter="handleEnterKey"
             />
             <div class="chat-input__footer">
               <el-cascader
@@ -133,7 +153,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listLLMProviders, type LLMProvider } from '../api/llmProvider'
-import { streamQuickTest } from '../api/quickTest'
+import {
+  streamQuickTest,
+  fetchQuickTestHistory,
+  type QuickTestHistoryItem
+} from '../api/quickTest'
 import { listPrompts } from '../api/prompt'
 import type { ChatMessagePayload } from '../types/llm'
 import type { Prompt } from '../types/prompt'
@@ -162,6 +186,33 @@ interface QuickTestMessage {
   }
 }
 
+interface ChatSession {
+  id: number
+  title: string
+  messages: QuickTestMessage[]
+  createdAt: number
+  updatedAt: number
+  autoTitle: boolean
+  isPersisted: boolean
+  hasInteraction: boolean
+  providerId: number | null
+  providerName: string | null
+  providerLogoEmoji: string | null
+  providerLogoUrl: string | null
+  modelId: number | null
+  modelName: string | null
+  promptId: number | null
+  promptVersionId: number | null
+}
+
+interface HistoryMatchCriteria {
+  requestSignature?: string
+  responseText?: string | null
+  providerId?: number
+  modelName?: string | null
+  draftId?: number
+}
+
 const cascaderProps = reactive({
   expandTrigger: 'hover' as const,
   emitPath: true
@@ -185,15 +236,55 @@ const temperature = ref(0.7)
 const extraParams = ref('{}')
 const extraParamsError = ref<string | null>(null)
 const chatInput = ref('')
+const chatSessions = ref<ChatSession[]>([])
+const activeSessionId = ref<number | null>(null)
+let sessionSeed = 0
 const messages = ref<QuickTestMessage[]>([])
 const userAvatar = ''
 
 const providerMap = ref(new Map<number, LLMProvider>())
 const promptMap = ref(new Map<number, Prompt>())
 
+const sessionOptions = computed(() =>
+  [...chatSessions.value]
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map((session) => ({
+      value: session.id,
+      label: formatSessionOptionLabel(session)
+    }))
+)
+
+const canCreateNewChat = computed(() =>
+  !chatSessions.value.some(
+    (session) => !session.isPersisted && !session.hasInteraction && session.messages.length === 0
+  )
+)
+
 const chatScrollRef = ref<HTMLDivElement | null>(null)
 let activeStreamController: AbortController | null = null
 let messageId = 0
+
+const HISTORY_LIMIT = 30
+
+function nextMessageId(): number {
+  messageId += 1
+  return messageId
+}
+
+function normalizeMessageContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (content == null) {
+    return ''
+  }
+  try {
+    return JSON.stringify(content)
+  } catch (error) {
+    void error
+    return String(content)
+  }
+}
 
 const selectedModel = computed(() => {
   if (selectedModelPath.value.length !== 2) return null
@@ -250,6 +341,13 @@ watch(selectedPromptPath, (path) => {
 onMounted(() => {
   void fetchLLMProviders()
   void fetchPromptOptions()
+  void refreshHistory().then(() => {
+    if (!chatSessions.value.length) {
+      const session = createChatSession()
+      messages.value = session.messages
+      selectedModelPath.value = []
+    }
+  })
 })
 
 onBeforeUnmount(() => {
@@ -272,6 +370,313 @@ async function scrollToBottom() {
   wrapper.scrollTop = wrapper.scrollHeight
 }
 
+function handleSessionChange(value: number | null) {
+  if (value === null || value === activeSessionId.value) {
+    return
+  }
+  const session = chatSessions.value.find((item) => item.id === value)
+  if (!session) {
+    return
+  }
+  cancelActiveStream()
+  isSending.value = false
+  activeSessionId.value = session.id
+  messages.value = session.messages
+  chatInput.value = ''
+  if (
+    session.providerId != null &&
+    session.modelName &&
+    providerMap.value.has(session.providerId)
+  ) {
+    selectedModelPath.value = [session.providerId, session.modelName]
+  }
+  void scrollToBottom()
+  syncActiveSessionSelection()
+}
+
+function handleNewChat() {
+  if (!canCreateNewChat.value) {
+    ElMessage.info('当前新建对话尚未使用，请先发送消息')
+    return
+  }
+  cancelActiveStream()
+  isSending.value = false
+  chatInput.value = ''
+  selectedPromptPath.value = []
+  const session = createChatSession()
+  messages.value = session.messages
+  selectedModelPath.value = []
+  void scrollToBottom()
+}
+
+function getActiveSession(): ChatSession | undefined {
+  if (activeSessionId.value === null) {
+    return undefined
+  }
+  return chatSessions.value.find((session) => session.id === activeSessionId.value)
+}
+
+function ensureActiveSession(): ChatSession {
+  const existing = getActiveSession()
+  if (existing) {
+    return existing
+  }
+  return createChatSession()
+}
+
+function createChatSession(title?: string): ChatSession {
+  const now = Date.now()
+  const sessionMessages = reactive<QuickTestMessage[]>([]) as QuickTestMessage[]
+  sessionSeed -= 1
+  const identifier = Math.abs(sessionSeed)
+  const session: ChatSession = {
+    id: sessionSeed,
+    title: title && title.trim() ? title : `新的对话 ${identifier}`,
+    messages: sessionMessages,
+    createdAt: now,
+    updatedAt: now,
+    autoTitle: !(title && title.trim()),
+    isPersisted: false,
+    hasInteraction: false,
+    providerId: null,
+    providerName: null,
+    providerLogoEmoji: null,
+    providerLogoUrl: null,
+    modelId: null,
+    modelName: null,
+    promptId: null,
+    promptVersionId: null
+  }
+  chatSessions.value.push(session)
+  activeSessionId.value = session.id
+  messages.value = session.messages
+  return session
+}
+
+function generateSessionTitle(content: string, fallback: string): string {
+  const trimmed = content.trim()
+  if (!trimmed) {
+    return fallback
+  }
+  const snippet = trimmed.slice(0, 18)
+  return trimmed.length > 18 ? `${snippet}…` : snippet
+}
+
+function updateActiveSessionTimestamp() {
+  const session = getActiveSession()
+  if (session) {
+    session.updatedAt = Date.now()
+  }
+}
+
+function formatSessionOptionLabel(session: ChatSession): string {
+  const timestamp = formatSessionTime(session.updatedAt)
+  const prefix = session.isPersisted ? '' : '草稿·'
+  return `${prefix}${session.title}（${timestamp}）`
+}
+
+function formatSessionTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${month}-${day} ${hour}:${minute}`
+}
+
+function syncActiveSessionSelection() {
+  const session = getActiveSession()
+  if (
+    session &&
+    session.providerId != null &&
+    session.modelName &&
+    providerMap.value.has(session.providerId)
+  ) {
+    selectedModelPath.value = [session.providerId, session.modelName]
+  }
+}
+
+function deriveHistoryTitle(log: QuickTestHistoryItem): string {
+  if (Array.isArray(log.messages)) {
+    const firstUser = log.messages.find((item) => item.role === 'user')
+    if (firstUser) {
+      const snippet = normalizeMessageContent(firstUser.content).trim()
+      if (snippet) {
+        return snippet.length > 18 ? `${snippet.slice(0, 18)}…` : snippet
+      }
+    }
+  }
+  if (log.provider_name) {
+    return `${log.provider_name}-${log.model_name}`
+  }
+  return `历史对话 ${log.id}`
+}
+
+function convertHistoryLogToSession(log: QuickTestHistoryItem): ChatSession {
+  const sessionMessages = reactive<QuickTestMessage[]>([]) as QuickTestMessage[]
+  const providerName = log.provider_name
+  const providerEmoji = log.provider_logo_emoji
+  const providerLogoUrl = log.provider_logo_url
+
+  const historyMessages = Array.isArray(log.messages) ? log.messages : []
+  for (const entry of historyMessages) {
+    const role = typeof entry.role === 'string' ? entry.role : 'user'
+    const normalizedRole = role === 'assistant' || role === 'system' ? 'assistant' : 'user'
+    const displayName =
+      role === 'assistant' ? providerName ?? '助手' : role === 'system' ? '系统' : '我'
+    sessionMessages.push({
+      id: nextMessageId(),
+      role: normalizedRole,
+      content: normalizeMessageContent(entry.content),
+      displayName,
+      avatarUrl: normalizedRole === 'assistant' ? providerLogoUrl ?? undefined : userAvatar,
+      avatarEmoji: normalizedRole === 'assistant' ? providerEmoji ?? undefined : undefined,
+      avatarFallback:
+        normalizedRole === 'assistant'
+          ? (providerName ?? '助手').slice(0, 1).toUpperCase()
+          : undefined,
+      avatarAlt: normalizedRole === 'assistant' ? providerName ?? '助手' : '我',
+      isStreaming: false,
+      tokens: undefined,
+    })
+  }
+
+  if (log.response_text) {
+    const assistantMessage: QuickTestMessage = {
+      id: nextMessageId(),
+      role: 'assistant',
+      content: normalizeMessageContent(log.response_text),
+      displayName: providerName ?? '助手',
+      avatarUrl: providerLogoUrl ?? undefined,
+      avatarEmoji: providerEmoji ?? undefined,
+      avatarFallback: (providerName ?? '助手').slice(0, 1).toUpperCase(),
+      avatarAlt: providerName ?? '助手',
+      isStreaming: false,
+      tokens: undefined,
+    }
+    applyUsageToMessage(assistantMessage, {
+      prompt_tokens: log.prompt_tokens ?? undefined,
+      completion_tokens: log.completion_tokens ?? undefined,
+      total_tokens: log.total_tokens ?? undefined,
+    })
+    sessionMessages.push(assistantMessage)
+  }
+
+  const createdAt = Date.parse(log.created_at)
+  const timestamp = Number.isNaN(createdAt) ? Date.now() : createdAt
+
+  return {
+    id: log.id,
+    title: deriveHistoryTitle(log),
+    messages: sessionMessages,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    autoTitle: false,
+    isPersisted: true,
+    hasInteraction: true,
+    providerId: log.provider_id,
+    providerName,
+    providerLogoEmoji: providerEmoji,
+    providerLogoUrl,
+    modelId: log.model_id,
+    modelName: log.model_name,
+    promptId: log.prompt_id,
+    promptVersionId: log.prompt_version_id,
+  }
+}
+
+async function refreshHistory(match?: HistoryMatchCriteria): Promise<void> {
+  try {
+    const logs = await fetchQuickTestHistory({ limit: HISTORY_LIMIT })
+    const persistedSessions = logs.map(convertHistoryLogToSession)
+    const drafts = chatSessions.value.filter((session) => !session.isPersisted)
+
+    let remainingDrafts = drafts
+    let matchedId: number | null = null
+
+    if (match) {
+      const matchedLog = logs.find((log) => {
+        const providerOk =
+          match.providerId === undefined || log.provider_id === match.providerId
+        const modelOk =
+          match.modelName === undefined || log.model_name === match.modelName
+        const responseOk =
+          match.responseText === undefined || log.response_text === match.responseText
+        const requestOk =
+          match.requestSignature === undefined
+            ? true
+            : JSON.stringify(log.messages ?? []) === match.requestSignature
+        return providerOk && modelOk && responseOk && requestOk
+      })
+      if (matchedLog) {
+        matchedId = matchedLog.id
+        if (match.draftId !== undefined) {
+          remainingDrafts = drafts.filter((session) => session.id !== match.draftId)
+        }
+      }
+    }
+
+    chatSessions.value = [...persistedSessions, ...remainingDrafts]
+
+    if (matchedId !== null) {
+      const matchedSession = chatSessions.value.find((session) => session.id === matchedId)
+      if (matchedSession) {
+        activeSessionId.value = matchedSession.id
+        messages.value = matchedSession.messages
+        if (
+          matchedSession.providerId != null &&
+          matchedSession.modelName &&
+          providerMap.value.has(matchedSession.providerId)
+        ) {
+          selectedModelPath.value = [matchedSession.providerId, matchedSession.modelName]
+        }
+        chatInput.value = ''
+        void scrollToBottom()
+        syncActiveSessionSelection()
+      }
+      return
+    }
+
+    if (activeSessionId.value !== null) {
+      const active = chatSessions.value.find((session) => session.id === activeSessionId.value)
+      if (active) {
+        messages.value = active.messages
+        syncActiveSessionSelection()
+        return
+      }
+    }
+
+    if (chatSessions.value.length > 0) {
+      const session = chatSessions.value[0]
+      activeSessionId.value = session.id
+      messages.value = session.messages
+      if (
+        session.providerId != null &&
+        session.modelName &&
+        providerMap.value.has(session.providerId)
+      ) {
+        selectedModelPath.value = [session.providerId, session.modelName]
+      }
+      chatInput.value = ''
+      void scrollToBottom()
+    }
+    syncActiveSessionSelection()
+  } catch (error) {
+    void error
+    ElMessage.warning('加载历史记录失败，请稍后再试')
+  }
+}
+function handleEnterKey(event: KeyboardEvent) {
+  if (event.shiftKey) {
+    return
+  }
+  event.preventDefault()
+  if (isSending.value) {
+    return
+  }
+  void handleSend()
+}
+
 async function fetchLLMProviders() {
   isModelLoading.value = true
   try {
@@ -285,6 +690,7 @@ async function fetchLLMProviders() {
         label: model.name
       }))
     }))
+    syncActiveSessionSelection()
   } catch (error) {
     ElMessage.error('加载模型列表失败，请稍后再试')
   } finally {
@@ -394,8 +800,16 @@ async function handleSend() {
     return
   }
   cancelActiveStream()
+  const session = ensureActiveSession()
   const provider = model.provider
   const targetModel = model.model
+
+  session.providerId = provider.id
+  session.providerName = provider.provider_name
+  session.providerLogoEmoji = provider.logo_emoji
+  session.providerLogoUrl = provider.logo_url
+  session.modelId = targetModel.id
+  session.modelName = targetModel.name
 
   isSending.value = true
   chatInput.value = ''
@@ -403,8 +817,11 @@ async function handleSend() {
   const assistantMessage = appendAssistantPlaceholder(provider)
 
   const messagesPayload = buildChatPayloadMessages()
+  session.hasInteraction = true
   const extraParameters = parseExtraParameters()
   const promptMeta = resolveSelectedPromptMeta()
+  session.promptId = promptMeta?.promptId ?? null
+  session.promptVersionId = promptMeta?.versionId ?? null
 
   const controller = new AbortController()
   activeStreamController = controller
@@ -421,6 +838,13 @@ async function handleSend() {
   }
 
   let shouldScrollAfterStream = false
+  let shouldRefreshHistory = false
+  const matchCriteria: HistoryMatchCriteria = {
+    requestSignature: JSON.stringify(messagesPayload),
+    providerId: provider.id,
+    modelName: targetModel.name,
+    draftId: session.isPersisted ? undefined : session.id
+  }
   try {
     for await (const event of streamQuickTest(payload, { signal: controller.signal })) {
       const data = event.data
@@ -437,6 +861,7 @@ async function handleSend() {
 
       if (parsed?.usage) {
         applyUsageToMessage(assistantMessage, parsed.usage)
+        updateActiveSessionTimestamp()
       }
 
       const choices = Array.isArray(parsed?.choices) ? parsed.choices : []
@@ -445,15 +870,18 @@ async function handleSend() {
         if (delta && typeof delta.content === 'string') {
           assistantMessage.content += delta.content
           shouldScrollAfterStream = true
+          updateActiveSessionTimestamp()
           continue
         }
         const message = choice?.message
         if (message && typeof message.content === 'string') {
           assistantMessage.content += message.content
           shouldScrollAfterStream = true
+          updateActiveSessionTimestamp()
         }
       }
     }
+    shouldRefreshHistory = true
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       if (!assistantMessage.content) {
@@ -461,6 +889,7 @@ async function handleSend() {
       }
       assistantMessage.tokens = undefined
       shouldScrollAfterStream = true
+      updateActiveSessionTimestamp()
       return
     }
     let message = '调用模型失败，请稍后再试'
@@ -476,14 +905,23 @@ async function handleSend() {
     assistantMessage.tokens = undefined
     ElMessage.error(message)
     shouldScrollAfterStream = true
+    updateActiveSessionTimestamp()
   } finally {
     assistantMessage.isStreaming = false
     isSending.value = false
     if (activeStreamController === controller) {
       activeStreamController = null
     }
+    if (assistantMessage.content) {
+      shouldScrollAfterStream = true
+    }
+    session.updatedAt = Date.now()
     if (shouldScrollAfterStream) {
       void scrollToBottom()
+    }
+    if (shouldRefreshHistory) {
+      matchCriteria.responseText = assistantMessage.content
+      await refreshHistory(matchCriteria)
     }
   }
 }
@@ -498,11 +936,22 @@ function handleSaveAsPrompt() {
 
 function appendUserMessage(content: string) {
   messages.value.push({
-    id: ++messageId,
+    id: nextMessageId(),
     role: 'user',
     content,
     displayName: '我'
   })
+  const session = getActiveSession()
+  if (session) {
+    session.hasInteraction = true
+    if (session.autoTitle) {
+      session.title = generateSessionTitle(content, session.title)
+      if (content.trim()) {
+        session.autoTitle = false
+      }
+    }
+    session.updatedAt = Date.now()
+  }
   void scrollToBottom()
 }
 
@@ -512,7 +961,7 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
     lastStreaming.isStreaming = false
   }
   const message: QuickTestMessage = {
-    id: ++messageId,
+    id: nextMessageId(),
     role: 'assistant',
     content: '',
     displayName: provider.provider_name,
@@ -524,6 +973,14 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
     tokens: undefined
   }
   messages.value.push(message)
+  const session = getActiveSession()
+  if (session) {
+    session.providerId = provider.id
+    session.providerName = provider.provider_name
+    session.providerLogoEmoji = provider.logo_emoji
+    session.providerLogoUrl = provider.logo_url
+    session.updatedAt = Date.now()
+  }
   void scrollToBottom()
   return message
 }
@@ -549,6 +1006,17 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.page-header__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-select {
+  width: 220px;
 }
 
 .page-header__text h2 {
@@ -724,6 +1192,24 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
 @media (max-width: 1200px) {
   .test-layout {
     flex-direction: column;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-header__actions {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .history-select {
+    flex: 1 1 auto;
+    width: 100%;
   }
 
   .model-card,

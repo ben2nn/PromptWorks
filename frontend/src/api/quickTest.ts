@@ -13,6 +13,31 @@ export interface QuickTestStreamPayload {
   promptVersionId?: number | null
 }
 
+export interface QuickTestHistoryMessage {
+  role: string
+  content: unknown
+}
+
+export interface QuickTestHistoryItem {
+  id: number
+  provider_id: number | null
+  provider_name: string | null
+  provider_logo_emoji: string | null
+  provider_logo_url: string | null
+  model_id: number | null
+  model_name: string
+  response_text: string | null
+  messages: QuickTestHistoryMessage[]
+  temperature: number | null
+  latency_ms: number | null
+  prompt_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+  prompt_id: number | null
+  prompt_version_id: number | null
+  created_at: string
+}
+
 export interface SSEMessage {
   event?: string
   data: string
@@ -118,4 +143,27 @@ export async function* streamQuickTest(
   } finally {
     reader.releaseLock()
   }
+}
+
+export async function fetchQuickTestHistory(
+  params: { limit?: number; offset?: number } = {}
+): Promise<QuickTestHistoryItem[]> {
+  const search = new URLSearchParams()
+  if (params.limit !== undefined) {
+    search.set('limit', String(params.limit))
+  }
+  if (params.offset !== undefined) {
+    search.set('offset', String(params.offset))
+  }
+  const query = search.toString()
+  const url = `${API_BASE_URL}/llm-providers/quick-test/history${query ? `?${query}` : ''}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    const error: HttpError = new Error('获取历史记录失败')
+    error.status = response.status
+    error.payload = await parseErrorPayload(response)
+    throw error
+  }
+  const data = (await response.json()) as QuickTestHistoryItem[]
+  return data
 }

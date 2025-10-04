@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -78,3 +80,30 @@ class KnownLLMProvider(BaseModel):
     base_url: str | None = None
     logo_emoji: str | None = None
     logo_url: str | None = None
+
+
+class LLMUsageMessage(BaseModel):
+    role: str = Field(..., description="消息角色，例如 user、assistant")
+    content: Any = Field(..., description="与 OpenAI 兼容的消息内容")
+
+
+class LLMUsageLogRead(BaseModel):
+    id: int
+    provider_id: int | None
+    provider_name: str | None
+    provider_logo_emoji: str | None
+    provider_logo_url: str | None
+    model_id: int | None
+    model_name: str
+    response_text: str | None
+    messages: list[LLMUsageMessage] = Field(default_factory=list)
+    temperature: float | None
+    latency_ms: int | None
+    prompt_tokens: int | None
+    completion_tokens: int | None
+    total_tokens: int | None
+    prompt_id: int | None
+    prompt_version_id: int | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

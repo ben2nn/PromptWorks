@@ -451,3 +451,41 @@ def test_stream_invoke_llm_persists_usage(client, db_session, monkeypatch):
     assert captured["json"]["stream"] is True
     assert captured["json"]["temperature"] == 0.6
     assert captured["json"]["messages"][0]["content"] == "请问你好"
+
+
+def test_quick_test_history_endpoint_returns_logs(client, db_session):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "HistoryTest",
+            "api_key": "history-key",
+            "is_custom": True,
+            "base_url": "https://history.llm/api",
+        },
+    )
+
+    log = LLMUsageLog(
+        provider_id=provider["id"],
+        model_id=None,
+        model_name="chat-history",
+        source="quick_test",
+        messages=[{"role": "user", "content": "回顾一下"}],
+        response_text="历史记录",
+        temperature=0.5,
+        latency_ms=123,
+        prompt_tokens=3,
+        completion_tokens=4,
+        total_tokens=7,
+    )
+    db_session.add(log)
+    db_session.commit()
+
+    response = client.get("/api/v1/llm-providers/quick-test/history")
+    assert response.status_code == 200
+    records = response.json()
+    assert records, "历史接口应返回至少一条记录"
+    matched = next(item for item in records if item["id"] == log.id)
+    assert matched["model_name"] == "chat-history"
+    assert matched["response_text"] == "历史记录"
+    assert matched["messages"][0]["role"] == "user"
+    assert matched["messages"][0]["content"] == "回顾一下"

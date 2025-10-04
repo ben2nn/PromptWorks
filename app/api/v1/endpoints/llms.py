@@ -7,7 +7,7 @@ from typing import Any, Iterator, cast
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -27,7 +27,10 @@ from app.schemas.llm_provider import (
     LLMProviderCreate,
     LLMProviderRead,
     LLMProviderUpdate,
+    LLMUsageLogRead,
+    LLMUsageMessage,
 )
+from app.services.llm_usage import list_quick_test_usage_logs
 
 router = APIRouter()
 
@@ -243,6 +246,57 @@ def list_common_providers() -> list[KnownLLMProvider]:
         for provider in iter_common_providers()
     ]
     return items
+
+
+@router.get("/quick-test/history", response_model=list[LLMUsageLogRead])
+def list_quick_test_history(
+    *,
+    db: Session = Depends(get_db),
+    limit: int = Query(20, ge=1, le=100, description="返回的历史记录数量"),
+    offset: int = Query(0, ge=0, description="跳过的历史记录数量"),
+) -> list[LLMUsageLogRead]:
+    """返回快速测试产生的最近调用记录。"""
+
+    logs = list_quick_test_usage_logs(db, limit=limit, offset=offset)
+    history: list[LLMUsageLogRead] = []
+    for log in logs:
+        provider = log.provider
+        message_items: list[LLMUsageMessage] = []
+        if isinstance(log.messages, list):
+            for item in log.messages:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    message_items.append(LLMUsageMessage.model_validate(item))
+                except ValidationError:
+                    role = str(item.get("role", "user"))
+                    message_items.append(
+                        LLMUsageMessage(role=role, content=item.get("content"))
+                    )
+
+        history.append(
+            LLMUsageLogRead(
+                id=log.id,
+                provider_id=log.provider_id,
+                provider_name=provider.provider_name if provider else None,
+                provider_logo_emoji=provider.logo_emoji if provider else None,
+                provider_logo_url=provider.logo_url if provider else None,
+                model_id=log.model_id,
+                model_name=log.model_name,
+                response_text=log.response_text,
+                messages=message_items,
+                temperature=log.temperature,
+                latency_ms=log.latency_ms,
+                prompt_tokens=log.prompt_tokens,
+                completion_tokens=log.completion_tokens,
+                total_tokens=log.total_tokens,
+                prompt_id=log.prompt_id,
+                prompt_version_id=log.prompt_version_id,
+                created_at=log.created_at,
+            )
+        )
+
+    return history
 
 
 @router.get("/", response_model=list[LLMProviderRead])

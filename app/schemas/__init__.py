@@ -2,6 +2,8 @@ from app.schemas.llm_provider import (
     LLMProviderCreate,
     LLMProviderRead,
     LLMProviderUpdate,
+    LLMUsageLogRead,
+    LLMUsageMessage,
 )
 from app.schemas.metric import MetricCreate, MetricRead
 from app.schemas.prompt import (
@@ -48,4 +50,6 @@ __all__ = [
     "LLMProviderCreate",
     "LLMProviderUpdate",
     "LLMProviderRead",
+    "LLMUsageLogRead",
+    "LLMUsageMessage",
 ]
