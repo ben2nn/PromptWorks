@@ -1078,7 +1078,7 @@ async function handleSend() {
   }
   const content = chatInput.value.trim()
   if (!content) {
-    ElMessage.info('请输入要测试的内容')
+    ElMessage.info(t('quickTest.messages.inputRequired'))
     return
   }
   cancelActiveStream()
@@ -1167,14 +1167,14 @@ async function handleSend() {
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       if (!assistantMessage.content) {
-        assistantMessage.content = '本次请求已取消'
+        assistantMessage.content = t('quickTest.messages.requestCancelled')
       }
       assistantMessage.tokens = undefined
       shouldScrollAfterStream = true
       updateActiveSessionTimestamp()
       return
     }
-    let message = '调用模型失败，请稍后再试'
+    let message = t('quickTest.messages.invokeFailed')
     const detail = error?.payload ?? error?.detail
     if (typeof detail === 'string') {
       message = detail
@@ -1211,7 +1211,7 @@ async function handleSend() {
 function handleSaveAsPrompt() {
   const content = getDefaultPromptContent()
   if (!content.trim()) {
-    ElMessage.info('请输入内容后再保存为 Prompt')
+    ElMessage.info(t('quickTest.messages.saveNoContent'))
     return
   }
   resetSavePromptForm(content)
@@ -1230,7 +1230,7 @@ async function handleSavePromptConfirm() {
   }
   const content = savePromptForm.promptContent.trim()
   if (!content) {
-    ElMessage.warning('内容不能为空')
+    ElMessage.warning(t('quickTest.messages.contentRequired'))
     return
   }
 
@@ -1239,7 +1239,7 @@ async function handleSavePromptConfirm() {
     if (savePromptMode.value === 'new') {
       const name = savePromptForm.promptName.trim()
       if (!name) {
-        ElMessage.warning('请输入 Prompt 名称')
+        ElMessage.warning(t('quickTest.messages.nameRequired'))
         savePromptSubmitting.value = false
         return
       }
@@ -1259,29 +1259,29 @@ async function handleSavePromptConfirm() {
         payload.tag_ids = [...savePromptForm.promptTagIds]
       }
       await createPrompt(payload)
-      ElMessage.success('新 Prompt 创建成功')
+      ElMessage.success(t('quickTest.messages.createPromptSuccess'))
     } else {
       const promptId = savePromptForm.promptId
       if (!promptId) {
-        ElMessage.warning('请选择要更新的 Prompt')
+        ElMessage.warning(t('quickTest.messages.selectPromptToUpdate'))
         savePromptSubmitting.value = false
         return
       }
       const version = savePromptForm.promptVersion.trim()
       if (!version) {
-        ElMessage.warning('请输入版本标签')
+        ElMessage.warning(t('quickTest.messages.versionRequired'))
         savePromptSubmitting.value = false
         return
       }
       await createPromptVersion(promptId, version, savePromptForm.promptContent)
-      ElMessage.success('已创建新的 Prompt 版本')
+      ElMessage.success(t('quickTest.messages.createPromptVersionSuccess'))
     }
 
     savePromptDialogVisible.value = false
     resetSavePromptForm('')
     await fetchPromptOptions()
   } catch (error: any) {
-    const message = error?.message ?? '保存 Prompt 失败'
+    const message = error?.message ?? t('quickTest.messages.savePromptFailed')
     ElMessage.error(message)
   } finally {
     savePromptSubmitting.value = false
@@ -1293,7 +1293,7 @@ function appendUserMessage(content: string) {
     id: nextMessageId(),
     role: 'user',
     content,
-    displayName: '我'
+    displayName: t('quickTest.chat.avatar.self')
   })
   const session = getActiveSession()
   if (session) {

@@ -249,6 +249,184 @@ export const messages = {
         createPromptVersionSuccess: '已创建新的 Prompt 版本',
         savePromptFailed: '保存 Prompt 失败'
       }
+    },
+    testJobManagement: {
+      headerTitle: '测试任务',
+      headerDescription: '统一查看批量测试任务与执行状态，后续将支持任务创建与重跑。',
+      createButton: '新建测试任务',
+      listTitle: '任务列表',
+      table: {
+        columns: {
+          name: '测试名称',
+          model: '模型',
+          versions: '版本列表',
+          temperature: '温度',
+          repetitions: '测试次数',
+          status: '状态',
+          createdAt: '创建时间',
+          updatedAt: '最近更新',
+          actions: '操作'
+        },
+        promptPrefix: 'Prompt：',
+        notePrefix: '备注：',
+        viewDetails: '查看详情'
+      },
+      versionCount: '{count} 版本',
+      empty: '暂未创建测试任务',
+      status: {
+        completed: '已完成',
+        running: '执行中',
+        failed: '失败',
+        pending: '排队中'
+      },
+      unnamedPrompt: '未命名 Prompt',
+      versionFallback: '版本 #{id}',
+      messages: {
+        loadFailed: '加载测试任务失败'
+      }
+    },
+    llmManagement: {
+      headerTitle: 'LLMs 管理',
+      headerDescription: '统一维护各大模型服务的凭证与接入配置，支撑跨团队的调用治理。',
+      addProvider: '新增提供方',
+      empty: '暂未接入任何大模型提供方',
+      options: {
+        customProvider: '自定义提供方'
+      },
+      card: {
+        expand: '展开查看详情',
+        collapse: '收起卡片',
+        updateApiKey: '更新 API Key',
+        deleteProvider: '删除提供方',
+        apiKeyLabel: 'API Key（仅展示脱敏信息）',
+        baseUrlLabel: '访问地址',
+        baseUrlPlaceholderCustom: '请输入自定义 API 域名',
+        baseUrlPlaceholderDefault: '官方默认地址自动读取',
+        modelsTitle: '已接入模型',
+        addModel: '添加模型',
+        table: {
+          empty: '暂未配置模型',
+          columns: {
+            name: '模型名称',
+            capability: '能力标签',
+            quota: '配额策略',
+            actions: '操作'
+          },
+          check: '检测',
+          remove: '删除'
+        }
+      },
+      providerDialog: {
+        title: '新增模型提供方',
+        providerLabel: '提供方',
+        providerPlaceholder: '请选择提供方',
+        displayNameLabel: '展示名称',
+        displayNamePlaceholder: '请输入提供方名称',
+        baseUrlLabel: '接口地址',
+        baseUrlPlaceholder: '请输入自定义提供方 API 地址',
+        emojiLabel: 'Logo Emoji',
+        emojiPlaceholder: '请选择喜欢的 Emoji',
+        apiKeyLabel: 'API Key',
+        apiKeyPlaceholder: '请输入访问凭证'
+      },
+      modelDialog: {
+        title: '添加模型',
+        nameLabel: '模型名称',
+        namePlaceholder: '请输入模型名称',
+        capabilityLabel: '能力标签',
+        capabilityPlaceholder: '如 对话 / 推理（可选）',
+        quotaLabel: '配额策略',
+        quotaPlaceholder: '如 团队共享 100k tokens/日（可选）'
+      },
+      confirmations: {
+        removeModel: {
+          title: '提示',
+          message: '确认删除该模型接入配置吗？删除后可在后续重新添加。'
+        },
+        removeProvider: {
+          title: '删除确认',
+          message: '确认删除提供方“{name}”吗？此操作会同时删除其下的 {count} 个模型配置，且不可恢复。'
+        },
+        updateApiKey: {
+          title: '更新 API Key',
+          message: '请输入新的 API Key',
+          placeholder: 'sk-...'
+        }
+      },
+      messages: {
+        loadProvidersFailed: '加载提供方信息失败，请稍后重试',
+        loadCommonProvidersFailed: '加载常用提供方配置失败，仅提供自定义选项',
+        providerNameRequired: '请填写提供方名称',
+        apiKeyRequired: '请填写 API Key',
+        customBaseUrlRequired: '请输入自定义提供方的接口地址',
+        createProviderSuccess: '提供方创建成功',
+        createProviderFailed: '创建提供方失败，请稍后重试',
+        modelRemoved: '模型已移除',
+        removeModelFailed: '删除模型失败，请稍后重试',
+        modelNameRequired: '请填写模型名称',
+        providerNotFound: '未找到对应的提供方，请重新操作',
+        createModelSuccess: '模型添加成功',
+        createModelFailed: '添加模型失败，请稍后重试',
+        baseUrlUpdated: '访问地址已更新',
+        baseUrlUpdateFailed: '更新访问地址失败，请稍后重试',
+        providerDeleted: '提供方已删除',
+        providerDeleteFailed: '删除提供方失败，请稍后重试',
+        invalidApiKey: '请输入有效的 API Key',
+        apiKeyUpdated: 'API Key 已更新',
+        apiKeyUpdateFailed: '更新 API Key 失败，请稍后重试',
+        checkTimeout: '检测超时，请稍后重试',
+        checkFailed: '检测失败，请稍后重试',
+        checkSuccess: '检测成功，用时 {ms} ms'
+      }
+    },
+    usageManagement: {
+      headerTitle: '用量管理',
+      headerDescription: '汇总各模型与团队的调用用量，为配额管理和成本分析提供数据支撑。',
+      datePicker: {
+        rangeSeparator: '至',
+        startPlaceholder: '开始日期',
+        endPlaceholder: '结束日期',
+        shortcuts: {
+          last7Days: '最近 7 天',
+          last30Days: '最近 30 天'
+        }
+      },
+      overview: {
+        cards: {
+          totalTokens: '总 Token 数',
+          inputTokens: '输入 Token 数',
+          outputTokens: '输出 Token 数',
+          callCount: '调用次数'
+        }
+      },
+      modelCard: {
+        title: '模型用量',
+        sortOptions: {
+          totalTokens: '按总 Token',
+          callCount: '按调用次数',
+          inputTokens: '按输入 Token',
+          outputTokens: '按输出 Token'
+        },
+        empty: '暂无用量数据',
+        columns: {
+          model: '模型',
+          totalTokens: '总 Token',
+          callCount: '调用次数'
+        }
+      },
+      chart: {
+        title: '{model} - Token 趋势',
+        defaultModel: '模型用量',
+        legend: {
+          input: '输入 Token',
+          output: '输出 Token'
+        },
+        stack: '总量'
+      },
+      messages: {
+        usageLoadFailed: '加载用量数据失败，请稍后重试',
+        trendLoadFailed: '加载趋势数据失败，请稍后重试'
+      }
     }
   },
   'en-US': {
@@ -500,6 +678,184 @@ export const messages = {
         versionRequired: 'Enter a version tag.',
         createPromptVersionSuccess: 'New prompt version created.',
         savePromptFailed: 'Failed to save prompt.'
+      }
+    },
+    testJobManagement: {
+      headerTitle: 'Test Jobs',
+      headerDescription: 'Review batch test jobs and monitor execution status. Scheduling and re-runs are coming soon.',
+      createButton: 'New Test Job',
+      listTitle: 'Job List',
+      table: {
+        columns: {
+          name: 'Job Name',
+          model: 'Model',
+          versions: 'Versions',
+          temperature: 'Temperature',
+          repetitions: 'Runs',
+          status: 'Status',
+          createdAt: 'Created At',
+          updatedAt: 'Last Updated',
+          actions: 'Actions'
+        },
+        promptPrefix: 'Prompt: ',
+        notePrefix: 'Note: ',
+        viewDetails: 'View Details'
+      },
+      versionCount: '{count} versions',
+      empty: 'No test jobs yet',
+      status: {
+        completed: 'Completed',
+        running: 'Running',
+        failed: 'Failed',
+        pending: 'Queued'
+      },
+      unnamedPrompt: 'Untitled Prompt',
+      versionFallback: 'Version #{id}',
+      messages: {
+        loadFailed: 'Failed to load test jobs.'
+      }
+    },
+    llmManagement: {
+      headerTitle: 'LLM Management',
+      headerDescription: 'Manage credentials and integrations for every model provider to support team-wide governance.',
+      addProvider: 'Add Provider',
+      empty: 'No LLM providers connected yet.',
+      options: {
+        customProvider: 'Custom Provider'
+      },
+      card: {
+        expand: 'Expand details',
+        collapse: 'Collapse card',
+        updateApiKey: 'Update API Key',
+        deleteProvider: 'Remove provider',
+        apiKeyLabel: 'API Key (masked)',
+        baseUrlLabel: 'Base URL',
+        baseUrlPlaceholderCustom: 'Enter custom API domain',
+        baseUrlPlaceholderDefault: 'Using official default endpoint',
+        modelsTitle: 'Connected Models',
+        addModel: 'Add Model',
+        table: {
+          empty: 'No models configured',
+          columns: {
+            name: 'Model Name',
+            capability: 'Capability Tags',
+            quota: 'Quota Policy',
+            actions: 'Actions'
+          },
+          check: 'Check',
+          remove: 'Remove'
+        }
+      },
+      providerDialog: {
+        title: 'Add Model Provider',
+        providerLabel: 'Provider',
+        providerPlaceholder: 'Select a provider',
+        displayNameLabel: 'Display Name',
+        displayNamePlaceholder: 'Enter provider name',
+        baseUrlLabel: 'Endpoint',
+        baseUrlPlaceholder: 'Enter custom provider API URL',
+        emojiLabel: 'Logo Emoji',
+        emojiPlaceholder: 'Pick a favorite emoji',
+        apiKeyLabel: 'API Key',
+        apiKeyPlaceholder: 'Enter access credential'
+      },
+      modelDialog: {
+        title: 'Add Model',
+        nameLabel: 'Model Name',
+        namePlaceholder: 'Enter model name',
+        capabilityLabel: 'Capability Tags',
+        capabilityPlaceholder: 'e.g. Chat / Reasoning (optional)',
+        quotaLabel: 'Quota Policy',
+        quotaPlaceholder: 'e.g. Team shared 100k tokens/day (optional)'
+      },
+      confirmations: {
+        removeModel: {
+          title: 'Notice',
+          message: 'Remove this model integration? You can reconnect it later.'
+        },
+        removeProvider: {
+          title: 'Delete Provider',
+          message: 'Delete provider “{name}”? This removes its {count} model configurations and cannot be undone.'
+        },
+        updateApiKey: {
+          title: 'Update API Key',
+          message: 'Enter a new API Key',
+          placeholder: 'sk-...'
+        }
+      },
+      messages: {
+        loadProvidersFailed: 'Failed to load provider list. Try again later.',
+        loadCommonProvidersFailed: 'Failed to load common provider presets; only the custom option is available.',
+        providerNameRequired: 'Provide a provider name.',
+        apiKeyRequired: 'Enter an API key.',
+        customBaseUrlRequired: 'Provide the custom provider endpoint.',
+        createProviderSuccess: 'Provider created successfully.',
+        createProviderFailed: 'Failed to create provider. Try again later.',
+        modelRemoved: 'Model removed.',
+        removeModelFailed: 'Failed to remove model. Try again later.',
+        modelNameRequired: 'Provide a model name.',
+        providerNotFound: 'Provider not found. Please retry.',
+        createModelSuccess: 'Model added successfully.',
+        createModelFailed: 'Failed to add model. Try again later.',
+        baseUrlUpdated: 'Endpoint updated.',
+        baseUrlUpdateFailed: 'Failed to update endpoint. Try again later.',
+        providerDeleted: 'Provider deleted.',
+        providerDeleteFailed: 'Failed to delete provider. Try again later.',
+        invalidApiKey: 'Enter a valid API key.',
+        apiKeyUpdated: 'API key updated.',
+        apiKeyUpdateFailed: 'Failed to update API key. Try again later.',
+        checkTimeout: 'Check timed out. Try again later.',
+        checkFailed: 'Model check failed. Try again later.',
+        checkSuccess: 'Check succeeded in {ms} ms.'
+      }
+    },
+    usageManagement: {
+      headerTitle: 'Usage Management',
+      headerDescription: 'Aggregate model and team usage to support quota management and cost analysis.',
+      datePicker: {
+        rangeSeparator: 'to',
+        startPlaceholder: 'Start date',
+        endPlaceholder: 'End date',
+        shortcuts: {
+          last7Days: 'Last 7 days',
+          last30Days: 'Last 30 days'
+        }
+      },
+      overview: {
+        cards: {
+          totalTokens: 'Total Tokens',
+          inputTokens: 'Input Tokens',
+          outputTokens: 'Output Tokens',
+          callCount: 'Call Count'
+        }
+      },
+      modelCard: {
+        title: 'Model Usage',
+        sortOptions: {
+          totalTokens: 'Sort by total tokens',
+          callCount: 'Sort by call count',
+          inputTokens: 'Sort by input tokens',
+          outputTokens: 'Sort by output tokens'
+        },
+        empty: 'No usage data available',
+        columns: {
+          model: 'Model',
+          totalTokens: 'Total Tokens',
+          callCount: 'Call Count'
+        }
+      },
+      chart: {
+        title: '{model} - Token Trend',
+        defaultModel: 'Model Usage',
+        legend: {
+          input: 'Input Tokens',
+          output: 'Output Tokens'
+        },
+        stack: 'Total'
+      },
+      messages: {
+        usageLoadFailed: 'Failed to load usage data. Try again later.',
+        trendLoadFailed: 'Failed to load trend data. Try again later.'
       }
     }
   }

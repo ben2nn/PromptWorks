@@ -2,10 +2,12 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>LLMs 管理</h2>
-        <p class="page-desc">统一维护各大模型服务的凭证与接入配置，支撑跨团队的调用治理。</p>
+        <h2>{{ t('llmManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('llmManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDialog">新增提供方</el-button>
+      <el-button type="primary" :icon="Plus" @click="openDialog">
+        {{ t('llmManagement.addProvider') }}
+      </el-button>
     </section>
 
     <template v-if="providerCards.length">
@@ -30,7 +32,10 @@
                 </div>
               </div>
               <div class="provider-card__actions">
-                <el-tooltip :content="card.collapsed ? '展开查看详情' : '收起卡片'" placement="top">
+                <el-tooltip
+                  :content="card.collapsed ? t('llmManagement.card.expand') : t('llmManagement.card.collapse')"
+                  placement="top"
+                >
                   <el-button
                     class="collapse-button"
                     text
@@ -39,7 +44,7 @@
                     @click="toggleCollapse(card.id)"
                   />
                 </el-tooltip>
-                <el-tooltip content="更新 API Key" placement="top">
+                <el-tooltip :content="t('llmManagement.card.updateApiKey')" placement="top">
                   <el-button
                     class="collapse-button"
                     text
@@ -48,7 +53,7 @@
                     @click="handleUpdateApiKey(card)"
                   />
                 </el-tooltip>
-                <el-tooltip content="删除提供方" placement="top">
+                <el-tooltip :content="t('llmManagement.card.deleteProvider')" placement="top">
                   <el-button
                     class="collapse-button"
                     text
@@ -64,7 +69,7 @@
             <transition name="fade">
               <div v-show="!card.collapsed" class="provider-card__body">
                 <el-form label-position="top" class="provider-card__form">
-                  <el-form-item label="API Key（仅展示脱敏信息）">
+                  <el-form-item :label="t('llmManagement.card.apiKeyLabel')">
                     <el-input
                       class="provider-card__input"
                       :type="card.revealApiKey ? 'text' : 'password'"
@@ -78,12 +83,16 @@
                       </template>
                     </el-input>
                   </el-form-item>
-                  <el-form-item label="访问地址">
+                  <el-form-item :label="t('llmManagement.card.baseUrlLabel')">
                     <el-input
                       class="provider-card__input"
                       v-model="card.baseUrl"
                       :readonly="!card.isCustom"
-                      :placeholder="card.isCustom ? '请输入自定义 API 域名' : '官方默认地址自动读取'"
+                      :placeholder="
+                        card.isCustom
+                          ? t('llmManagement.card.baseUrlPlaceholderCustom')
+                          : t('llmManagement.card.baseUrlPlaceholderDefault')
+                      "
                       @change="(value) => handleBaseUrlChange(card, value)"
                     />
                   </el-form-item>
@@ -91,25 +100,37 @@
 
                 <div class="provider-card__models">
                   <div class="provider-card__models-header">
-                    <span>已接入模型</span>
+                    <span>{{ t('llmManagement.card.modelsTitle') }}</span>
                     <el-button
                       type="primary"
                       text
                       size="small"
                       :icon="Plus"
                       @click="handleAddModel(card.id)"
-                    >添加模型</el-button>
+                    >{{ t('llmManagement.card.addModel') }}</el-button>
                   </div>
                   <el-table
                     :data="card.models"
                     size="small"
                     border
-                    empty-text="暂未配置模型"
+                    :empty-text="t('llmManagement.card.table.empty')"
                   >
-                    <el-table-column prop="name" label="模型名称" min-width="140" />
-                    <el-table-column prop="capability" label="能力标签" min-width="120" />
-                    <el-table-column prop="quota" label="配额策略" min-width="140" />
-                    <el-table-column label="操作" width="160" align="center">
+                    <el-table-column
+                      prop="name"
+                      :label="t('llmManagement.card.table.columns.name')"
+                      min-width="140"
+                    />
+                    <el-table-column
+                      prop="capability"
+                      :label="t('llmManagement.card.table.columns.capability')"
+                      min-width="120"
+                    />
+                    <el-table-column
+                      prop="quota"
+                      :label="t('llmManagement.card.table.columns.quota')"
+                      min-width="140"
+                    />
+                    <el-table-column :label="t('llmManagement.card.table.columns.actions')" width="160" align="center">
                       <template #default="{ row }">
                         <div class="provider-card__model-actions">
                           <el-button
@@ -120,7 +141,7 @@
                             :loading="checkingModelId === row.id"
                             :disabled="checkingModelId !== null && checkingModelId !== row.id"
                             @click="checkModel(card.id, row)">
-                            检测
+                            {{ t('llmManagement.card.table.check') }}
                           </el-button>
                           <el-button
                             type="danger"
@@ -128,7 +149,7 @@
                             size="small"
                             :icon="Delete"
                             @click="removeModel(card.id, row.id)"
-                          >删除</el-button>
+                          >{{ t('llmManagement.card.table.remove') }}</el-button>
                         </div>
                       </template>
                     </el-table-column>
@@ -140,12 +161,16 @@
         </el-col>
       </el-row>
     </template>
-    <el-empty v-else description="暂未接入任何大模型提供方" />
+    <el-empty v-else :description="t('llmManagement.empty')" />
 
-    <el-dialog v-model="dialogVisible" title="新增模型提供方" width="620px">
+    <el-dialog v-model="dialogVisible" :title="t('llmManagement.providerDialog.title')" width="620px">
       <el-form :model="llmForm" label-width="120px" class="dialog-form">
-        <el-form-item label="提供方">
-          <el-select v-model="llmForm.provider_key" placeholder="请选择提供方" @change="handleProviderChange">
+        <el-form-item :label="t('llmManagement.providerDialog.providerLabel')">
+          <el-select
+            v-model="llmForm.provider_key"
+            :placeholder="t('llmManagement.providerDialog.providerPlaceholder')"
+            @change="handleProviderChange"
+          >
             <el-option
               v-for="item in providerOptions"
               :key="item.value"
@@ -154,13 +179,19 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="展示名称">
-          <el-input v-model="llmForm.provider_name" placeholder="请输入提供方名称" />
+        <el-form-item :label="t('llmManagement.providerDialog.displayNameLabel')">
+          <el-input
+            v-model="llmForm.provider_name"
+            :placeholder="t('llmManagement.providerDialog.displayNamePlaceholder')"
+          />
         </el-form-item>
-        <el-form-item v-if="isCustomProvider" label="接口地址">
-          <el-input v-model="llmForm.base_url" placeholder="请输入自定义提供方 API 地址" />
+        <el-form-item v-if="isCustomProvider" :label="t('llmManagement.providerDialog.baseUrlLabel')">
+          <el-input
+            v-model="llmForm.base_url"
+            :placeholder="t('llmManagement.providerDialog.baseUrlPlaceholder')"
+          />
         </el-form-item>
-        <el-form-item v-if="isCustomProvider" label="Logo Emoji">
+        <el-form-item v-if="isCustomProvider" :label="t('llmManagement.providerDialog.emojiLabel')">
           <el-popover placement="bottom-start" width="260" trigger="click" v-model:visible="emojiPopoverVisible">
             <div class="emoji-grid">
               <span
@@ -173,35 +204,56 @@
               </span>
             </div>
             <template #reference>
-              <el-input v-model="llmForm.logo_emoji" placeholder="请选择喜欢的 Emoji" />
+              <el-input
+                v-model="llmForm.logo_emoji"
+                :placeholder="t('llmManagement.providerDialog.emojiPlaceholder')"
+              />
             </template>
           </el-popover>
         </el-form-item>
-        <el-form-item label="API Key">
-          <el-input v-model="llmForm.api_key" placeholder="请输入访问凭证" type="password" show-password />
+        <el-form-item :label="t('llmManagement.providerDialog.apiKeyLabel')">
+          <el-input
+            v-model="llmForm.api_key"
+            :placeholder="t('llmManagement.providerDialog.apiKeyPlaceholder')"
+            type="password"
+            show-password
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="handleCreate">提交</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreate">
+          {{ t('common.submit') }}
+        </el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="modelDialogVisible" title="添加模型" width="560px">
+    <el-dialog v-model="modelDialogVisible" :title="t('llmManagement.modelDialog.title')" width="560px">
       <el-form :model="modelForm" label-width="120px" class="dialog-form">
-        <el-form-item label="模型名称">
-          <el-input v-model="modelForm.name" placeholder="请输入模型名称" />
+        <el-form-item :label="t('llmManagement.modelDialog.nameLabel')">
+          <el-input
+            v-model="modelForm.name"
+            :placeholder="t('llmManagement.modelDialog.namePlaceholder')"
+          />
         </el-form-item>
-        <el-form-item label="能力标签">
-          <el-input v-model="modelForm.capability" placeholder="如 对话 / 推理（可选）" />
+        <el-form-item :label="t('llmManagement.modelDialog.capabilityLabel')">
+          <el-input
+            v-model="modelForm.capability"
+            :placeholder="t('llmManagement.modelDialog.capabilityPlaceholder')"
+          />
         </el-form-item>
-        <el-form-item label="配额策略">
-          <el-input v-model="modelForm.quota" placeholder="如 团队共享 100k tokens/日（可选）" />
+        <el-form-item :label="t('llmManagement.modelDialog.quotaLabel')">
+          <el-input
+            v-model="modelForm.quota"
+            :placeholder="t('llmManagement.modelDialog.quotaPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="modelDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="modelSubmitLoading" @click="submitModel">提交</el-button>
+        <el-button @click="modelDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="modelSubmitLoading" @click="submitModel">
+          {{ t('common.submit') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -224,6 +276,7 @@ import {
   RequestTimeoutError
 } from '../api/llmProvider'
 import type { KnownLLMProvider, LLMProvider } from '../types/llm'
+import { useI18n } from 'vue-i18n'
 
 interface ProviderOption {
   label: string
@@ -250,6 +303,8 @@ interface ProviderCard {
   revealApiKey: boolean
 }
 
+const { t } = useI18n()
+
 const loadingProviders = ref(false)
 const providerCards = ref<ProviderCard[]>([])
 const checkingModelId = ref<number | null>(null)
@@ -268,7 +323,7 @@ const providerOptions = computed<ProviderOption[]>(() => {
     label: item.name,
     value: item.key
   }))
-  options.push({ label: '自定义提供方', value: 'custom' })
+  options.push({ label: t('llmManagement.options.customProvider'), value: 'custom' })
   return options
 })
 
@@ -366,7 +421,7 @@ async function fetchProviders() {
     providerCards.value = providers.map((provider) => mapProviderToCard(provider, existingCollapsed, existingReveal))
   } catch (error) {
     console.error(error)
-    ElMessage.error('加载提供方信息失败，请稍后重试')
+    ElMessage.error(t('llmManagement.messages.loadProvidersFailed'))
   } finally {
     loadingProviders.value = false
   }
@@ -374,10 +429,10 @@ async function fetchProviders() {
 
 function extractErrorMessage(error: unknown): string {
   if (error instanceof RequestTimeoutError) {
-    return '检测超时，请稍后重试'
+    return t('llmManagement.messages.checkTimeout')
   }
   if (!error) {
-    return '检测失败，请稍后重试'
+    return t('llmManagement.messages.checkFailed')
   }
   const maybeError = error as any
   const detail = maybeError?.payload?.detail ?? maybeError?.detail
@@ -388,13 +443,13 @@ function extractErrorMessage(error: unknown): string {
     try {
       return JSON.stringify(detail)
     } catch (jsonError) {
-      console.error('序列化错误详情失败', jsonError)
+      console.error('Failed to stringify error detail', jsonError)
     }
   }
   if (typeof maybeError?.message === 'string' && maybeError.message.trim()) {
     return maybeError.message
   }
-  return '检测失败，请稍后重试'
+  return t('llmManagement.messages.checkFailed')
 }
 
 function mapProviderToCard(
@@ -426,7 +481,7 @@ async function fetchCommonOptions() {
     commonProviders.value = await listCommonLLMProviders()
   } catch (error) {
     console.error(error)
-    ElMessage.warning('加载常用提供方配置失败，仅提供自定义选项')
+    ElMessage.warning(t('llmManagement.messages.loadCommonProvidersFailed'))
     commonProviders.value = []
   }
 }
@@ -442,16 +497,16 @@ onMounted(() => {
 
 async function handleCreate() {
   if (!llmForm.provider_name.trim()) {
-    ElMessage.warning('请填写提供方名称')
+    ElMessage.warning(t('llmManagement.messages.providerNameRequired'))
     return
   }
   if (!llmForm.api_key.trim()) {
-    ElMessage.warning('请填写 API Key')
+    ElMessage.warning(t('llmManagement.messages.apiKeyRequired'))
     return
   }
   if (isCustomProvider.value) {
     if (!llmForm.base_url.trim()) {
-      ElMessage.warning('请输入自定义提供方的接口地址')
+      ElMessage.warning(t('llmManagement.messages.customBaseUrlRequired'))
       return
     }
   }
@@ -467,12 +522,12 @@ async function handleCreate() {
       provider_key: !isCustomProvider.value ? llmForm.provider_key : undefined
     }
     await createLLMProvider(payload)
-    ElMessage.success('提供方创建成功')
+    ElMessage.success(t('llmManagement.messages.createProviderSuccess'))
     dialogVisible.value = false
     await fetchProviders()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '创建提供方失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('llmManagement.messages.createProviderFailed')
     ElMessage.error(message)
   } finally {
     createLoading.value = false
@@ -481,22 +536,26 @@ async function handleCreate() {
 
 async function removeModel(providerId: number, modelId: number) {
   try {
-    await ElMessageBox.confirm('确认删除该模型接入配置吗？删除后可在后续重新添加。', '提示', {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+      t('llmManagement.confirmations.removeModel.message'),
+      t('llmManagement.confirmations.removeModel.title'),
+      {
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning'
+      }
+    )
   } catch (error) {
     return
   }
 
   try {
     await deleteLLMModel(providerId, modelId)
-    ElMessage.success('模型已移除')
+    ElMessage.success(t('llmManagement.messages.modelRemoved'))
     await fetchProviders()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '删除模型失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('llmManagement.messages.removeModelFailed')
     ElMessage.error(message)
   }
 }
@@ -520,12 +579,12 @@ function handleAddModel(providerId: number) {
 
 async function submitModel() {
   if (!modelForm.name.trim()) {
-    ElMessage.warning('请填写模型名称')
+    ElMessage.warning(t('llmManagement.messages.modelNameRequired'))
     return
   }
   const providerId = activeProviderId.value
   if (!providerId) {
-    ElMessage.error('未找到对应的提供方，请重新操作')
+    ElMessage.error(t('llmManagement.messages.providerNotFound'))
     return
   }
 
@@ -536,12 +595,12 @@ async function submitModel() {
       capability: modelForm.capability.trim() || undefined,
       quota: modelForm.quota.trim() || undefined
     })
-    ElMessage.success('模型添加成功')
+    ElMessage.success(t('llmManagement.messages.createModelSuccess'))
     modelDialogVisible.value = false
     await fetchProviders()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '添加模型失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('llmManagement.messages.createModelFailed')
     ElMessage.error(message)
   } finally {
     modelSubmitLoading.value = false
@@ -554,17 +613,17 @@ async function handleBaseUrlChange(card: ProviderCard, value: string) {
   }
   const trimmed = (value ?? '').trim()
   if (!trimmed) {
-    ElMessage.warning('自定义提供方必须配置访问地址')
+    ElMessage.warning(t('llmManagement.messages.customBaseUrlRequired'))
     await fetchProviders()
     return
   }
   try {
     await updateLLMProvider(card.id, { base_url: trimmed })
-    ElMessage.success('访问地址已更新')
+    ElMessage.success(t('llmManagement.messages.baseUrlUpdated'))
     card.baseUrl = trimmed
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? '更新访问地址失败，请稍后重试'
+    const message = error?.payload?.detail ?? t('llmManagement.messages.baseUrlUpdateFailed')
     ElMessage.error(message)
     await fetchProviders()
   }
@@ -572,11 +631,14 @@ async function handleBaseUrlChange(card: ProviderCard, value: string) {
 
 async function handleDeleteProvider(card: ProviderCard) {
   const modelCount = card.models.length
-  const message = `确认删除提供方“${card.providerName}”吗？此操作会同时删除其下的 ${modelCount} 个模型配置，且不可恢复。`
+  const message = t('llmManagement.confirmations.removeProvider.message', {
+    name: card.providerName,
+    count: modelCount
+  })
   try {
-    await ElMessageBox.confirm(message, '删除确认', {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(message, t('llmManagement.confirmations.removeProvider.title'), {
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
       type: 'warning'
     })
   } catch (error) {
@@ -585,39 +647,43 @@ async function handleDeleteProvider(card: ProviderCard) {
 
   try {
     await deleteLLMProvider(card.id)
-    ElMessage.success('提供方已删除')
+    ElMessage.success(t('llmManagement.messages.providerDeleted'))
     await fetchProviders()
   } catch (error: any) {
     console.error(error)
-    const detail = error?.payload?.detail ?? '删除提供方失败，请稍后重试'
+    const detail = error?.payload?.detail ?? t('llmManagement.messages.providerDeleteFailed')
     ElMessage.error(detail)
   }
 }
 
 async function handleUpdateApiKey(card: ProviderCard) {
   try {
-    const { value } = await ElMessageBox.prompt('请输入新的 API Key', '更新 API Key', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      inputType: 'password',
-      inputPlaceholder: 'sk-...'
-    })
+    const { value } = await ElMessageBox.prompt(
+      t('llmManagement.confirmations.updateApiKey.message'),
+      t('llmManagement.confirmations.updateApiKey.title'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        inputType: 'password',
+        inputPlaceholder: t('llmManagement.confirmations.updateApiKey.placeholder')
+      }
+    )
 
     const newKey = value.trim()
     if (!newKey) {
-      ElMessage.warning('请输入有效的 API Key')
+      ElMessage.warning(t('llmManagement.messages.invalidApiKey'))
       return
     }
 
     await updateLLMProvider(card.id, { api_key: newKey })
-    ElMessage.success('API Key 已更新')
+    ElMessage.success(t('llmManagement.messages.apiKeyUpdated'))
     await fetchProviders()
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') {
       return
     }
     console.error(error)
-    const detail = error?.payload?.detail ?? '更新 API Key 失败，请稍后重试'
+    const detail = error?.payload?.detail ?? t('llmManagement.messages.apiKeyUpdateFailed')
     ElMessage.error(detail)
   }
 }
@@ -640,9 +706,9 @@ async function checkModel(providerId: number, model: ProviderCardModel) {
       parameters: {}
     })
     const elapsed = Math.round(performance.now() - startedAt)
-    ElMessage.success(`检测成功，用时 ${elapsed} ms`)
+    ElMessage.success(t('llmManagement.messages.checkSuccess', { ms: elapsed }))
   } catch (error) {
-    console.error('模型检测失败', error)
+    console.error('Model check failed', error)
     const message = extractErrorMessage(error)
     ElMessage.error(message)
   } finally {

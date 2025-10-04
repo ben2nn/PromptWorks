@@ -2,16 +2,18 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>测试任务</h2>
-        <p class="page-desc">统一查看批量测试任务与执行状态，后续将支持任务创建与重跑。</p>
+        <h2>{{ t('testJobManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('testJobManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Memo" @click="handleCreateTestJob">新建测试任务</el-button>
+      <el-button type="primary" :icon="Memo" @click="handleCreateTestJob">
+        {{ t('testJobManagement.createButton') }}
+      </el-button>
     </section>
 
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>任务列表</span>
+          <span>{{ t('testJobManagement.listTitle') }}</span>
         </div>
       </template>
       <el-alert
@@ -29,19 +31,21 @@
         :empty-text="tableEmptyText"
         v-loading="isLoading"
       >
-        <el-table-column label="测试名称" min-width="260">
+        <el-table-column :label="t('testJobManagement.table.columns.name')" min-width="260">
           <template #default="{ row }">
             <div class="table-name-cell">
               <span class="table-name__title">{{ row.jobName }}</span>
               <el-tag v-if="row.versionLabels.length > 1" size="small" type="info">
-                {{ row.versionLabels.length }} 版本
+                {{ t('testJobManagement.versionCount', { count: row.versionLabels.length }) }}
               </el-tag>
             </div>
-            <p class="table-subtitle">Prompt：{{ row.promptName }}</p>
-            <p v-if="row.description" class="table-subtitle">备注：{{ row.description }}</p>
+            <p class="table-subtitle">{{ t('testJobManagement.table.promptPrefix') }}{{ row.promptName }}</p>
+            <p v-if="row.description" class="table-subtitle">
+              {{ t('testJobManagement.table.notePrefix') }}{{ row.description }}
+            </p>
           </template>
         </el-table-column>
-        <el-table-column label="模型" min-width="180">
+        <el-table-column :label="t('testJobManagement.table.columns.model')" min-width="180">
           <template #default="{ row }">
             <div class="table-model">
               <span>{{ row.modelName }}</span>
@@ -49,7 +53,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="版本列表" min-width="220">
+        <el-table-column :label="t('testJobManagement.table.columns.versions')" min-width="220">
           <template #default="{ row }">
             <el-space wrap>
               <el-tag
@@ -63,29 +67,29 @@
             </el-space>
           </template>
         </el-table-column>
-        <el-table-column label="温度" width="100">
+        <el-table-column :label="t('testJobManagement.table.columns.temperature')" width="100">
           <template #default="{ row }">{{ formatTemperature(row.temperature) }}</template>
         </el-table-column>
-        <el-table-column label="测试次数" width="100">
+        <el-table-column :label="t('testJobManagement.table.columns.repetitions')" width="100">
           <template #default="{ row }">{{ row.repetitions }}</template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column :label="t('testJobManagement.table.columns.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType[row.status] ?? 'info'" size="small">
               {{ statusLabel[row.status] ?? row.status }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="160">
+        <el-table-column :label="t('testJobManagement.table.columns.createdAt')" min-width="160">
           <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="最近更新" min-width="160">
+        <el-table-column :label="t('testJobManagement.table.columns.updatedAt')" min-width="160">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column :label="t('testJobManagement.table.columns.actions')" width="120" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="handleViewJob(row)">
-              查看详情
+              {{ t('testJobManagement.table.viewDetails') }}
             </el-button>
           </template>
         </el-table-column>
@@ -100,6 +104,7 @@ import { Memo } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { listTestRuns } from '../api/testRun'
 import type { TestRun } from '../types/testRun'
+import { useI18n } from 'vue-i18n'
 
 interface AggregatedJobRow {
   id: string
@@ -120,12 +125,13 @@ interface AggregatedJobRow {
 }
 
 const router = useRouter()
+const { t, locale } = useI18n()
 
 const testRuns = ref<TestRun[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 
-const tableEmptyText = computed(() => errorMessage.value ?? '暂未创建测试任务')
+const tableEmptyText = computed(() => errorMessage.value ?? t('testJobManagement.empty'))
 
 const jobs = computed<AggregatedJobRow[]>(() => {
   const groups = new Map<string, TestRun[]>()
@@ -151,13 +157,17 @@ const jobs = computed<AggregatedJobRow[]>(() => {
       const ordered = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at))
       const primary = ordered[0]
       const schema = (primary.schema ?? {}) as Record<string, unknown>
-      const promptName = primary.prompt?.name ?? '未命名 Prompt'
+      const promptName = primary.prompt?.name ?? t('testJobManagement.unnamedPrompt')
       const jobNameCandidate = typeof schema.job_name === 'string' ? schema.job_name.trim() : ''
       const jobName = jobNameCandidate || primary.notes || promptName
       const versionLabels = ordered.map((run) => {
         const data = (run.schema ?? {}) as Record<string, unknown>
         const label = typeof data.version_label === 'string' ? data.version_label : null
-        return label ?? run.prompt_version?.version ?? `版本 #${run.prompt_version_id}`
+        return (
+          label ??
+          run.prompt_version?.version ??
+          t('testJobManagement.versionFallback', { id: run.prompt_version_id })
+        )
       })
       const repetitions = Math.max(...ordered.map((run) => run.repetitions ?? 1))
       const createdAt = ordered.reduce(
@@ -198,20 +208,24 @@ const statusTagType = {
   pending: 'info'
 } as const
 
-const statusLabel = {
-  completed: '已完成',
-  running: '执行中',
-  failed: '失败',
-  pending: '排队中'
-} as const
+const statusLabel = computed<Record<string, string>>(() => ({
+  completed: t('testJobManagement.status.completed'),
+  running: t('testJobManagement.status.running'),
+  failed: t('testJobManagement.status.failed'),
+  pending: t('testJobManagement.status.pending')
+}))
 
-const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
 
 function formatDateTime(value: string) {
   if (!value) return '--'
@@ -219,7 +233,7 @@ function formatDateTime(value: string) {
   if (Number.isNaN(date.getTime())) {
     return value
   }
-  return dateTimeFormatter.format(date)
+  return dateTimeFormatter.value.format(date)
 }
 
 function formatTemperature(value: number | null | undefined) {
@@ -251,7 +265,7 @@ async function fetchTestRuns() {
   try {
     testRuns.value = await listTestRuns({ limit: 200 })
   } catch (error) {
-    errorMessage.value = extractErrorMessage(error, '加载测试任务失败')
+    errorMessage.value = extractErrorMessage(error, t('testJobManagement.messages.loadFailed'))
     testRuns.value = []
   } finally {
     isLoading.value = false

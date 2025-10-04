@@ -2,8 +2,8 @@
   <div class="page">
     <section class="page-header">
       <div class="page-header__text">
-        <h2>用量管理</h2>
-        <p class="page-desc">汇总各模型与团队的调用用量，为配额管理和成本分析提供数据支撑。</p>
+        <h2>{{ t('usageManagement.headerTitle') }}</h2>
+        <p class="page-desc">{{ t('usageManagement.headerDescription') }}</p>
       </div>
     </section>
 
@@ -12,9 +12,9 @@
         v-model="dateRange"
         type="daterange"
         unlink-panels
-        range-separator="至"
-        start-placeholder="开始日期"
-        end-placeholder="结束日期"
+        :range-separator="t('usageManagement.datePicker.rangeSeparator')"
+        :start-placeholder="t('usageManagement.datePicker.startPlaceholder')"
+        :end-placeholder="t('usageManagement.datePicker.endPlaceholder')"
         :shortcuts="dateShortcuts"
       />
     </div>
@@ -33,12 +33,12 @@
         <el-card shadow="hover" class="model-card" v-loading="modelLoading">
           <template #header>
             <div class="model-card__header">
-              <span>模型用量</span>
+              <span>{{ t('usageManagement.modelCard.title') }}</span>
               <el-select v-model="sortKey" size="small" class="sort-select">
-                <el-option label="按总 Token" value="totalTokens" />
-                <el-option label="按调用次数" value="callCount" />
-                <el-option label="按输入 Token" value="inputTokens" />
-                <el-option label="按输出 Token" value="outputTokens" />
+                <el-option :label="t('usageManagement.modelCard.sortOptions.totalTokens')" value="totalTokens" />
+                <el-option :label="t('usageManagement.modelCard.sortOptions.callCount')" value="callCount" />
+                <el-option :label="t('usageManagement.modelCard.sortOptions.inputTokens')" value="inputTokens" />
+                <el-option :label="t('usageManagement.modelCard.sortOptions.outputTokens')" value="outputTokens" />
               </el-select>
             </div>
           </template>
@@ -49,18 +49,18 @@
             highlight-current-row
             :row-class-name="rowClassName"
             @current-change="handleModelSelect"
-            empty-text="暂无用量数据"
+            :empty-text="t('usageManagement.modelCard.empty')"
           >
-            <el-table-column prop="modelName" label="模型" min-width="160">
+            <el-table-column prop="modelName" :label="t('usageManagement.modelCard.columns.model')" min-width="160">
               <template #default="{ row }">
                 <span class="model-name">{{ row.modelName }}</span>
                 <span class="provider-name">{{ row.provider }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="totalTokens" label="总 Token" width="120">
+            <el-table-column prop="totalTokens" :label="t('usageManagement.modelCard.columns.totalTokens')" width="120">
               <template #default="{ row }">{{ formatNumber(row.totalTokens) }}</template>
             </el-table-column>
-            <el-table-column prop="callCount" label="调用次数" width="120">
+            <el-table-column prop="callCount" :label="t('usageManagement.modelCard.columns.callCount')" width="120">
               <template #default="{ row }">{{ formatNumber(row.callCount) }}</template>
             </el-table-column>
           </el-table>
@@ -70,7 +70,13 @@
         <el-card shadow="hover" class="chart-card" v-loading="chartLoading">
           <template #header>
             <div class="chart-card__header">
-              <span>{{ activeModel?.modelName ?? '模型用量' }} - Token 趋势</span>
+              <span>
+                {{
+                  t('usageManagement.chart.title', {
+                    model: activeModel?.modelName ?? t('usageManagement.chart.defaultModel')
+                  })
+                }}
+              </span>
             </div>
           </template>
           <div ref="chartRef" class="usage-chart"></div>
@@ -90,6 +96,7 @@ import {
   getUsageOverview,
   listModelUsage
 } from '../api/usage'
+import { useI18n } from 'vue-i18n'
 
 interface UsagePoint {
   date: string
@@ -115,13 +122,15 @@ interface UsageOverviewTotals {
   callCount: number
 }
 
+const { t, locale } = useI18n()
+
 const now = new Date()
 const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
 const dateRange = ref<[Date, Date]>([sevenDaysAgo, now])
 
-const dateShortcuts = [
+const dateShortcuts = computed(() => [
   {
-    text: '最近 7 天',
+    text: t('usageManagement.datePicker.shortcuts.last7Days'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -130,7 +139,7 @@ const dateShortcuts = [
     }
   },
   {
-    text: '最近 30 天',
+    text: t('usageManagement.datePicker.shortcuts.last30Days'),
     value: () => {
       const end = new Date()
       const start = new Date()
@@ -138,7 +147,7 @@ const dateShortcuts = [
       return [start, end] as [Date, Date]
     }
   }
-]
+])
 
 const overviewData = ref<UsageOverviewTotals | null>(null)
 const modelSummaries = ref<ModelSummary[]>([])
@@ -149,6 +158,8 @@ const modelLoading = ref(false)
 const chartLoading = ref(false)
 
 const sortKey = ref<'totalTokens' | 'callCount' | 'inputTokens' | 'outputTokens'>('totalTokens')
+
+const numberLocale = computed(() => (locale.value === 'zh-CN' ? 'zh-CN' : 'en-US'))
 
 const sortedModels = computed(() => {
   const list = modelSummaries.value
@@ -190,6 +201,10 @@ watch(sortedModels, (list) => {
   }
 })
 
+watch(locale, () => {
+  updateChart()
+})
+
 const overviewCards = computed(() => {
   const fallback = modelSummaries.value.reduce(
     (acc, item) => {
@@ -209,10 +224,10 @@ const overviewCards = computed(() => {
       callCount: fallback.callCount
     }
   return [
-    { key: 'totalTokens', title: '总 Token 数', value: source.totalTokens },
-    { key: 'inputTokens', title: '输入 Token 数', value: source.inputTokens },
-    { key: 'outputTokens', title: '输出 Token 数', value: source.outputTokens },
-    { key: 'callCount', title: '调用次数', value: source.callCount }
+    { key: 'totalTokens', title: t('usageManagement.overview.cards.totalTokens'), value: source.totalTokens },
+    { key: 'inputTokens', title: t('usageManagement.overview.cards.inputTokens'), value: source.inputTokens },
+    { key: 'outputTokens', title: t('usageManagement.overview.cards.outputTokens'), value: source.outputTokens },
+    { key: 'callCount', title: t('usageManagement.overview.cards.callCount'), value: source.callCount }
   ]
 })
 
@@ -283,7 +298,7 @@ async function refreshUsageData() {
   } catch (error) {
     console.error(error)
     if (currentToken === modelDataToken) {
-      ElMessage.error('加载用量数据失败，请稍后重试')
+      ElMessage.error(t('usageManagement.messages.usageLoadFailed'))
     }
   } finally {
     if (currentToken === modelDataToken) {
@@ -319,7 +334,7 @@ async function loadTimeseriesForActiveModel(params = getDateParams()) {
   } catch (error) {
     console.error(error)
     if (currentToken === chartDataToken) {
-      ElMessage.error('加载趋势数据失败，请稍后重试')
+      ElMessage.error(t('usageManagement.messages.trendLoadFailed'))
       chartMetrics.value = []
       updateChart()
     }
@@ -343,7 +358,7 @@ function rowClassName({ row }: { row: ModelSummary }) {
 
 function formatNumber(value?: number | null) {
   const safeValue = value ?? 0
-  return safeValue.toLocaleString('zh-CN')
+  return safeValue.toLocaleString(numberLocale.value)
 }
 
 const chartRef = ref<HTMLDivElement | null>(null)
@@ -361,13 +376,16 @@ function updateChart() {
   const dates = metrics.map((item) => item.date)
   const inputSeries = metrics.map((item) => item.inputTokens)
   const outputSeries = metrics.map((item) => item.outputTokens)
+  const legendInput = t('usageManagement.chart.legend.input')
+  const legendOutput = t('usageManagement.chart.legend.output')
+  const stackLabel = t('usageManagement.chart.stack')
 
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'axis'
     },
     legend: {
-      data: ['输入 Token', '输出 Token'],
+      data: [legendInput, legendOutput],
       top: 10
     },
     grid: {
@@ -387,17 +405,17 @@ function updateChart() {
     },
     series: [
       {
-        name: '输入 Token',
+        name: legendInput,
         type: 'line',
-        stack: '总量',
+        stack: stackLabel,
         areaStyle: {},
         emphasis: { focus: 'series' },
         data: inputSeries
       },
       {
-        name: '输出 Token',
+        name: legendOutput,
         type: 'line',
-        stack: '总量',
+        stack: stackLabel,
         areaStyle: {},
         emphasis: { focus: 'series' },
         data: outputSeries
