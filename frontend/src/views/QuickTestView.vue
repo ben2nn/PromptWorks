@@ -124,6 +124,8 @@
               placeholder="在此输入测试内容，支持多行输入"
               :disabled="isSending"
               @keydown.enter="handleEnterKey"
+              @compositionstart="handleCompositionStart"
+              @compositionend="handleCompositionEnd"
             />
             <div class="chat-input__footer">
               <el-cascader
@@ -138,7 +140,7 @@
                 :disabled="isPromptLoading"
               />
               <div class="chat-input__actions">
-                <el-button plain @click="handleSaveAsPrompt" :disabled="!chatInput.trim()">保存为 Prompt</el-button>
+                <el-button plain @click="handleSaveAsPrompt">保存为 Prompt</el-button>
                 <el-button type="primary" @click="handleSend" :loading="isSending">发送</el-button>
               </div>
             </div>
@@ -146,6 +148,119 @@
         </div>
       </el-card>
     </div>
+
+    <el-dialog
+      v-model="savePromptDialogVisible"
+      title="保存为 Prompt"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="96px" class="save-prompt-form">
+        <el-form-item label="保存方式">
+          <el-radio-group v-model="savePromptMode">
+            <el-radio-button label="new">新建 Prompt</el-radio-button>
+            <el-radio-button label="existing">追加版本</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <template v-if="savePromptMode === 'new'">
+          <el-form-item label="分类">
+            <div class="save-prompt-class">
+              <el-select
+                v-model="savePromptForm.promptClassId"
+                class="save-prompt-select"
+                clearable
+                filterable
+                placeholder="选择已有分类"
+              >
+                <el-option
+                  v-for="option in promptClassOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+          </el-form-item>
+          <el-form-item label="名称">
+            <el-input
+              v-model="savePromptForm.promptName"
+              placeholder="请输入 Prompt 名称"
+            />
+          </el-form-item>
+          <el-form-item label="标签">
+            <el-select
+              v-model="savePromptForm.promptTagIds"
+              class="save-prompt-select"
+              multiple
+              filterable
+              clearable
+              placeholder="可选择一个或多个标签"
+            >
+              <el-option
+                v-for="option in promptTagOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="版本标签">
+            <el-input
+              v-model="savePromptForm.promptVersion"
+              placeholder="例如 v1"
+            />
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input
+              v-model="savePromptForm.promptDescription"
+              type="textarea"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+              placeholder="可选：补充说明"
+            />
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="选择 Prompt">
+            <el-select
+              v-model="savePromptForm.promptId"
+              class="save-prompt-select"
+              filterable
+              placeholder="请选择 Prompt"
+            >
+              <el-option
+                v-for="option in existingPromptOptions"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="版本标签">
+            <el-input
+              v-model="savePromptForm.promptVersion"
+              placeholder="例如 v2"
+            />
+          </el-form-item>
+        </template>
+
+        <el-form-item label="内容">
+          <el-input
+            v-model="savePromptForm.promptContent"
+            type="textarea"
+            :autosize="{ minRows: 4, maxRows: 12 }"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="handleSavePromptCancel">取消</el-button>
+        <el-button type="primary" :loading="savePromptSubmitting" @click="handleSavePromptConfirm">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -158,9 +273,15 @@ import {
   fetchQuickTestHistory,
   type QuickTestHistoryItem
 } from '../api/quickTest'
-import { listPrompts } from '../api/prompt'
+import {
+  listPrompts,
+  createPrompt,
+  createPromptVersion
+} from '../api/prompt'
+import type { PromptCreatePayload } from '../api/prompt'
 import type { ChatMessagePayload } from '../types/llm'
 import type { Prompt } from '../types/prompt'
+import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 
 interface CascaderOptionNode {
   value: number | string
@@ -241,6 +362,9 @@ const activeSessionId = ref<number | null>(null)
 let sessionSeed = 0
 const messages = ref<QuickTestMessage[]>([])
 const userAvatar = ''
+const isComposing = ref(false)
+
+const promptTags = ref<PromptTagStats[]>([])
 
 const providerMap = ref(new Map<number, LLMProvider>())
 const promptMap = ref(new Map<number, Prompt>())
@@ -258,6 +382,38 @@ const canCreateNewChat = computed(() =>
   !chatSessions.value.some(
     (session) => !session.isPersisted && !session.hasInteraction && session.messages.length === 0
   )
+)
+
+const savePromptDialogVisible = ref(false)
+const savePromptMode = ref<'new' | 'existing'>('new')
+const savePromptSubmitting = ref(false)
+const savePromptForm = reactive({
+  promptId: null as number | null,
+  promptName: '',
+  promptVersion: 'v1',
+  promptClassId: null as number | null,
+  promptDescription: '',
+  promptContent: '',
+  promptTagIds: [] as number[],
+})
+
+const existingPromptOptions = computed(() =>
+  Array.from(promptMap.value.values()).map((prompt) => ({
+    value: prompt.id,
+    label: `${prompt.prompt_class.name} / ${prompt.name}`,
+  }))
+)
+
+const promptClassOptions = computed(() => {
+  const map = new Map<number, string>()
+  promptMap.value.forEach((prompt) => {
+    map.set(prompt.prompt_class.id, prompt.prompt_class.name)
+  })
+  return Array.from(map.entries()).map(([value, label]) => ({ value, label }))
+})
+
+const promptTagOptions = computed(() =>
+  promptTags.value.map((tag) => ({ value: tag.id, label: tag.name }))
 )
 
 const chatScrollRef = ref<HTMLDivElement | null>(null)
@@ -338,15 +494,41 @@ watch(selectedPromptPath, (path) => {
   chatInput.value = version.content
 })
 
+watch(savePromptMode, (mode) => {
+  if (mode === 'new') {
+    savePromptForm.promptId = null
+    savePromptForm.promptVersion = 'v1'
+    savePromptForm.promptTagIds = []
+  } else if (mode === 'existing') {
+    const firstPrompt = existingPromptOptions.value[0]
+    if (firstPrompt && savePromptForm.promptId === null) {
+      savePromptForm.promptId = firstPrompt.value
+    }
+  }
+})
+
+watch(
+  () => savePromptForm.promptId,
+  (promptId) => {
+    if (promptId === null) {
+      return
+    }
+    const prompt = promptMap.value.get(promptId)
+    if (!prompt) {
+      return
+    }
+    savePromptForm.promptVersion = suggestNextVersion(prompt)
+    savePromptForm.promptClassId = prompt.prompt_class.id
+    savePromptForm.promptTagIds = prompt.tags.map((tag) => tag.id)
+  }
+)
+
 onMounted(() => {
   void fetchLLMProviders()
   void fetchPromptOptions()
+  void fetchPromptTags()
   void refreshHistory().then(() => {
-    if (!chatSessions.value.length) {
-      const session = createChatSession()
-      messages.value = session.messages
-      selectedModelPath.value = []
-    }
+    startNewDraftSession()
   })
 })
 
@@ -403,10 +585,7 @@ function handleNewChat() {
   isSending.value = false
   chatInput.value = ''
   selectedPromptPath.value = []
-  const session = createChatSession()
-  messages.value = session.messages
-  selectedModelPath.value = []
-  void scrollToBottom()
+  startNewDraftSession(true)
 }
 
 function getActiveSession(): ChatSession | undefined {
@@ -421,10 +600,10 @@ function ensureActiveSession(): ChatSession {
   if (existing) {
     return existing
   }
-  return createChatSession()
+  return createDraftSession()
 }
 
-function createChatSession(title?: string): ChatSession {
+function createDraftSession(title?: string): ChatSession {
   const now = Date.now()
   const sessionMessages = reactive<QuickTestMessage[]>([]) as QuickTestMessage[]
   sessionSeed -= 1
@@ -451,6 +630,23 @@ function createChatSession(title?: string): ChatSession {
   activeSessionId.value = session.id
   messages.value = session.messages
   return session
+}
+
+function startNewDraftSession(force = false) {
+  if (!force) {
+    const hasEmptyDraft = chatSessions.value.some(
+      (session) => !session.isPersisted && !session.hasInteraction && session.messages.length === 0
+    )
+    if (hasEmptyDraft) {
+      return
+    }
+  }
+
+  const session = createDraftSession()
+  messages.value = session.messages
+  selectedModelPath.value = []
+  chatInput.value = ''
+  void scrollToBottom()
 }
 
 function generateSessionTitle(content: string, fallback: string): string {
@@ -494,6 +690,52 @@ function syncActiveSessionSelection() {
   ) {
     selectedModelPath.value = [session.providerId, session.modelName]
   }
+}
+
+function getDefaultPromptContent(): string {
+  const draft = chatInput.value
+  if (draft.trim()) {
+    return draft
+  }
+  const lastUser = [...messages.value]
+    .reverse()
+    .find((item) => item.role === 'user' && item.content.trim())
+  return lastUser ? lastUser.content : ''
+}
+
+function resetSavePromptForm(initialContent = '') {
+  savePromptForm.promptId = null
+  savePromptForm.promptName = ''
+  savePromptForm.promptVersion = 'v1'
+  savePromptForm.promptClassId = null
+  savePromptForm.promptDescription = ''
+  savePromptForm.promptContent = initialContent
+  savePromptForm.promptTagIds = []
+}
+
+function getLatestPromptVersion(prompt: Prompt | undefined): string | null {
+  if (!prompt) return null
+  if (prompt.versions.length) {
+    const sorted = [...prompt.versions].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    return sorted[sorted.length - 1]?.version ?? null
+  }
+  return prompt.current_version?.version ?? null
+}
+
+function suggestNextVersion(prompt: Prompt | undefined): string {
+  const latest = getLatestPromptVersion(prompt)
+  if (!latest) {
+    return 'v1'
+  }
+  const match = latest.match(/^v(\d+)$/i)
+  if (match) {
+    const next = Number(match[1]) + 1
+    return `v${next}`
+  }
+  const suffix = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  return `${latest}-${suffix}`
 }
 
 function deriveHistoryTitle(log: QuickTestHistoryItem): string {
@@ -667,7 +909,11 @@ async function refreshHistory(match?: HistoryMatchCriteria): Promise<void> {
   }
 }
 function handleEnterKey(event: KeyboardEvent) {
-  if (event.shiftKey) {
+  if (event.shiftKey || event.isComposing || isComposing.value) {
+    return
+  }
+  const keyCode = (event as KeyboardEvent & { keyCode?: number }).keyCode
+  if (keyCode === 229) {
     return
   }
   event.preventDefault()
@@ -675,6 +921,16 @@ function handleEnterKey(event: KeyboardEvent) {
     return
   }
   void handleSend()
+}
+
+function handleCompositionStart() {
+  isComposing.value = true
+}
+
+function handleCompositionEnd() {
+  setTimeout(() => {
+    isComposing.value = false
+  }, 0)
 }
 
 async function fetchLLMProviders() {
@@ -727,6 +983,15 @@ async function fetchPromptOptions() {
     ElMessage.error('加载 Prompt 列表失败，请稍后再试')
   } finally {
     isPromptLoading.value = false
+  }
+}
+
+async function fetchPromptTags() {
+  try {
+    const response = await listPromptTags()
+    promptTags.value = response.items
+  } catch (error) {
+    ElMessage.warning('加载标签列表失败')
   }
 }
 
@@ -927,11 +1192,83 @@ async function handleSend() {
 }
 
 function handleSaveAsPrompt() {
-  if (!chatInput.value.trim()) {
+  const content = getDefaultPromptContent()
+  if (!content.trim()) {
     ElMessage.info('请输入内容后再保存为 Prompt')
     return
   }
-  ElMessage.success('已临时保存到草稿区，后续将接入实际保存功能')
+  resetSavePromptForm(content)
+  savePromptMode.value = 'new'
+  savePromptDialogVisible.value = true
+}
+
+function handleSavePromptCancel() {
+  savePromptDialogVisible.value = false
+  resetSavePromptForm(chatInput.value)
+}
+
+async function handleSavePromptConfirm() {
+  if (savePromptSubmitting.value) {
+    return
+  }
+  const content = savePromptForm.promptContent.trim()
+  if (!content) {
+    ElMessage.warning('内容不能为空')
+    return
+  }
+
+  savePromptSubmitting.value = true
+  try {
+    if (savePromptMode.value === 'new') {
+      const name = savePromptForm.promptName.trim()
+      if (!name) {
+        ElMessage.warning('请输入 Prompt 名称')
+        savePromptSubmitting.value = false
+        return
+      }
+      const version = savePromptForm.promptVersion.trim() || 'v1'
+      const payload: PromptCreatePayload = {
+        name,
+        version,
+        content: savePromptForm.promptContent,
+      }
+      if (savePromptForm.promptDescription.trim()) {
+        payload.description = savePromptForm.promptDescription.trim()
+      }
+      if (savePromptForm.promptClassId) {
+        payload.class_id = savePromptForm.promptClassId
+      }
+      if (savePromptForm.promptTagIds.length) {
+        payload.tag_ids = [...savePromptForm.promptTagIds]
+      }
+      await createPrompt(payload)
+      ElMessage.success('新 Prompt 创建成功')
+    } else {
+      const promptId = savePromptForm.promptId
+      if (!promptId) {
+        ElMessage.warning('请选择要更新的 Prompt')
+        savePromptSubmitting.value = false
+        return
+      }
+      const version = savePromptForm.promptVersion.trim()
+      if (!version) {
+        ElMessage.warning('请输入版本标签')
+        savePromptSubmitting.value = false
+        return
+      }
+      await createPromptVersion(promptId, version, savePromptForm.promptContent)
+      ElMessage.success('已创建新的 Prompt 版本')
+    }
+
+    savePromptDialogVisible.value = false
+    resetSavePromptForm('')
+    await fetchPromptOptions()
+  } catch (error: any) {
+    const message = error?.message ?? '保存 Prompt 失败'
+    ElMessage.error(message)
+  } finally {
+    savePromptSubmitting.value = false
+  }
 }
 
 function appendUserMessage(content: string) {
@@ -1017,6 +1354,30 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
 
 .history-select {
   width: 220px;
+}
+
+.save-prompt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.save-prompt-select {
+  width: 100%;
+}
+
+.save-prompt-class {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.save-prompt-class :deep(.el-select) {
+  flex: 1 1 220px;
+}
+
+.save-prompt-class :deep(.el-input) {
+  flex: 1 1 220px;
 }
 
 .page-header__text h2 {
@@ -1210,6 +1571,10 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   .history-select {
     flex: 1 1 auto;
     width: 100%;
+  }
+
+  .save-prompt-class {
+    flex-direction: column;
   }
 
   .model-card,
