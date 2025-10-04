@@ -29,7 +29,7 @@
     </el-row>
 
     <el-row :gutter="16" class="detail-row">
-      <el-col :xs="24" :lg="10">
+      <el-col :xs="24" :lg="10" class="model-col">
         <el-card shadow="hover" class="model-card" v-loading="modelLoading">
           <template #header>
             <div class="model-card__header">
@@ -66,7 +66,7 @@
           </el-table>
         </el-card>
       </el-col>
-      <el-col :xs="24" :lg="14">
+      <el-col :xs="24" :lg="14" class="chart-col">
         <el-card shadow="hover" class="chart-card" v-loading="chartLoading">
           <template #header>
             <div class="chart-card__header">
@@ -502,10 +502,12 @@ onBeforeUnmount(() => {
 .detail-row {
   margin-top: 4px;
   align-items: stretch;
+  flex-wrap: wrap;
 }
 
 .detail-row :deep(.el-col) {
   display: flex;
+  min-width: 0;
 }
 
 .model-card,
@@ -513,6 +515,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.model-col {
+  flex: 1 1 auto !important;
+  max-width: none !important;
+}
+
+.chart-card {
+  max-width: 100%;
 }
 
 .model-card :deep(.el-card__body),
@@ -540,6 +551,22 @@ onBeforeUnmount(() => {
   width: 100%;
   flex: 1;
   min-height: 340px;
+}
+
+@media (min-width: 1200px) {
+  .detail-row {
+    flex-wrap: nowrap;
+  }
+
+  .chart-col {
+    flex: 0 0 680px !important;
+    max-width: 680px !important;
+    width: 680px !important;
+  }
+
+  .chart-card {
+    width: 680px;
+  }
 }
 
 .model-card__header,

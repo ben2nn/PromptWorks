@@ -24,6 +24,7 @@ from app.schemas.prompt import (
 )
 from app.schemas.result import ResultCreate, ResultRead
 from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
+from app.schemas.usage import UsageModelSummary, UsageOverview, UsageTimeseriesPoint
 
 __all__ = [
     "PromptClassRead",
@@ -52,4 +53,7 @@ __all__ = [
     "LLMProviderRead",
     "LLMUsageLogRead",
     "LLMUsageMessage",
+    "UsageOverview",
+    "UsageModelSummary",
+    "UsageTimeseriesPoint",
 ]

@@ -1,6 +1,13 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import llms, prompt_classes, prompt_tags, prompts, test_prompt
+from app.api.v1.endpoints import (
+    llms,
+    prompt_classes,
+    prompt_tags,
+    prompts,
+    test_prompt,
+    usage,
+)
 
 
 api_router = APIRouter()
@@ -15,3 +22,4 @@ api_router.include_router(
 api_router.include_router(
     test_prompt.router, prefix="/test_prompt", tags=["test_prompt"]
 )
+api_router.include_router(usage.router, prefix="/usage", tags=["usage"])
