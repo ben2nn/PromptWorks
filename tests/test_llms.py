@@ -2,9 +2,13 @@ from datetime import timedelta
 from types import TracebackType
 from typing import Any, Literal
 
+import anyio
 import httpx
 import pytest
+from fastapi import HTTPException
 
+from app.api.v1.endpoints import llms as llms_api
+from app.api.v1.endpoints.llms import ChatMessage, LLMStreamInvocationRequest
 from app.models.llm_provider import LLMModel, LLMProvider
 from app.models.usage import LLMUsageLog
 
@@ -489,3 +493,253 @@ def test_quick_test_history_endpoint_returns_logs(client, db_session):
     assert matched["response_text"] == "历史记录"
     assert matched["messages"][0]["role"] == "user"
     assert matched["messages"][0]["content"] == "回顾一下"
+
+
+def test_invoke_llm_network_error_returns_gateway_error(client, monkeypatch):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "InvokeError",
+            "api_key": "invoke-error",
+            "is_custom": True,
+            "base_url": "https://invoke.error/api",
+        },
+    )
+    model = create_model(client, provider["id"], {"name": "err-model"})
+
+    def fake_post(*args, **kwargs):  # noqa: ANN002 - 与 httpx 接口对齐
+        raise httpx.HTTPError("network down")
+
+    monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.post", fake_post)
+
+    payload = {
+        "model_id": model["id"],
+        "messages": [{"role": "user", "content": "ping"}],
+    }
+    response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=payload)
+    assert response.status_code == 502
+    assert "network down" in response.text
+
+
+def test_invoke_llm_error_response_falls_back_to_text(client, monkeypatch):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "InvokeErrorText",
+            "api_key": "invoke-text",
+            "is_custom": True,
+            "base_url": "https://invoke.text/api",
+        },
+    )
+    model = create_model(client, provider["id"], {"name": "err-text"})
+
+    class ErrorResponse:
+        status_code = 429
+
+        def json(self) -> dict[str, Any]:  # noqa: ANN401 - 接口返回任意内容
+            raise ValueError("boom")
+
+        @property
+        def text(self) -> str:
+            return "too many requests"
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.llms.httpx.post",
+        lambda *args, **kwargs: ErrorResponse(),
+    )
+
+    payload = {
+        "model_id": model["id"],
+        "messages": [{"role": "user", "content": "ping"}],
+    }
+    response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=payload)
+    assert response.status_code == 429
+    assert "too many requests" in response.text
+
+
+def test_invoke_llm_without_elapsed_logs(client, monkeypatch):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "InvokeNoElapsed",
+            "api_key": "invoke-elapsed",
+            "is_custom": True,
+            "base_url": "https://invoke.elapsed/api",
+        },
+    )
+    model = create_model(client, provider["id"], {"name": "model-elapsed"})
+
+    class SuccessResponse:
+        status_code = 200
+        elapsed = None
+
+        def json(self) -> dict[str, Any]:  # noqa: ANN401
+            return {"choices": []}
+
+        @property
+        def text(self) -> str:
+            return ""
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.llms.httpx.post",
+        lambda *args, **kwargs: SuccessResponse(),
+    )
+
+    payload = {
+        "model_id": model["id"],
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+    response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=payload)
+    assert response.status_code == 200
+
+
+def test_stream_invoke_llm_handles_error_status(db_session, monkeypatch):
+    provider = LLMProvider(
+        provider_name="StreamError",
+        api_key="stream-error",
+        is_custom=True,
+        base_url="https://stream.error/api",
+    )
+    model = LLMModel(provider=provider, name="stream-model")
+    db_session.add_all([provider, model])
+    db_session.commit()
+
+    class ErrorStream:
+        status_code = 502
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self) -> bytes:
+            return b'{"message": "bad"}'
+
+        def iter_lines(self):  # noqa: ANN201
+            yield from []
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.llms.httpx.stream",
+        lambda *args, **kwargs: ErrorStream(),
+    )
+
+    payload = LLMStreamInvocationRequest(
+        model_id=model.id,
+        messages=[ChatMessage(role="user", content="hello")],
+        parameters={},
+        temperature=0.5,
+    )
+
+    response = llms_api.stream_invoke_llm(
+        db=db_session,
+        provider_id=provider.id,
+        payload=payload,
+    )
+
+    async def consume():
+        async for _ in response.body_iterator:
+            pass
+
+    with pytest.raises(HTTPException) as exc:
+        anyio.run(consume)
+    assert exc.value.status_code == 502
+
+
+def test_stream_invoke_llm_handles_http_exception(db_session, monkeypatch):
+    provider = LLMProvider(
+        provider_name="StreamHttpError",
+        api_key="stream-http",
+        is_custom=True,
+        base_url="https://stream.http/api",
+    )
+    model = LLMModel(provider=provider, name="stream-http-model")
+    db_session.add_all([provider, model])
+    db_session.commit()
+
+    def fake_stream(*args, **kwargs):  # noqa: ANN002
+        raise httpx.HTTPError("stream boom")
+
+    monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.stream", fake_stream)
+
+    payload = LLMStreamInvocationRequest(
+        model_id=model.id,
+        messages=[ChatMessage(role="user", content="hello")],
+        parameters={},
+        temperature=0.2,
+    )
+
+    response = llms_api.stream_invoke_llm(
+        db=db_session,
+        provider_id=provider.id,
+        payload=payload,
+    )
+
+    async def consume():
+        async for _ in response.body_iterator:
+            pass
+
+    with pytest.raises(HTTPException) as exc:
+        anyio.run(consume)
+
+    assert exc.value.status_code == 502
+
+
+def test_stream_invoke_llm_ignores_invalid_chunks(client, db_session, monkeypatch):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "StreamNoise",
+            "api_key": "stream-noise",
+            "is_custom": True,
+            "base_url": "https://stream.noise/api",
+        },
+    )
+    model = create_model(client, provider["id"], {"name": "stream-noise-model"})
+
+    class NoiseStream:
+        status_code = 200
+
+        def __init__(self) -> None:
+            self._lines = [
+                "data: not-a-json",
+                "",
+                'data: {"choices": [{"message": {"content": "A"}}]}',
+                "",
+                "data: [DONE]",
+            ]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def iter_lines(self):  # noqa: ANN201
+            for item in self._lines:
+                yield item
+
+        def read(self) -> bytes:
+            return b""
+
+    monkeypatch.setattr(
+        "app.api.v1.endpoints.llms.httpx.stream",
+        lambda *args, **kwargs: NoiseStream(),
+    )
+
+    payload = {
+        "model_id": model["id"],
+        "messages": [{"role": "user", "content": "hello"}],
+        "parameters": {"stream_options": {}},
+        "temperature": 0.4,
+    }
+
+    response = client.post(
+        f"{API_PREFIX}/{provider['id']}/invoke/stream",
+        json=payload,
+    )
+    assert response.status_code == 200
+
+    logs = db_session.query(LLMUsageLog).order_by(LLMUsageLog.id.desc()).first()
+    assert logs is not None
+    assert logs.response_text == "A"

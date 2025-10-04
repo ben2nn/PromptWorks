@@ -12,7 +12,7 @@ from app.models.result import Result
 from app.models.test_run import TestRun, TestRunStatus
 from app.schemas.result import ResultRead
 from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
-from app.services.test_run import complete_with_mock_results
+from app.services.test_run import TestRunExecutionError, execute_test_run
 
 router = APIRouter()
 
@@ -67,11 +67,25 @@ def create_test_prompt(
     test_run = TestRun(**data)
     test_run.prompt_version = prompt_version
     db.add(test_run)
-    db.flush()
-    complete_with_mock_results(db, test_run)
-    db.commit()
-    db.refresh(test_run)
-    return test_run
+    try:
+        db.flush()
+        execute_test_run(db, test_run)
+        db.commit()
+    except TestRunExecutionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as exc:  # pragma: no cover - 防御性异常
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="执行测试任务失败"
+        ) from exc
+
+    stmt = _test_run_query().where(TestRun.id == test_run.id)
+    created_run = db.execute(stmt).unique().scalar_one()
+    return created_run
 
 
 @router.get("/{test_prompt_id}", response_model=TestRunRead)
