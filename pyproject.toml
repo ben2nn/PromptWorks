@@ -89,6 +89,10 @@ sequence = ["format", "lint", "test"]
 help = "通过 uv 启动 FastAPI 开发服务器，便于本地调试接口。"
 cmd = "uv run fastapi dev app/main.py"
 
+[tool.poe.tasks."frontend"]
+help = "启动前端"
+shell = "cd ./frontend && npm run dev"
+
 # Ruff 配置，避免格式化命令扫描缓存目录导致权限异常。
 [tool.ruff]
 src = ["app", "tests"]

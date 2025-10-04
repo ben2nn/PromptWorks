@@ -49,6 +49,8 @@ uv run poe server
 # 在新终端中启动前端开发服务器
 cd frontend
 npm run dev -- --host
+## 或者
+uv run poe frontend
 ```
 后端默认运行在 `http://127.0.0.1:8000`（API 文档访问 `/docs`），前端默认运行在 `http://127.0.0.1:5173`。
 
