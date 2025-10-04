@@ -225,11 +225,8 @@ watch(extraParams, (value) => {
   }
 }, { immediate: true })
 
-watch(messages, async () => {
-  await nextTick()
-  const wrapper = chatScrollRef.value
-  if (!wrapper) return
-  wrapper.scrollTop = wrapper.scrollHeight
+watch(messages, () => {
+  void scrollToBottom()
 })
 
 watch(selectedPromptPath, (path) => {
@@ -264,6 +261,15 @@ function cancelActiveStream() {
     activeStreamController.abort()
     activeStreamController = null
   }
+}
+
+async function scrollToBottom() {
+  await nextTick()
+  const wrapper = chatScrollRef.value
+  if (!wrapper) {
+    return
+  }
+  wrapper.scrollTop = wrapper.scrollHeight
 }
 
 async function fetchLLMProviders() {
@@ -414,6 +420,7 @@ async function handleSend() {
     promptVersionId: promptMeta?.versionId ?? null
   }
 
+  let shouldScrollAfterStream = false
   try {
     for await (const event of streamQuickTest(payload, { signal: controller.signal })) {
       const data = event.data
@@ -437,11 +444,13 @@ async function handleSend() {
         const delta = choice?.delta
         if (delta && typeof delta.content === 'string') {
           assistantMessage.content += delta.content
+          shouldScrollAfterStream = true
           continue
         }
         const message = choice?.message
         if (message && typeof message.content === 'string') {
           assistantMessage.content += message.content
+          shouldScrollAfterStream = true
         }
       }
     }
@@ -451,6 +460,7 @@ async function handleSend() {
         assistantMessage.content = '本次请求已取消'
       }
       assistantMessage.tokens = undefined
+      shouldScrollAfterStream = true
       return
     }
     let message = '调用模型失败，请稍后再试'
@@ -465,11 +475,15 @@ async function handleSend() {
     assistantMessage.content = message
     assistantMessage.tokens = undefined
     ElMessage.error(message)
+    shouldScrollAfterStream = true
   } finally {
     assistantMessage.isStreaming = false
     isSending.value = false
     if (activeStreamController === controller) {
       activeStreamController = null
+    }
+    if (shouldScrollAfterStream) {
+      void scrollToBottom()
     }
   }
 }
@@ -489,6 +503,7 @@ function appendUserMessage(content: string) {
     content,
     displayName: '我'
   })
+  void scrollToBottom()
 }
 
 function appendAssistantPlaceholder(provider: LLMProvider) {
@@ -509,6 +524,7 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
     tokens: undefined
   }
   messages.value.push(message)
+  void scrollToBottom()
   return message
 }
 </script>
@@ -552,6 +568,7 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   gap: 16px;
   align-items: stretch;
   flex: 1;
+  min-height: 0;
 }
 
 .model-card {
@@ -560,12 +577,14 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 .model-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
   flex: 1;
+  overflow: auto;
 }
 
 .card-header {
@@ -591,12 +610,14 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 .chat-card :deep(.el-card__body) {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
 }
 
 .chat-panel {
@@ -605,6 +626,7 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   height: 100%;
   gap: 16px;
   flex: 1;
+  min-height: 0;
 }
 
 .chat-messages {
@@ -614,6 +636,7 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .chat-message {
