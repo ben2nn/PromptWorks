@@ -5,7 +5,7 @@ function normalizeBaseUrl(url: string | undefined): string {
   return url.endsWith('/') ? url.slice(0, -1) : url
 }
 
-const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
+export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
 

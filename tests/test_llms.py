@@ -1,10 +1,12 @@
 from datetime import timedelta
-from typing import Any
+from types import TracebackType
+from typing import Any, Literal
 
 import httpx
 import pytest
 
 from app.models.llm_provider import LLMModel, LLMProvider
+from app.models.usage import LLMUsageLog
 
 
 API_PREFIX = "/api/v1/llm-providers"
@@ -348,3 +350,104 @@ def test_masked_api_key_format(client, mask_value: str, expected: str):
         },
     )
     assert provider["masked_api_key"] == expected
+
+
+def test_stream_invoke_llm_persists_usage(client, db_session, monkeypatch):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "Stream",
+            "api_key": "stream-key",
+            "is_custom": True,
+            "base_url": "https://stream.llm/api",
+        },
+    )
+    model = create_model(client, provider["id"], {"name": "chat-stream"})
+
+    captured: dict[str, Any] = {}
+
+    class DummyStream:
+        status_code = 200
+
+        def __init__(self, lines: list[str]) -> None:
+            self._lines = lines
+
+        def __enter__(self) -> "DummyStream":
+            return self
+
+        def __exit__(
+            self,
+            exc_type: type[BaseException] | None,
+            exc: BaseException | None,
+            tb: TracebackType | None,
+        ) -> Literal[False]:
+            return False
+
+        def read(self) -> bytes:
+            return b""
+
+        def iter_lines(self):  # noqa: ANN201 - 接口保持与 httpx 一致
+            for item in self._lines:
+                yield item
+
+    lines = [
+        'data: {"id":"chatcmpl-1","choices":[{"delta":{"role":"assistant"}}]}',
+        "",
+        'data: {"id":"chatcmpl-1","choices":[{"delta":{"content":"你好"}}]}',
+        "",
+        (
+            'data: {"id":"chatcmpl-1","choices":[{"delta":{}}],'
+            '"usage":{"prompt_tokens":5,"completion_tokens":7,"total_tokens":12}}'
+        ),
+        "",
+        "data: [DONE]",
+        "",
+    ]
+
+    def fake_stream(method, url, headers, json, timeout):  # noqa: ANN001 - 与 httpx 接口对齐
+        captured.update(
+            {
+                "method": method,
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return DummyStream(lines)
+
+    monkeypatch.setattr("app.api.v1.endpoints.llms.httpx.stream", fake_stream)
+
+    body = {
+        "model_id": model["id"],
+        "messages": [{"role": "user", "content": "请问你好"}],
+        "parameters": {"max_tokens": 64},
+        "temperature": 0.6,
+    }
+
+    with client.stream(
+        "POST", f"{API_PREFIX}/{provider['id']}/invoke/stream", json=body
+    ) as response:
+        assert response.status_code == 200
+        chunks = list(response.iter_text())
+
+    aggregated = "".join(chunks)
+    assert '"content":"你好"' in aggregated
+    assert "[DONE]" in aggregated
+
+    usage_logs = db_session.query(LLMUsageLog).all()
+    assert len(usage_logs) == 1
+    log_entry = usage_logs[0]
+    assert log_entry.provider_id == provider["id"]
+    assert log_entry.model_id == model["id"]
+    assert log_entry.model_name == model["name"]
+    assert log_entry.prompt_tokens == 5
+    assert log_entry.completion_tokens == 7
+    assert log_entry.total_tokens == 12
+    assert log_entry.response_text == "你好"
+    assert log_entry.parameters == {"max_tokens": 64}
+    assert pytest.approx(log_entry.temperature, rel=1e-6) == 0.6
+
+    assert captured["json"]["stream"] is True
+    assert captured["json"]["temperature"] == 0.6
+    assert captured["json"]["messages"][0]["content"] == "请问你好"

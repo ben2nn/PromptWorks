@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -12,6 +13,9 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:  # pragma: no cover - 类型检查辅助
+    from app.models.usage import LLMUsageLog
 
 
 class LLMProvider(Base):
@@ -44,6 +48,11 @@ class LLMProvider(Base):
         back_populates="provider",
         cascade="all, delete-orphan",
         lazy="selectin",
+    )
+    usage_logs: Mapped[list["LLMUsageLog"]] = relationship(
+        "LLMUsageLog",
+        back_populates="provider",
+        passive_deletes=True,
     )
 
     def __repr__(self) -> str:  # pragma: no cover - 调试辅助

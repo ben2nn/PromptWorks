@@ -88,6 +88,11 @@
                     <el-skeleton v-if="message.isStreaming && !message.content" animated :rows="2" />
                     <span v-else v-text="message.content" />
                   </div>
+                  <div v-if="message.tokens" class="chat-message__meta">
+                    <span>输入 Token：{{ formatTokenValue(message.tokens.input) }}</span>
+                    <span>输出 Token：{{ formatTokenValue(message.tokens.output) }}</span>
+                    <span>总计：{{ formatTokenValue(message.tokens.total) }}</span>
+                  </div>
                 </div>
               </div>
             </template>
@@ -128,7 +133,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listLLMProviders, type LLMProvider } from '../api/llmProvider'
+import { streamQuickTest } from '../api/quickTest'
 import { listPrompts } from '../api/prompt'
+import type { ChatMessagePayload } from '../types/llm'
 import type { Prompt } from '../types/prompt'
 
 interface CascaderOptionNode {
@@ -148,6 +155,11 @@ interface QuickTestMessage {
   avatarFallback?: string
   avatarAlt?: string
   isStreaming?: boolean
+  tokens?: {
+    input: number | null
+    output: number | null
+    total: number | null
+  }
 }
 
 const cascaderProps = reactive({
@@ -180,7 +192,7 @@ const providerMap = ref(new Map<number, LLMProvider>())
 const promptMap = ref(new Map<number, Prompt>())
 
 const chatScrollRef = ref<HTMLDivElement | null>(null)
-let streamTimer: ReturnType<typeof setInterval> | null = null
+let activeStreamController: AbortController | null = null
 let messageId = 0
 
 const selectedModel = computed(() => {
@@ -244,11 +256,15 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (streamTimer) {
-    clearInterval(streamTimer)
-    streamTimer = null
-  }
+  cancelActiveStream()
 })
+
+function cancelActiveStream() {
+  if (activeStreamController) {
+    activeStreamController.abort()
+    activeStreamController = null
+  }
+}
 
 async function fetchLLMProviders() {
   isModelLoading.value = true
@@ -302,7 +318,61 @@ async function fetchPromptOptions() {
   }
 }
 
-function handleSend() {
+function resolveSelectedPromptMeta() {
+  if (selectedPromptPath.value.length !== 3) {
+    return null
+  }
+  const [, promptIdRaw, versionIdRaw] = selectedPromptPath.value
+  const promptId = Number(promptIdRaw)
+  const versionId = Number(versionIdRaw)
+  if (Number.isNaN(promptId) || Number.isNaN(versionId)) {
+    return null
+  }
+  return { promptId, versionId }
+}
+
+function buildChatPayloadMessages(): ChatMessagePayload[] {
+  return messages.value
+    .filter((message) => !(message.role === 'assistant' && message.isStreaming))
+    .map((message) => ({ role: message.role, content: message.content }))
+}
+
+function parseExtraParameters(): Record<string, unknown> {
+  if (!extraParams.value.trim()) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(extraParams.value)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch (error) {
+    void error
+    return {}
+  }
+}
+
+function applyUsageToMessage(
+  message: QuickTestMessage,
+  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number }
+) {
+  if (!usage) return
+  const input = usage.prompt_tokens ?? null
+  const output = usage.completion_tokens ?? null
+  const total = usage.total_tokens ?? (
+    input !== null || output !== null
+      ? (input ?? 0) + (output ?? 0)
+      : null
+  )
+  message.tokens = { input, output, total }
+}
+
+function formatTokenValue(value: number | null | undefined) {
+  if (value === null || value === undefined) {
+    return '—'
+  }
+  return value
+}
+
+async function handleSend() {
   const model = selectedModel.value
   if (!model) {
     ElMessage.warning('请先选择要调用的模型')
@@ -317,11 +387,91 @@ function handleSend() {
     ElMessage.info('请输入要测试的内容')
     return
   }
+  cancelActiveStream()
+  const provider = model.provider
+  const targetModel = model.model
+
   isSending.value = true
   chatInput.value = ''
   appendUserMessage(content)
-  const assistantMessage = appendAssistantPlaceholder(model.provider)
-  startMockStreaming(assistantMessage, model)
+  const assistantMessage = appendAssistantPlaceholder(provider)
+
+  const messagesPayload = buildChatPayloadMessages()
+  const extraParameters = parseExtraParameters()
+  const promptMeta = resolveSelectedPromptMeta()
+
+  const controller = new AbortController()
+  activeStreamController = controller
+
+  const payload = {
+    providerId: provider.id,
+    modelId: targetModel.id,
+    modelName: targetModel.name,
+    messages: messagesPayload,
+    temperature: temperature.value,
+    parameters: extraParameters,
+    promptId: promptMeta?.promptId ?? null,
+    promptVersionId: promptMeta?.versionId ?? null
+  }
+
+  try {
+    for await (const event of streamQuickTest(payload, { signal: controller.signal })) {
+      const data = event.data
+      if (data === '[DONE]') {
+        break
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(data)
+      } catch (error) {
+        void error
+        continue
+      }
+
+      if (parsed?.usage) {
+        applyUsageToMessage(assistantMessage, parsed.usage)
+      }
+
+      const choices = Array.isArray(parsed?.choices) ? parsed.choices : []
+      for (const choice of choices) {
+        const delta = choice?.delta
+        if (delta && typeof delta.content === 'string') {
+          assistantMessage.content += delta.content
+          continue
+        }
+        const message = choice?.message
+        if (message && typeof message.content === 'string') {
+          assistantMessage.content += message.content
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      if (!assistantMessage.content) {
+        assistantMessage.content = '本次请求已取消'
+      }
+      assistantMessage.tokens = undefined
+      return
+    }
+    let message = '调用模型失败，请稍后再试'
+    const detail = error?.payload ?? error?.detail
+    if (typeof detail === 'string') {
+      message = detail
+    } else if (detail && typeof detail === 'object') {
+      message = detail.message ?? detail.detail ?? message
+    } else if (error?.message) {
+      message = error.message
+    }
+    assistantMessage.content = message
+    assistantMessage.tokens = undefined
+    ElMessage.error(message)
+  } finally {
+    assistantMessage.isStreaming = false
+    isSending.value = false
+    if (activeStreamController === controller) {
+      activeStreamController = null
+    }
+  }
 }
 
 function handleSaveAsPrompt() {
@@ -342,10 +492,6 @@ function appendUserMessage(content: string) {
 }
 
 function appendAssistantPlaceholder(provider: LLMProvider) {
-  if (streamTimer) {
-    clearInterval(streamTimer)
-    streamTimer = null
-  }
   const lastStreaming = [...messages.value].reverse().find((item) => item.role === 'assistant' && item.isStreaming)
   if (lastStreaming) {
     lastStreaming.isStreaming = false
@@ -359,37 +505,11 @@ function appendAssistantPlaceholder(provider: LLMProvider) {
     avatarEmoji: provider.logo_emoji,
     avatarFallback: provider.provider_name.slice(0, 1).toUpperCase(),
     avatarAlt: provider.provider_name,
-    isStreaming: true
+    isStreaming: true,
+    tokens: undefined
   }
   messages.value.push(message)
   return message
-}
-
-function startMockStreaming(target: QuickTestMessage, model: { provider: LLMProvider }) {
-  const snippets = [
-    '正在根据当前 Prompt 生成回复...',
-    `模型 ${model.provider.provider_name} 已接收到额外参数并开始推理。`,
-    '示例响应：您好，这是一个示例输出，实际对接部署后将展示真实结果。'
-  ]
-  let index = 0
-  streamTimer = setInterval(() => {
-    if (!target) return
-    if (index >= snippets.length) {
-      stopStreaming(target)
-      return
-    }
-    target.content = [target.content, snippets[index]].filter(Boolean).join('\n\n')
-    index += 1
-  }, 600)
-}
-
-function stopStreaming(target: QuickTestMessage) {
-  if (streamTimer) {
-    clearInterval(streamTimer)
-    streamTimer = null
-  }
-  target.isStreaming = false
-  isSending.value = false
 }
 </script>
 
@@ -544,6 +664,15 @@ function stopStreaming(target: QuickTestMessage) {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 14px;
+}
+
+.chat-message__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--text-weak-color);
+  margin-top: 4px;
 }
 
 .chat-input {
