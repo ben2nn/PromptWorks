@@ -14,6 +14,22 @@ venv/
 ENV/
 env/
 
+# Python tooling缓存
+.uv_cache/
+.ruff_cache/
+
+# Node.js / Vite 构建产物
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# 前端环境变量
+frontend/.env.local
+frontend/.env.*.local
+
 # Environment variables
 .env
 
