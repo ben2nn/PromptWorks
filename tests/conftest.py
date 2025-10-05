@@ -7,6 +7,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.db.session as db_session_module
+from app.core.task_queue import task_queue
 from app.db.session import get_db
 from app.main import app
 from app.models import Base  # noqa: F401 - ensure models are loaded
@@ -38,9 +40,14 @@ def db_session(engine: Engine) -> Iterator[Session]:
         bind=connection, autoflush=False, autocommit=False, expire_on_commit=False
     )
     session = session_local()
+
+    original_session_local = db_session_module.SessionLocal
+    db_session_module.SessionLocal = session_local
     try:
         yield session
     finally:
+        task_queue.wait_for_idle(timeout=2.0)
+        db_session_module.SessionLocal = original_session_local
         session.close()
         if transaction.is_active:
             transaction.rollback()

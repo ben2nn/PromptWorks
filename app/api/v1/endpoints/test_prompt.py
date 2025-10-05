@@ -12,7 +12,7 @@ from app.models.result import Result
 from app.models.test_run import TestRun, TestRunStatus
 from app.schemas.result import ResultRead
 from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
-from app.services.test_run import TestRunExecutionError, execute_test_run
+from app.core.task_queue import enqueue_test_run
 
 router = APIRouter()
 
@@ -55,7 +55,7 @@ def list_test_prompts(
 def create_test_prompt(
     *, db: Session = Depends(get_db), payload: TestRunCreate
 ) -> TestRun:
-    """为指定 Prompt 版本创建新的测试任务，初始状态为 pending。"""
+    """为指定 Prompt 版本创建新的测试任务，并将其入队异步执行。"""
 
     prompt_version = db.get(PromptVersion, payload.prompt_version_id)
     if not prompt_version:
@@ -67,24 +67,24 @@ def create_test_prompt(
     test_run = TestRun(**data)
     test_run.prompt_version = prompt_version
     db.add(test_run)
-    try:
-        db.flush()
-        execute_test_run(db, test_run)
-        db.commit()
-    except TestRunExecutionError as exc:
-        db.rollback()
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as exc:  # pragma: no cover - 防御性异常
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail="执行测试任务失败"
-        ) from exc
+    db.flush()
+    db.commit()
 
     stmt = _test_run_query().where(TestRun.id == test_run.id)
     created_run = db.execute(stmt).unique().scalar_one()
+
+    try:
+        enqueue_test_run(test_run.id)
+    except Exception as exc:  # pragma: no cover - 防御性兜底
+        test_run_ref = db.get(TestRun, test_run.id)
+        if test_run_ref:
+            test_run_ref.status = TestRunStatus.FAILED
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="测试任务入队失败",
+        ) from exc
+
     return created_run
 
 

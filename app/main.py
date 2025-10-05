@@ -5,6 +5,7 @@ from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging, get_logger
 from app.core.middleware import RequestLoggingMiddleware
+from app.core.task_queue import task_queue as _test_run_task_queue  # noqa: F401 - 确保队列初始化
 
 
 def create_application() -> FastAPI:

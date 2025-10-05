@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Memo } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { listTestRuns } from '../api/testRun'
@@ -130,6 +130,24 @@ const { t, locale } = useI18n()
 const testRuns = ref<TestRun[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
+const pollingTimer = ref<number | null>(null)
+
+function clearPolling() {
+  if (pollingTimer.value !== null) {
+    window.clearTimeout(pollingTimer.value)
+    pollingTimer.value = null
+  }
+}
+
+function scheduleNextPoll() {
+  clearPolling()
+  const hasInProgress = testRuns.value.some((run) => run.status === 'pending' || run.status === 'running')
+  if (hasInProgress) {
+    pollingTimer.value = window.setTimeout(() => {
+      void fetchTestRuns()
+    }, 3000)
+  }
+}
 
 const tableEmptyText = computed(() => errorMessage.value ?? t('testJobManagement.empty'))
 
@@ -205,7 +223,7 @@ const statusTagType = {
   completed: 'success',
   running: 'warning',
   failed: 'danger',
-  pending: 'info'
+  pending: 'warning'
 } as const
 
 const statusLabel = computed<Record<string, string>>(() => ({
@@ -269,11 +287,20 @@ async function fetchTestRuns() {
     testRuns.value = []
   } finally {
     isLoading.value = false
+    if (!errorMessage.value) {
+      scheduleNextPoll()
+    } else {
+      clearPolling()
+    }
   }
 }
 
 onMounted(() => {
   void fetchTestRuns()
+})
+
+onUnmounted(() => {
+  clearPolling()
 })
 
 function handleCreateTestJob() {

@@ -834,15 +834,13 @@ const jobName = baseForm.name.trim() || t('testJobCreate.summary.fallbackName', 
       }
 
       ElMessage.success(t('testJobCreate.messages.createSuccess'))
-      const query: Record<string, string> = { mode: currentMode.value, runIds: createdRunIds.join(',') }
-      if (createdRunIds.length > 1) {
-        query.runIds = createdRunIds.join(',')
+      const targetRoute: { name: string; query?: Record<string, string> } = {
+        name: 'test-job-management'
       }
-      router.push({
-        name: 'test-job-result',
-        params: { id: createdRunIds[0] },
-        query
-      })
+      if (batchId) {
+        targetRoute.query = { batch: batchId }
+      }
+      router.push(targetRoute)
       return
     } catch (error) {
       ElMessage.error(extractErrorMessage(error, t('testJobCreate.messages.createFailed')))

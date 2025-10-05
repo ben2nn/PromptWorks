@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.task_queue import task_queue
 from app.models.usage import LLMUsageLog
 from app.services.test_run import TestRunExecutionError
 
@@ -136,14 +137,13 @@ def test_create_and_retrieve_test_prompt(
     )
     assert create_resp.status_code == 201
     test_prompt = create_resp.json()
-    assert test_prompt["status"] == "completed"
+    initial_status = test_prompt["status"]
+    assert initial_status in {"pending", "running", "completed"}
+    if initial_status != "completed":
+        assert test_prompt["results"] == []
     assert test_prompt["prompt_version_id"] == prompt_version_id
     assert test_prompt["prompt_version"]["version"] == "v1"
     assert test_prompt["prompt"]["name"] == prompt_payload["name"]
-    assert (
-        test_prompt["schema"]["prompt_snapshot"]
-        == prompt_payload["current_version"]["content"]
-    )
 
     assert len(call_records) == 2
     for index, record in enumerate(call_records, start=1):
@@ -162,18 +162,26 @@ def test_create_and_retrieve_test_prompt(
             == ["第一轮提问", "第二轮提问"][index - 1]
         )
 
+    assert task_queue.wait_for_idle(timeout=2.0)
+
     list_resp = client.get("/api/v1/test_prompt/")
     assert list_resp.status_code == 200
     results = list_resp.json()
     assert len(results) == 1
     assert results[0]["id"] == test_prompt["id"]
+    assert results[0]["status"] == "completed"
 
     detail_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
+    assert detail["status"] == "completed"
     assert detail["prompt_version"]["id"] == prompt_version_id
     assert detail["prompt"]["id"] == prompt_payload["id"]
     assert len(detail["results"]) == 2
+    assert (
+        detail["schema"]["prompt_snapshot"]
+        == prompt_payload["current_version"]["content"]
+    )
 
     sorted_results = sorted(detail["results"], key=lambda item: item["run_index"])
     assert sorted_results[0]["run_index"] == 1
@@ -206,12 +214,10 @@ def test_create_test_prompt_handles_service_error(client: TestClient, monkeypatc
     prompt_payload = _create_prompt(client)
     prompt_version_id = prompt_payload["current_version"]["id"]
 
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.test_prompt.execute_test_run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            TestRunExecutionError("执行失败", status_code=422)
-        ),
-    )
+    def raise_error(*_, **__):
+        raise TestRunExecutionError("执行失败", status_code=422)
+
+    monkeypatch.setattr("app.core.task_queue.execute_test_run", raise_error)
 
     response = client.post(
         "/api/v1/test_prompt/",
@@ -223,8 +229,15 @@ def test_create_test_prompt_handles_service_error(client: TestClient, monkeypatc
             "repetitions": 1,
         },
     )
-    assert response.status_code == 422
-    assert "执行失败" in response.text
+    assert response.status_code == 201
+
+    assert task_queue.wait_for_idle(timeout=2.0)
+
+    detail_resp = client.get(f"/api/v1/test_prompt/{response.json()['id']}")
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["status"] == "failed"
+    assert detail["schema"].get("last_error") == "执行失败"
 
 
 def test_update_test_prompt_allows_partial_fields(client: TestClient, monkeypatch):
@@ -235,10 +248,7 @@ def test_update_test_prompt_allows_partial_fields(client: TestClient, monkeypatc
         test_run.status = "completed"
         return test_run
 
-    monkeypatch.setattr(
-        "app.api.v1.endpoints.test_prompt.execute_test_run",
-        fake_execute,
-    )
+    monkeypatch.setattr("app.core.task_queue.execute_test_run", fake_execute)
 
     create_resp = client.post(
         "/api/v1/test_prompt/",
@@ -251,6 +261,8 @@ def test_update_test_prompt_allows_partial_fields(client: TestClient, monkeypatc
         },
     )
     test_run = create_resp.json()
+
+    assert task_queue.wait_for_idle(timeout=2.0)
 
     patch_resp = client.patch(
         f"/api/v1/test_prompt/{test_run['id']}",

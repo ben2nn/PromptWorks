@@ -277,7 +277,7 @@ export const messages = {
         completed: '已完成',
         running: '执行中',
         failed: '失败',
-        pending: '排队中'
+        pending: '测试中'
       },
       unnamedPrompt: '未命名 Prompt',
       versionFallback: '版本 #{id}',
@@ -559,7 +559,7 @@ export const messages = {
         completed: '已完成',
         running: '执行中',
         failed: '失败',
-        pending: '排队中'
+        pending: '测试中'
       },
       table: {
         versionFallback: '版本 #{id}'
@@ -622,7 +622,7 @@ export const messages = {
         completed: '已完成',
         running: '执行中',
         failed: '失败',
-        pending: '排队中'
+        pending: '测试中'
       },
       messages: {
         loadFailed: '加载测试任务失败',
@@ -732,7 +732,7 @@ export const messages = {
         noModelsForComparison: '暂无可用模型，请先在“LLMs 配置”中添加模型',
         noModelsForExecution: '暂无可用模型，请先在“LLMs 配置”中添加模型。',
         cancelled: '未创建新的测试任务',
-        createSuccess: '测试任务已创建，正在跳转查看结果',
+        createSuccess: '测试任务已创建，稍后可在任务列表查看进度',
         createFailed: '创建测试任务失败',
         mockSuccess: '已模拟创建测试任务，可在任务列表中查看（演示）'
       },
@@ -1021,7 +1021,7 @@ export const messages = {
         completed: 'Completed',
         running: 'Running',
         failed: 'Failed',
-        pending: 'Queued'
+        pending: 'In Progress'
       },
       unnamedPrompt: 'Untitled Prompt',
       versionFallback: 'Version #{id}',
@@ -1303,7 +1303,7 @@ export const messages = {
         completed: 'Completed',
         running: 'Running',
         failed: 'Failed',
-        pending: 'Queued'
+        pending: 'In Progress'
       },
       table: {
         versionFallback: 'Version #{id}'
@@ -1366,7 +1366,7 @@ export const messages = {
         completed: 'Completed',
         running: 'Running',
         failed: 'Failed',
-        pending: 'Queued'
+        pending: 'In Progress'
       },
       messages: {
         loadFailed: 'Failed to load test job.',
@@ -1476,7 +1476,7 @@ export const messages = {
         noModelsForComparison: 'No models available. Please add models under “LLM Management”.',
         noModelsForExecution: 'No models available. Please add models under “LLM Management”.',
         cancelled: 'No test job was created.',
-        createSuccess: 'Test job created. Redirecting…',
+        createSuccess: 'Test job created. Track progress from the job list.',
         createFailed: 'Failed to create test job.',
         mockSuccess: 'Test job simulated. Review it from the job list.'
       },
