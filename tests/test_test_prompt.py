@@ -319,6 +319,98 @@ def test_retry_failed_test_prompt(client: TestClient, monkeypatch):
     assert final_schema.get("last_error") is None
 
 
+def test_partial_failure_keeps_results(client: TestClient, monkeypatch):
+    provider, model = _create_provider_with_model(client)
+    prompt_payload = _create_prompt(client)
+    prompt_version_id = prompt_payload["current_version"]["id"]
+
+    def fake_invoke(
+        *,
+        provider,
+        model,
+        base_url,
+        headers,
+        payload,
+        context,
+    ):
+        messages = payload.get("messages")
+        if isinstance(messages, list) and len(messages) > 1:
+            content = str(messages[1].get("content", ""))
+            if "第 1" in content or "第一轮" in content:
+                result = Result(
+                    output="第一轮成功",
+                    parsed_output=None,
+                    tokens_used=123,
+                    latency_ms=111,
+                )
+                usage = LLMUsageLog(
+                    provider_id=provider.id,
+                    model_id=model.id if model else None,
+                    model_name=model.name if model else payload.get("model"),
+                    source="test_run",
+                    prompt_id=context.prompt_id,
+                    prompt_version_id=context.prompt_version_id,
+                    messages=messages,
+                    parameters={
+                        key: value
+                        for key, value in payload.items()
+                        if key not in {"model", "messages"}
+                    }
+                    or None,
+                    response_text="第一轮成功",
+                    temperature=payload.get("temperature"),
+                    latency_ms=111,
+                    prompt_tokens=50,
+                    completion_tokens=60,
+                    total_tokens=110,
+                )
+                result.test_run_id = context.test_run_id
+                result.run_index = 1
+                return result, usage
+        raise TestRunExecutionError("第二轮接口报错", status_code=502)
+
+    monkeypatch.setattr("app.services.test_run._invoke_llm_once", fake_invoke)
+
+    response = client.post(
+        "/api/v1/test_prompt/",
+        json={
+            "prompt_version_id": prompt_version_id,
+            "model_name": model["name"],
+            "temperature": 0.2,
+            "top_p": 0.95,
+            "repetitions": 2,
+            "schema": {
+                "llm_provider_id": provider["id"],
+                "llm_model_id": model["id"],
+                "conversation": [
+                    {"role": "system", "content": "请保持专业"},
+                    {"role": "user", "content": "第 {{run_index}} 次提问"},
+                ],
+            },
+        },
+    )
+    assert response.status_code == 201
+    test_run_id = response.json()["id"]
+
+    assert task_queue.wait_for_idle(timeout=2.0)
+
+    detail_resp = client.get(f"/api/v1/test_prompt/{test_run_id}")
+    assert detail_resp.status_code == 200
+    payload = detail_resp.json()
+    assert payload["status"] == "failed"
+    assert payload["failure_reason"] == "第二轮接口报错"
+    assert len(payload["results"]) == 1
+    assert payload["results"][0]["output"] == "第一轮成功"
+
+    schema = payload["schema"]
+    assert schema.get("last_error") == "第二轮接口报错"
+    assert schema.get("last_error_status") == 502
+
+    results_resp = client.get(f"/api/v1/test_prompt/{test_run_id}/results")
+    assert results_resp.status_code == 200
+    assert len(results_resp.json()) == 1
+
+
 def test_update_test_prompt_allows_partial_fields(client: TestClient, monkeypatch):
     prompt_payload = _create_prompt(client)
     prompt_version_id = prompt_payload["current_version"]["id"]

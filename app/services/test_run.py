@@ -78,6 +78,7 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
 
     schema_data = _ensure_mapping(test_run.schema)
     schema_data.pop("last_error", None)
+    schema_data.pop("last_error_status", None)
     schema_data.setdefault("prompt_snapshot", prompt_snapshot)
     schema_data.setdefault("llm_provider_id", provider.id)
     schema_data.setdefault("llm_provider_name", provider.provider_name)
@@ -126,7 +127,8 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
         return run_index, result, usage_log
 
     run_indices = range(1, test_run.repetitions + 1)
-    outcomes: list[tuple[int, Result, LLMUsageLog]] = []
+    error_message: str | None = None
+    error_status_code: int | None = None
 
     worker_count = max(1, min(concurrency_limit, test_run.repetitions))
 
@@ -134,23 +136,35 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
         future_map = {
             executor.submit(_execute_single, index): index for index in run_indices
         }
-        try:
-            for future in as_completed(future_map):
-                outcomes.append(future.result())
-        except Exception as exc:  # pragma: no cover - 防御性
-            for pending in future_map:
-                pending.cancel()
-            if isinstance(exc, TestRunExecutionError):
-                raise
-            raise TestRunExecutionError(
-                f"执行测试任务失败: {exc}", status_code=status.HTTP_502_BAD_GATEWAY
-            ) from exc
+        for future in as_completed(future_map):
+            try:
+                _, result_obj, usage_obj = future.result()
+            except TestRunExecutionError as exc:
+                if error_message is None:
+                    error_message = str(exc)
+                    error_status_code = getattr(exc, "status_code", None)
+            except Exception as exc:  # pragma: no cover - 防御性
+                if error_message is None:
+                    error_message = f"执行测试任务失败: {exc}"
+                    error_status_code = status.HTTP_502_BAD_GATEWAY
+            else:
+                _persist_run_artifacts(db, result_obj, usage_obj)
 
-    for _, result_obj, usage_obj in sorted(outcomes, key=lambda item: item[0]):
-        db.add(result_obj)
-        db.add(usage_obj)
+    if error_message:
+        test_run.status = TestRunStatus.FAILED
+        test_run.last_error = error_message
+        if error_status_code is not None:
+            current_schema = _ensure_mapping(test_run.schema)
+            current_schema["last_error_status"] = error_status_code
+            test_run.schema = current_schema
+    else:
+        test_run.status = TestRunStatus.COMPLETED
+        test_run.last_error = None
+        current_schema = _ensure_mapping(test_run.schema)
+        if current_schema:
+            current_schema.pop("last_error_status", None)
+            test_run.schema = current_schema or None
 
-    test_run.status = TestRunStatus.COMPLETED
     db.flush()
     return test_run
 
@@ -472,6 +486,12 @@ def _try_parse_json(text: str) -> Any:
         return json.loads(text)
     except (TypeError, json.JSONDecodeError):
         return None
+
+
+def _persist_run_artifacts(db: Session, result: Result, usage_log: LLMUsageLog) -> None:
+    db.add(result)
+    db.add(usage_log)
+    db.flush()
 
 
 __all__ = ["execute_test_run", "ensure_completed", "TestRunExecutionError"]
