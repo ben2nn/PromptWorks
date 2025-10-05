@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.task_queue import task_queue
+from app.models.result import Result
 from app.models.usage import LLMUsageLog
 from app.services.test_run import TestRunExecutionError
 
@@ -74,46 +75,62 @@ def test_create_and_retrieve_test_prompt(
 
     provider, model = _create_provider_with_model(client)
 
-    call_records: list[dict[str, Any]] = []
+    invocation_records: list[dict[str, Any]] = []
 
-    class DummyResponse:
-        status_code = 200
-
-        def __init__(self, index: int) -> None:
-            self._index = index
-            self.elapsed = timedelta(milliseconds=150 + index)
-
-        def json(self) -> dict[str, Any]:
-            return {
-                "choices": [
-                    {"message": {"content": f"第 {self._index} 次响应内容"}},
-                ],
-                "usage": {
-                    "prompt_tokens": 100 + self._index,
-                    "completion_tokens": 20 + self._index,
-                    "total_tokens": 120 + self._index,
-                },
-            }
-
-        @property
-        def text(self) -> str:
-            return ""
-
-    def fake_post(
-        url: str, headers: dict[str, str], json: dict[str, Any], timeout: float
+    def fake_invoke(
+        *,
+        provider,
+        model,
+        base_url,
+        headers,
+        payload,
+        context,
     ):
-        call_index = len(call_records) + 1
-        call_records.append(
+        invocation_records.append(
             {
-                "url": url,
+                "url": f"{base_url}/chat/completions",
                 "headers": headers,
-                "json": json,
-                "timeout": timeout,
+                "payload": payload,
+                "timeout": 30.0,
             }
         )
-        return DummyResponse(call_index)
+        messages = payload.get("messages") if isinstance(payload, dict) else []
+        user_content = ""
+        if isinstance(messages, list) and len(messages) > 1:
+            candidate = messages[1]
+            if isinstance(candidate, dict):
+                user_content = str(candidate.get("content", ""))
+        run_index = 1 if "第一" in user_content else 2
+        result = Result(
+            output=f"第 {run_index} 次响应内容",
+            parsed_output=None,
+            tokens_used=120 + run_index,
+            latency_ms=150 + run_index,
+        )
+        param_dict = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"model", "messages"}
+        }
+        usage_log = LLMUsageLog(
+            provider_id=provider.id,
+            model_id=model.id if model else None,
+            model_name=model.name if model else payload.get("model"),
+            source="test_run",
+            prompt_id=context.prompt_id,
+            prompt_version_id=context.prompt_version_id,
+            messages=payload.get("messages"),
+            parameters=param_dict or None,
+            response_text=result.output,
+            temperature=param_dict.get("temperature") if param_dict else None,
+            latency_ms=result.latency_ms,
+            prompt_tokens=100 + run_index,
+            completion_tokens=20 + run_index,
+            total_tokens=120 + run_index,
+        )
+        return result, usage_log
 
-    monkeypatch.setattr("app.services.test_run.httpx.post", fake_post)
+    monkeypatch.setattr("app.services.test_run._invoke_llm_once", fake_invoke)
 
     prompt_payload = _create_prompt(client)
     prompt_version_id = prompt_payload["current_version"]["id"]
@@ -145,22 +162,25 @@ def test_create_and_retrieve_test_prompt(
     assert test_prompt["prompt_version"]["version"] == "v1"
     assert test_prompt["prompt"]["name"] == prompt_payload["name"]
 
-    assert len(call_records) == 2
-    for index, record in enumerate(call_records, start=1):
+    assert len(invocation_records) == 2
+    seen_prompts: set[str] = set()
+    for record in invocation_records:
         assert record["url"].endswith("/chat/completions")
         assert record["headers"]["Authorization"].startswith("Bearer test-secret")
-        assert record["json"]["model"] == model["name"]
-        assert record["json"]["max_tokens"] == 64
-        assert record["json"]["temperature"] == 0.2
-        assert record["json"]["messages"][0]["role"] == "system"
+        payload = record["payload"]
+        assert payload["model"] == model["name"]
+        assert payload["max_tokens"] == 64
+        assert payload["temperature"] == 0.2
+        assert payload["messages"][0]["role"] == "system"
         assert (
-            record["json"]["messages"][0]["content"]
+            payload["messages"][0]["content"]
             == prompt_payload["current_version"]["content"]
         )
-        assert (
-            record["json"]["messages"][1]["content"]
-            == ["第一轮提问", "第二轮提问"][index - 1]
-        )
+        user_content = payload["messages"][1]["content"]
+        assert user_content in {"第一轮提问", "第二轮提问"}
+        seen_prompts.add(user_content)
+
+    assert seen_prompts == {"第一轮提问", "第二轮提问"}
 
     assert task_queue.wait_for_idle(timeout=2.0)
 
@@ -170,11 +190,13 @@ def test_create_and_retrieve_test_prompt(
     assert len(results) == 1
     assert results[0]["id"] == test_prompt["id"]
     assert results[0]["status"] == "completed"
+    assert results[0]["failure_reason"] is None
 
     detail_resp = client.get(f"/api/v1/test_prompt/{test_prompt['id']}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["status"] == "completed"
+    assert detail["failure_reason"] is None
     assert detail["prompt_version"]["id"] == prompt_version_id
     assert detail["prompt"]["id"] == prompt_payload["id"]
     assert len(detail["results"]) == 2
@@ -237,7 +259,64 @@ def test_create_test_prompt_handles_service_error(client: TestClient, monkeypatc
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["status"] == "failed"
+    assert detail["failure_reason"] == "执行失败"
     assert detail["schema"].get("last_error") == "执行失败"
+
+
+def test_retry_failed_test_prompt(client: TestClient, monkeypatch):
+    prompt_payload = _create_prompt(client)
+    prompt_version_id = prompt_payload["current_version"]["id"]
+
+    call_count = {"value": 0}
+
+    def execute_with_retry(db, test_run):
+        call_count["value"] += 1
+        if call_count["value"] == 1:
+            raise TestRunExecutionError("首次执行失败", status_code=500)
+        test_run.status = "completed"
+        test_run.last_error = None
+        return test_run
+
+    monkeypatch.setattr("app.core.task_queue.execute_test_run", execute_with_retry)
+
+    response = client.post(
+        "/api/v1/test_prompt/",
+        json={
+            "prompt_version_id": prompt_version_id,
+            "model_name": "gpt-error",
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "repetitions": 1,
+        },
+    )
+    assert response.status_code == 201
+
+    assert task_queue.wait_for_idle(timeout=2.0)
+
+    test_run_id = response.json()["id"]
+
+    failed_detail_resp = client.get(f"/api/v1/test_prompt/{test_run_id}")
+    assert failed_detail_resp.status_code == 200
+    failed_payload = failed_detail_resp.json()
+    assert failed_payload["status"] == "failed"
+    assert failed_payload["failure_reason"] == "首次执行失败"
+    assert failed_payload["schema"].get("last_error") == "首次执行失败"
+
+    retry_resp = client.post(f"/api/v1/test_prompt/{test_run_id}/retry")
+    assert retry_resp.status_code == 200
+    retry_payload = retry_resp.json()
+    assert retry_payload["status"] == "pending"
+    assert retry_payload["failure_reason"] is None
+
+    assert task_queue.wait_for_idle(timeout=2.0)
+
+    final_detail_resp = client.get(f"/api/v1/test_prompt/{test_run_id}")
+    assert final_detail_resp.status_code == 200
+    final_payload = final_detail_resp.json()
+    assert final_payload["status"] == "completed"
+    assert final_payload["failure_reason"] is None
+    final_schema = final_payload.get("schema") or {}
+    assert final_schema.get("last_error") is None
 
 
 def test_update_test_prompt_allows_partial_fields(client: TestClient, monkeypatch):

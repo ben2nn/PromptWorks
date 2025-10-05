@@ -12,10 +12,27 @@ class LLMModelBase(BaseModel):
         default=None, description="可选的能力标签，例如对话、推理"
     )
     quota: str | None = Field(default=None, description="配额或调用策略说明")
+    concurrency_limit: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="执行测试任务时的最大并发请求数",
+    )
 
 
 class LLMModelCreate(LLMModelBase):
     pass
+
+
+class LLMModelUpdate(BaseModel):
+    capability: str | None = Field(default=None, description="可选的能力标签")
+    quota: str | None = Field(default=None, description="配额或调用策略说明")
+    concurrency_limit: int | None = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="执行测试任务时的最大并发请求数",
+    )
 
 
 class LLMModelRead(LLMModelBase):

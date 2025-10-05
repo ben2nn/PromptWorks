@@ -32,14 +32,26 @@
                 </el-tag>
               </div>
             </div>
-            <el-button
-              type="primary"
-              link
-              :disabled="!summary.promptId"
-              @click="goPrompt(summary.promptId)"
-            >
-              {{ t('testJobResult.info.viewPrompt') }}
-            </el-button>
+            <div class="info-actions">
+              <el-button
+                v-if="summary.status === 'failed'"
+                type="danger"
+                link
+                :loading="isRetrying"
+                :disabled="isRetrying"
+                @click="handleRetry"
+              >
+                {{ t('testJobResult.info.retryButton') }}
+              </el-button>
+              <el-button
+                type="primary"
+                link
+                :disabled="!summary.promptId || isRetrying"
+                @click="goPrompt(summary.promptId)"
+              >
+                {{ t('testJobResult.info.viewPrompt') }}
+              </el-button>
+            </div>
           </div>
         </template>
         <el-descriptions :column="3" border size="small">
@@ -69,6 +81,14 @@
           <span class="info-description__label">{{ t('testJobResult.info.descriptionLabel') }}</span>
           <span>{{ summary.description || t('testJobResult.info.descriptionFallback') }}</span>
         </div>
+        <el-alert
+          v-if="summary.status === 'failed' && summary.failureReason"
+          :title="t('testJobResult.info.failureTitle')"
+          :description="summary.failureReason"
+          type="error"
+          show-icon
+          class="summary-failure-alert"
+        />
         <div class="extra-params">
           <h4>{{ t('testJobResult.info.extraParams') }}</h4>
           <pre>{{ formattedExtraParams }}</pre>
@@ -119,6 +139,14 @@
               </span>
             </header>
             <section class="result-column__body">
+              <el-alert
+                v-if="target.status === 'failed' && target.failureReason"
+                :title="t('testJobResult.resultCard.failureTitle')"
+                :description="target.failureReason"
+                type="error"
+                show-icon
+                class="result-alert"
+              />
               <div class="result-section">
                 <h5>{{ t('testJobResult.resultCard.promptContent') }}</h5>
                 <p>{{ target.promptPreview }}</p>
@@ -177,7 +205,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { getTestRun } from '../api/testRun'
+import { ElMessage } from 'element-plus'
+import { getTestRun, retryTestRun } from '../api/testRun'
 import type { TestResult, TestRun } from '../types/testRun'
 import { useI18n } from 'vue-i18n'
 
@@ -202,6 +231,8 @@ interface TargetView {
   versionLabel: string
   promptPreview: string
   updatedAt: string
+  status: TestRun['status']
+  failureReason: string | null
   results: ResultView[]
 }
 
@@ -249,6 +280,25 @@ const runs = ref<TestRun[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 const currentRound = ref(1)
+const isRetrying = ref(false)
+
+const failedRuns = computed(() => runs.value.filter((run) => run.status === 'failed'))
+
+function resolveFailureReason(run: TestRun): string | null {
+  const direct = typeof run.failure_reason === 'string' ? run.failure_reason.trim() : ''
+  if (direct) {
+    return direct
+  }
+  const schema = (run.schema ?? {}) as Record<string, unknown>
+  const fallback = schema['last_error']
+  if (typeof fallback === 'string') {
+    const trimmed = fallback.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+  return null
+}
 
 const modeLabelMap = computed<Record<ComparisonMode, string>>(() => ({
   'same-model-different-version': t('testJobResult.modes.same-model-different-version'),
@@ -294,6 +344,8 @@ const targets = computed<TargetView[]>(() =>
       versionLabel,
       promptPreview: summarizeText(promptSnapshot),
       updatedAt: run.prompt_version?.updated_at ?? run.updated_at,
+      status: run.status,
+      failureReason: resolveFailureReason(run),
       results: normalizeResults(run.results)
     }
   })
@@ -351,6 +403,12 @@ const summary = computed(() => {
   const updatedAt = runs.value
     .map((run) => run.updated_at)
     .reduce((prev, curr) => (prev > curr ? prev : curr))
+  const failureReasons = failedRuns.value
+    .map((run) => resolveFailureReason(run))
+    .filter((value): value is string => Boolean(value))
+  const failureReason = failureReasons.length
+    ? Array.from(new Set(failureReasons)).join('；')
+    : null
   return {
     title: jobName,
     promptName,
@@ -363,6 +421,7 @@ const summary = computed(() => {
     updatedAt,
     description: first.notes ?? '',
     status,
+    failureReason,
     extraParams: first.schema ?? null
   }
 })
@@ -500,6 +559,28 @@ function goPrompt(promptId: number | null) {
   router.push({ name: 'prompt-detail', params: { id: promptId } })
 }
 
+async function handleRetry() {
+  if (!failedRuns.value.length) {
+    ElMessage.info(t('testJobResult.messages.noFailedRuns'))
+    return
+  }
+  if (isRetrying.value) {
+    return
+  }
+  isRetrying.value = true
+  try {
+    await Promise.all(failedRuns.value.map((run) => retryTestRun(run.id)))
+    ElMessage.success(t('testJobResult.messages.retrySuccess'))
+    await fetchRuns()
+  } catch (error) {
+    ElMessage.error(
+      extractErrorMessage(error, t('testJobResult.messages.retryFailed'))
+    )
+  } finally {
+    isRetrying.value = false
+  }
+}
+
 function extractErrorMessage(error: unknown, fallback: string): string {
   if (error && typeof error === 'object' && 'payload' in error) {
     const payload = (error as { payload?: unknown }).payload
@@ -609,6 +690,12 @@ function summarizeText(value: string) {
   align-items: center;
 }
 
+.info-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .info-title {
   margin: 0;
   font-size: 22px;
@@ -630,6 +717,10 @@ function summarizeText(value: string) {
 
 .info-description__label {
   color: var(--header-text-color);
+}
+
+.summary-failure-alert {
+  margin-top: 12px;
 }
 
 .extra-params h4 {
@@ -692,6 +783,10 @@ function summarizeText(value: string) {
   border: 1px solid var(--side-border-color);
   border-radius: 12px;
   background: var(--content-bg-color);
+}
+
+.result-alert {
+  margin-bottom: 12px;
 }
 
 .result-column__header h4 {

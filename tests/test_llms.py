@@ -89,6 +89,7 @@ def test_provider_listing_excludes_archived(client):
     items = response.json()
     assert any(item["id"] == provider["id"] for item in items)
     provider_card = next(item for item in items if item["id"] == provider["id"])
+    assert provider_card["models"][0]["concurrency_limit"] == 5
 
     # 删除唯一模型后应归档，列表中不再出现
     model_id = provider_card["models"][0]["id"]
@@ -159,6 +160,7 @@ def test_invoke_llm_uses_request_parameters_only(client, monkeypatch):
         provider["id"],
         {"name": "chat-mini"},
     )
+    assert model["concurrency_limit"] == 5
 
     captured: dict[str, Any] = {}
 
@@ -222,6 +224,45 @@ def test_invoke_llm_without_models_requires_model_argument(client):
     response = client.post(f"{API_PREFIX}/{provider['id']}/invoke", json=body)
     assert response.status_code == 400
     assert "未能确定调用模型" in response.text
+
+
+def test_update_model_concurrency_limit(client):
+    provider = create_provider(
+        client,
+        {
+            "provider_name": "Internal",
+            "api_key": "concurrency-secret",
+            "is_custom": True,
+            "base_url": "https://llm.internal/api",
+        },
+    )
+
+    model = create_model(
+        client,
+        provider["id"],
+        {"name": "chat-concurrency", "capability": "测试"},
+    )
+
+    assert model["concurrency_limit"] == 5
+
+    update_resp = client.patch(
+        f"{API_PREFIX}/{provider['id']}/models/{model['id']}",
+        json={"concurrency_limit": 3},
+    )
+    assert update_resp.status_code == 200
+    updated = update_resp.json()
+    assert updated["concurrency_limit"] == 3
+
+    detail = client.get(f"{API_PREFIX}/{provider['id']}")
+    assert detail.status_code == 200
+    card = detail.json()
+    assert card["models"][0]["concurrency_limit"] == 3
+
+    invalid_resp = client.patch(
+        f"{API_PREFIX}/{provider['id']}/models/{model['id']}",
+        json={"concurrency_limit": 0},
+    )
+    assert invalid_resp.status_code == 422
 
 
 def test_invoke_llm_uses_known_base_url_when_missing(client, db_session, monkeypatch):

@@ -36,6 +36,7 @@ export interface TestRun {
   repetitions: number
   schema: Record<string, unknown> | null
   status: TestRunStatus
+  failure_reason: string | null
   notes: string | null
   created_at: string
   updated_at: string

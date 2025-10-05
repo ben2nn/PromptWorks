@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
+from typing import Any, Mapping
 
 import httpx
 import pytest
@@ -71,25 +71,27 @@ def test_execute_test_run_generates_results_and_usage(
 ):
     provider = provider_model.provider
 
-    responses = [
-        DummyResponse(
-            {
-                "choices": [{"message": {"content": "第一次响应"}}],
-                "usage": {"prompt_tokens": 3, "completion_tokens": 5},
-            },
-            elapsed_ms=12,
-        ),
-        DummyResponse(
-            {
-                "choices": [{"text": "第二次响应"}],
-                "usage": {"total_tokens": 9},
-            },
-            elapsed_ms=None,
-        ),
-    ]
+    response_payloads = {
+        1: {
+            "choices": [{"message": {"content": "第一次响应"}}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 5},
+        },
+        2: {
+            "choices": [{"text": "第二次响应"}],
+            "usage": {"total_tokens": 9},
+        },
+    }
 
-    def fake_post(*args, **kwargs):  # noqa: ANN002 - 接口保持与 httpx 一致
-        return responses.pop(0)
+    def fake_post(*_, **kwargs):  # noqa: ANN002 - 接口保持与 httpx 一致
+        payload = kwargs.get("json") or {}
+        messages = payload.get("messages") or []
+        user_content = ""
+        if len(messages) > 1 and isinstance(messages[1], Mapping):
+            user_content = str(messages[1].get("content", ""))
+        run_index = 1 if "第 1" in user_content else 2
+        selected = response_payloads[run_index]
+        elapsed_ms = 12 if run_index == 1 else None
+        return DummyResponse(selected, elapsed_ms=elapsed_ms)
 
     monkeypatch.setattr("app.services.test_run.httpx.post", fake_post)
 

@@ -130,9 +130,25 @@
                       :label="t('llmManagement.card.table.columns.quota')"
                       min-width="140"
                     />
-                    <el-table-column :label="t('llmManagement.card.table.columns.actions')" width="160" align="center">
+                    <el-table-column
+                      prop="concurrencyLimit"
+                      :label="t('llmManagement.card.table.columns.concurrency')"
+                      width="140"
+                    >
+                      <template #default="{ row }">
+                        <el-tag size="small" type="info">{{ row.concurrencyLimit }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column :label="t('llmManagement.card.table.columns.actions')" width="220" align="center">
                       <template #default="{ row }">
                         <div class="provider-card__model-actions">
+                          <el-button
+                            type="primary"
+                            text
+                            size="small"
+                            :icon="Edit"
+                            @click="handleEditModel(card.id, row)"
+                          >{{ t('llmManagement.card.table.edit') }}</el-button>
                           <el-button
                             type="primary"
                             text
@@ -228,12 +244,17 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="modelDialogVisible" :title="t('llmManagement.modelDialog.title')" width="560px">
+    <el-dialog
+      v-model="modelDialogVisible"
+      :title="isEditingModel ? t('llmManagement.modelDialog.editTitle') : t('llmManagement.modelDialog.title')"
+      width="560px"
+    >
       <el-form :model="modelForm" label-width="120px" class="dialog-form">
         <el-form-item :label="t('llmManagement.modelDialog.nameLabel')">
           <el-input
             v-model="modelForm.name"
             :placeholder="t('llmManagement.modelDialog.namePlaceholder')"
+            :disabled="isEditingModel"
           />
         </el-form-item>
         <el-form-item :label="t('llmManagement.modelDialog.capabilityLabel')">
@@ -246,6 +267,16 @@
           <el-input
             v-model="modelForm.quota"
             :placeholder="t('llmManagement.modelDialog.quotaPlaceholder')"
+          />
+        </el-form-item>
+        <el-form-item :label="t('llmManagement.modelDialog.concurrencyLabel')">
+          <el-input-number
+            v-model="modelForm.concurrency"
+            :min="1"
+            :max="50"
+            :step="1"
+            controls-position="right"
+            :placeholder="t('llmManagement.modelDialog.concurrencyPlaceholder')"
           />
         </el-form-item>
       </el-form>
@@ -271,6 +302,7 @@ import {
   deleteLLMProvider,
   listCommonLLMProviders,
   listLLMProviders,
+  updateLLMModel,
   updateLLMProvider,
   invokeLLMProvider,
   RequestTimeoutError
@@ -288,6 +320,7 @@ interface ProviderCardModel {
   name: string
   capability: string | null
   quota: string | null
+  concurrencyLimit: number
 }
 
 interface ProviderCard {
@@ -469,7 +502,8 @@ function mapProviderToCard(
       id: model.id,
       name: model.name,
       capability: model.capability,
-      quota: model.quota
+      quota: model.quota,
+      concurrencyLimit: model.concurrency_limit
     })),
     collapsed: collapsedState.get(provider.id) ?? false,
     revealApiKey: revealState.get(provider.id) ?? false
@@ -566,45 +600,90 @@ const activeProviderId = ref<number | null>(null)
 const modelForm = reactive({
   name: '',
   capability: '',
-  quota: ''
+  quota: '',
+  concurrency: 5
 })
+const isEditingModel = ref(false)
+const editingModelId = ref<number | null>(null)
 
 function handleAddModel(providerId: number) {
   activeProviderId.value = providerId
+  isEditingModel.value = false
+  editingModelId.value = null
   modelForm.name = ''
   modelForm.capability = ''
   modelForm.quota = ''
+  modelForm.concurrency = 5
   modelDialogVisible.value = true
 }
 
 async function submitModel() {
-  if (!modelForm.name.trim()) {
-    ElMessage.warning(t('llmManagement.messages.modelNameRequired'))
-    return
-  }
   const providerId = activeProviderId.value
   if (!providerId) {
     ElMessage.error(t('llmManagement.messages.providerNotFound'))
     return
   }
 
+  if (!isEditingModel.value && !modelForm.name.trim()) {
+    ElMessage.warning(t('llmManagement.messages.modelNameRequired'))
+    return
+  }
+
+  const concurrencyValue = Math.trunc(modelForm.concurrency)
+  if (!Number.isFinite(concurrencyValue) || concurrencyValue < 1) {
+    ElMessage.warning(t('llmManagement.messages.concurrencyRequired'))
+    return
+  }
+
+  const capabilityValue = modelForm.capability.trim()
+  const quotaValue = modelForm.quota.trim()
+
   modelSubmitLoading.value = true
   try {
-    await createLLMModel(providerId, {
-      name: modelForm.name.trim(),
-      capability: modelForm.capability.trim() || undefined,
-      quota: modelForm.quota.trim() || undefined
-    })
-    ElMessage.success(t('llmManagement.messages.createModelSuccess'))
+    if (isEditingModel.value) {
+      const modelId = editingModelId.value
+      if (!modelId) {
+        throw new Error('missing model id')
+      }
+      await updateLLMModel(providerId, modelId, {
+        capability: capabilityValue ? capabilityValue : null,
+        quota: quotaValue ? quotaValue : null,
+        concurrency_limit: concurrencyValue
+      })
+      ElMessage.success(t('llmManagement.messages.updateModelSuccess'))
+    } else {
+      await createLLMModel(providerId, {
+        name: modelForm.name.trim(),
+        capability: capabilityValue || undefined,
+        quota: quotaValue || undefined,
+        concurrency_limit: concurrencyValue
+      })
+      ElMessage.success(t('llmManagement.messages.createModelSuccess'))
+    }
     modelDialogVisible.value = false
     await fetchProviders()
   } catch (error: any) {
     console.error(error)
-    const message = error?.payload?.detail ?? t('llmManagement.messages.createModelFailed')
+    const message =
+      error?.payload?.detail ??
+      (isEditingModel.value
+        ? t('llmManagement.messages.updateModelFailed')
+        : t('llmManagement.messages.createModelFailed'))
     ElMessage.error(message)
   } finally {
     modelSubmitLoading.value = false
   }
+}
+
+function handleEditModel(providerId: number, model: ProviderCardModel) {
+  activeProviderId.value = providerId
+  isEditingModel.value = true
+  editingModelId.value = model.id
+  modelForm.name = model.name
+  modelForm.capability = model.capability ?? ''
+  modelForm.quota = model.quota ?? ''
+  modelForm.concurrency = model.concurrencyLimit
+  modelDialogVisible.value = true
 }
 
 async function handleBaseUrlChange(card: ProviderCard, value: string) {

@@ -12,6 +12,7 @@ export interface LLMModel {
   name: string
   capability: string | null
   quota: string | null
+  concurrency_limit: number
   created_at: string
   updated_at: string
 }
@@ -56,6 +57,13 @@ export interface LLMModelCreatePayload {
   name: string
   capability?: string | null
   quota?: string | null
+  concurrency_limit?: number
+}
+
+export interface LLMModelUpdatePayload {
+  capability?: string | null
+  quota?: string | null
+  concurrency_limit?: number
 }
 
 export interface ChatMessagePayload {

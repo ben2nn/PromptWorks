@@ -63,9 +63,7 @@ class TestRunTaskQueue:
                     logger.warning("测试任务 %s 在回滚后不存在", test_run_id)
                     return
 
-                schema = dict(failed_run.schema or {})
-                schema["last_error"] = str(exc)
-                failed_run.schema = schema
+                failed_run.last_error = str(exc)
                 failed_run.status = TestRunStatus.FAILED
                 session.commit()
 
@@ -77,9 +75,7 @@ class TestRunTaskQueue:
 
                 failed_run = session.get(TestRun, test_run_id)
                 if failed_run:
-                    schema = dict(failed_run.schema or {})
-                    schema["last_error"] = "执行测试任务失败"
-                    failed_run.schema = schema
+                    failed_run.last_error = "执行测试任务失败"
                     failed_run.status = TestRunStatus.FAILED
                     session.commit()
 

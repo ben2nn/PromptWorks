@@ -71,6 +71,34 @@ class TestRun(Base):
     )
 
     @property
+    def last_error(self) -> str | None:
+        schema_data = self.schema
+        if isinstance(schema_data, dict):
+            raw_value = schema_data.get("last_error")
+            if isinstance(raw_value, str):
+                trimmed = raw_value.strip()
+                if trimmed:
+                    return trimmed
+        return None
+
+    @last_error.setter
+    def last_error(self, message: str | None) -> None:
+        schema_data = dict(self.schema or {})
+        if message and message.strip():
+            schema_data["last_error"] = message.strip()
+        else:
+            schema_data.pop("last_error", None)
+        self.schema = schema_data or None
+
+    @property
+    def failure_reason(self) -> str | None:
+        return self.last_error
+
+    @failure_reason.setter
+    def failure_reason(self, message: str | None) -> None:
+        self.last_error = message
+
+    @property
     def prompt(self) -> Prompt | None:
         return self.prompt_version.prompt if self.prompt_version else None
 

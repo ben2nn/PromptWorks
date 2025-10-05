@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -17,6 +20,8 @@ from app.models.test_run import TestRun, TestRunStatus
 from app.models.usage import LLMUsageLog
 
 DEFAULT_TEST_TIMEOUT = 30.0
+DEFAULT_CONCURRENCY_LIMIT = 5
+REQUEST_SLEEP_RANGE = (0.05, 0.2)
 
 _KNOWN_PARAMETER_KEYS = {
     "max_tokens",
@@ -36,6 +41,14 @@ _KNOWN_PARAMETER_KEYS = {
 }
 
 _NESTED_PARAMETER_KEYS = {"llm_parameters", "model_parameters", "parameters"}
+
+
+@dataclass(frozen=True)
+class RunRequestContext:
+    test_run_id: int
+    model_name: str
+    prompt_id: int | None
+    prompt_version_id: int | None
 
 
 class TestRunExecutionError(Exception):
@@ -64,6 +77,7 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
     prompt_snapshot = prompt_version.content
 
     schema_data = _ensure_mapping(test_run.schema)
+    schema_data.pop("last_error", None)
     schema_data.setdefault("prompt_snapshot", prompt_snapshot)
     schema_data.setdefault("llm_provider_id", provider.id)
     schema_data.setdefault("llm_provider_name", provider.provider_name)
@@ -81,7 +95,18 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
     test_run.status = TestRunStatus.RUNNING
     db.flush()
 
-    for run_index in range(1, test_run.repetitions + 1):
+    context = RunRequestContext(
+        test_run_id=test_run.id,
+        model_name=test_run.model_name,
+        prompt_id=prompt_version.prompt_id,
+        prompt_version_id=test_run.prompt_version_id,
+    )
+
+    concurrency_limit = DEFAULT_CONCURRENCY_LIMIT
+    if model and isinstance(model.concurrency_limit, int):
+        concurrency_limit = max(1, model.concurrency_limit)
+
+    def _execute_single(run_index: int) -> tuple[int, Result, LLMUsageLog]:
         messages = _build_messages(schema_data, prompt_snapshot, run_index)
         payload: dict[str, Any] = dict(parameters_template)
         payload["model"] = model.name if model else test_run.model_name
@@ -93,13 +118,37 @@ def execute_test_run(db: Session, test_run: TestRun) -> TestRun:
             base_url=base_url,
             headers=headers,
             payload=payload,
-            test_run=test_run,
+            context=context,
         )
 
-        result.test_run_id = test_run.id
+        result.test_run_id = context.test_run_id
         result.run_index = run_index
-        db.add(result)
-        db.add(usage_log)
+        return run_index, result, usage_log
+
+    run_indices = range(1, test_run.repetitions + 1)
+    outcomes: list[tuple[int, Result, LLMUsageLog]] = []
+
+    worker_count = max(1, min(concurrency_limit, test_run.repetitions))
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {
+            executor.submit(_execute_single, index): index for index in run_indices
+        }
+        try:
+            for future in as_completed(future_map):
+                outcomes.append(future.result())
+        except Exception as exc:  # pragma: no cover - 防御性
+            for pending in future_map:
+                pending.cancel()
+            if isinstance(exc, TestRunExecutionError):
+                raise
+            raise TestRunExecutionError(
+                f"执行测试任务失败: {exc}", status_code=status.HTTP_502_BAD_GATEWAY
+            ) from exc
+
+    for _, result_obj, usage_obj in sorted(outcomes, key=lambda item: item[0]):
+        db.add(result_obj)
+        db.add(usage_obj)
 
     test_run.status = TestRunStatus.COMPLETED
     db.flush()
@@ -271,10 +320,19 @@ def _invoke_llm_once(
     base_url: str,
     headers: Mapping[str, str],
     payload: dict[str, Any],
-    test_run: TestRun,
+    context: RunRequestContext,
 ) -> tuple[Result, LLMUsageLog]:
     url = f"{base_url}/chat/completions"
     start_time = time.perf_counter()
+
+    try:
+        sleep_lower, sleep_upper = REQUEST_SLEEP_RANGE
+        if sleep_upper > 0:
+            jitter = random.uniform(sleep_lower, sleep_upper)
+            if jitter > 0:
+                time.sleep(jitter)
+    except Exception:  # pragma: no cover - 容错
+        pass
 
     try:
         response = httpx.post(
@@ -290,8 +348,9 @@ def _invoke_llm_once(
             error_payload = response.json()
         except ValueError:
             error_payload = {"message": response.text}
+        detail_text = _format_error_detail(error_payload)
         raise TestRunExecutionError(
-            "LLM 接口返回错误响应。",
+            f"LLM 请求失败 (HTTP {response.status_code}): {detail_text}",
             status_code=response.status_code,
         ) from None
 
@@ -360,12 +419,10 @@ def _invoke_llm_once(
     usage_log = LLMUsageLog(
         provider_id=provider.id,
         model_id=model.id if model else None,
-        model_name=model.name if model else payload.get("model", test_run.model_name),
+        model_name=model.name if model else payload.get("model", context.model_name),
         source="test_run",
-        prompt_id=test_run.prompt_version.prompt_id
-        if test_run.prompt_version
-        else None,
-        prompt_version_id=test_run.prompt_version_id,
+        prompt_id=context.prompt_id,
+        prompt_version_id=context.prompt_version_id,
         messages=payload.get("messages"),
         parameters=request_parameters or None,
         response_text=output_text or None,
@@ -383,6 +440,31 @@ def _invoke_llm_once(
     )
 
     return result, usage_log
+
+
+def _format_error_detail(payload: Any) -> str:
+    if isinstance(payload, Mapping):
+        error_obj = payload.get("error")
+        if isinstance(error_obj, Mapping):
+            message_parts: list[str] = []
+            code = error_obj.get("code")
+            if isinstance(code, str) and code.strip():
+                message_parts.append(code.strip())
+            error_type = error_obj.get("type")
+            if isinstance(error_type, str) and error_type.strip():
+                message_parts.append(error_type.strip())
+            message = error_obj.get("message")
+            if isinstance(message, str) and message.strip():
+                prefix = " | ".join(message_parts)
+                return f"{prefix}: {message.strip()}" if prefix else message.strip()
+        message = payload.get("message")
+        if isinstance(message, str) and message.strip():
+            return message.strip()
+        try:
+            return json.dumps(payload, ensure_ascii=False)
+        except Exception:  # pragma: no cover - 容错
+            return str(payload)
+    return str(payload)
 
 
 def _try_parse_json(text: str) -> Any:

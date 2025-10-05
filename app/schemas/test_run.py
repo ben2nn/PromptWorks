@@ -50,6 +50,7 @@ class TestRunRead(TestRunBase):
     id: int
     prompt_version_id: int
     status: TestRunStatus
+    failure_reason: str | None = None
     created_at: datetime
     updated_at: datetime
     prompt_version: PromptVersionRead | None = None

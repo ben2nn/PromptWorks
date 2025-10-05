@@ -45,4 +45,10 @@ export function listTestRunResults(testRunId: number): Promise<TestResult[]> {
   return request<TestResult[]>(`/test_prompt/${testRunId}/results`)
 }
 
+export function retryTestRun(testRunId: number): Promise<TestRun> {
+  return request<TestRun>(`/test_prompt/${testRunId}/retry`, {
+    method: 'POST'
+  })
+}
+
 export type { TestRun, TestRunStatus }

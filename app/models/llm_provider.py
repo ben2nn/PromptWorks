@@ -79,6 +79,9 @@ class LLMModel(Base):
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     capability: Mapped[str | None] = mapped_column(String(120), nullable=True)
     quota: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    concurrency_limit: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default="5"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -23,6 +23,7 @@ from app.models.usage import LLMUsageLog
 from app.schemas.llm_provider import (
     KnownLLMProvider,
     LLMModelCreate,
+    LLMModelUpdate,
     LLMModelRead,
     LLMProviderCreate,
     LLMProviderRead,
@@ -453,6 +454,52 @@ def create_llm_model(
     db.refresh(model)
 
     logger.info("新增模型成功: provider_id=%s model=%s", provider.id, model.name)
+    return LLMModelRead.model_validate(model, from_attributes=True)
+
+
+@router.patch(
+    "/{provider_id}/models/{model_id}",
+    response_model=LLMModelRead,
+)
+def update_llm_model(
+    *,
+    db: Session = Depends(get_db),
+    provider_id: int,
+    model_id: int,
+    payload: LLMModelUpdate,
+) -> LLMModelRead:
+    """更新模型属性，如并发配置。"""
+
+    _ = _get_provider_or_404(db, provider_id)
+    stmt = select(LLMModel).where(
+        LLMModel.id == model_id, LLMModel.provider_id == provider_id
+    )
+    model = db.scalar(stmt)
+    if not model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到指定的模型",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    concurrency = update_data.get("concurrency_limit")
+    if concurrency is not None:
+        model.concurrency_limit = concurrency
+
+    if "capability" in update_data:
+        model.capability = update_data["capability"]
+    if "quota" in update_data:
+        model.quota = update_data["quota"]
+
+    db.commit()
+    db.refresh(model)
+
+    logger.info(
+        "更新模型成功: provider_id=%s model_id=%s concurrency=%s",
+        provider_id,
+        model_id,
+        model.concurrency_limit,
+    )
     return LLMModelRead.model_validate(model, from_attributes=True)
 
 

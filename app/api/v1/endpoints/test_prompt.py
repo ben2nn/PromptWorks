@@ -79,6 +79,7 @@ def create_test_prompt(
         test_run_ref = db.get(TestRun, test_run.id)
         if test_run_ref:
             test_run_ref.status = TestRunStatus.FAILED
+            test_run_ref.last_error = "测试任务入队失败"
             db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -142,3 +143,42 @@ def list_results_for_test_prompt(
         .order_by(Result.run_index.asc())
     )
     return list(db.scalars(stmt))
+
+
+@router.post("/{test_prompt_id}/retry", response_model=TestRunRead)
+def retry_test_prompt(*, db: Session = Depends(get_db), test_prompt_id: int) -> TestRun:
+    """重新入队执行失败的测试任务。"""
+
+    test_run = db.get(TestRun, test_prompt_id)
+    if not test_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run 不存在"
+        )
+
+    if test_run.status != TestRunStatus.FAILED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="仅失败状态的测试任务可重试"
+        )
+
+    test_run.status = TestRunStatus.PENDING
+    test_run.last_error = None
+    db.flush()
+    db.commit()
+
+    stmt = _test_run_query().where(TestRun.id == test_run.id)
+    refreshed = db.execute(stmt).unique().scalar_one()
+
+    try:
+        enqueue_test_run(test_run.id)
+    except Exception as exc:  # pragma: no cover - 防御性兜底
+        failed_run = db.get(TestRun, test_run.id)
+        if failed_run:
+            failed_run.status = TestRunStatus.FAILED
+            failed_run.last_error = "测试任务重新入队失败"
+            db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="测试任务重新入队失败",
+        ) from exc
+
+    return refreshed

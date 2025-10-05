@@ -269,7 +269,8 @@ export const messages = {
         },
         promptPrefix: 'Prompt：',
         notePrefix: '备注：',
-        viewDetails: '查看详情'
+        viewDetails: '查看详情',
+        retry: '重试'
       },
       versionCount: '{count} 版本',
       empty: '暂未创建测试任务',
@@ -281,8 +282,12 @@ export const messages = {
       },
       unnamedPrompt: '未命名 Prompt',
       versionFallback: '版本 #{id}',
+      failureReasonPrefix: '失败原因：',
       messages: {
-        loadFailed: '加载测试任务失败'
+        loadFailed: '加载测试任务失败',
+        retrySuccess: '已重新入队失败任务',
+        retryFailed: '重试失败，请稍后再试',
+        noFailedRuns: '没有需要重试的失败任务'
       }
     },
     llmManagement: {
@@ -310,8 +315,10 @@ export const messages = {
             name: '模型名称',
             capability: '能力标签',
             quota: '配额策略',
+            concurrency: '并发数',
             actions: '操作'
           },
+          edit: '编辑',
           check: '检测',
           remove: '删除'
         }
@@ -331,12 +338,15 @@ export const messages = {
       },
       modelDialog: {
         title: '添加模型',
+        editTitle: '编辑模型',
         nameLabel: '模型名称',
         namePlaceholder: '请输入模型名称',
         capabilityLabel: '能力标签',
         capabilityPlaceholder: '如 对话 / 推理（可选）',
         quotaLabel: '配额策略',
-        quotaPlaceholder: '如 团队共享 100k tokens/日（可选）'
+        quotaPlaceholder: '如 团队共享 100k tokens/日（可选）',
+        concurrencyLabel: '测试并发数',
+        concurrencyPlaceholder: '并发请求上限，默认 5'
       },
       confirmations: {
         removeModel: {
@@ -367,6 +377,9 @@ export const messages = {
         providerNotFound: '未找到对应的提供方，请重新操作',
         createModelSuccess: '模型添加成功',
         createModelFailed: '添加模型失败，请稍后重试',
+        updateModelSuccess: '模型配置已更新',
+        updateModelFailed: '更新模型失败，请稍后重试',
+        concurrencyRequired: '请设置至少 1 的并发数',
         baseUrlUpdated: '访问地址已更新',
         baseUrlUpdateFailed: '更新访问地址失败，请稍后重试',
         providerDeleted: '提供方已删除',
@@ -573,6 +586,8 @@ export const messages = {
       empty: '未找到测试任务',
       info: {
         viewPrompt: '查看 Prompt',
+        retryButton: '重新执行失败任务',
+        failureTitle: '失败原因',
         fields: {
           prompt: '关联 Prompt',
           model: '使用模型',
@@ -596,7 +611,8 @@ export const messages = {
         modelOutput: '模型输出',
         tokens: 'Tokens 用量',
         latency: '响应耗时',
-        noResult: '当前轮次暂无结果'
+        noResult: '当前轮次暂无结果',
+        failureTitle: '失败原因'
       },
       analysis: {
         title: '数据分析',
@@ -629,7 +645,10 @@ export const messages = {
         noneSelected: '未选择任何测试任务',
         notFound: '未找到测试任务',
         promptContentEmpty: '暂无 Prompt 内容',
-        summaryEmpty: '暂无内容'
+        summaryEmpty: '暂无内容',
+        retrySuccess: '失败任务已重新排队执行',
+        retryFailed: '重试失败，请稍后再试',
+        noFailedRuns: '没有可重试的失败任务'
       },
       units: {
         milliseconds: '{value} ms'
@@ -1013,7 +1032,8 @@ export const messages = {
         },
         promptPrefix: 'Prompt: ',
         notePrefix: 'Note: ',
-        viewDetails: 'View Details'
+        viewDetails: 'View Details',
+        retry: 'Retry'
       },
       versionCount: '{count} versions',
       empty: 'No test jobs yet',
@@ -1025,8 +1045,12 @@ export const messages = {
       },
       unnamedPrompt: 'Untitled Prompt',
       versionFallback: 'Version #{id}',
+      failureReasonPrefix: 'Reason:',
       messages: {
-        loadFailed: 'Failed to load test jobs.'
+        loadFailed: 'Failed to load test jobs.',
+        retrySuccess: 'Failed runs re-queued.',
+        retryFailed: 'Retry failed. Please try again later.',
+        noFailedRuns: 'No failed runs to retry.'
       }
     },
     llmManagement: {
@@ -1054,8 +1078,10 @@ export const messages = {
             name: 'Model Name',
             capability: 'Capability Tags',
             quota: 'Quota Policy',
+            concurrency: 'Concurrency',
             actions: 'Actions'
           },
+          edit: 'Edit',
           check: 'Check',
           remove: 'Remove'
         }
@@ -1075,12 +1101,15 @@ export const messages = {
       },
       modelDialog: {
         title: 'Add Model',
+        editTitle: 'Edit Model',
         nameLabel: 'Model Name',
         namePlaceholder: 'Enter model name',
         capabilityLabel: 'Capability Tags',
         capabilityPlaceholder: 'e.g. Chat / Reasoning (optional)',
         quotaLabel: 'Quota Policy',
-        quotaPlaceholder: 'e.g. Team shared 100k tokens/day (optional)'
+        quotaPlaceholder: 'e.g. Team shared 100k tokens/day (optional)',
+        concurrencyLabel: 'Test Concurrency',
+        concurrencyPlaceholder: 'Max concurrent requests (default 5)'
       },
       confirmations: {
         removeModel: {
@@ -1111,6 +1140,9 @@ export const messages = {
         providerNotFound: 'Provider not found. Please retry.',
         createModelSuccess: 'Model added successfully.',
         createModelFailed: 'Failed to add model. Try again later.',
+        updateModelSuccess: 'Model settings updated.',
+        updateModelFailed: 'Failed to update model. Try again later.',
+        concurrencyRequired: 'Set concurrency to at least 1.',
         baseUrlUpdated: 'Endpoint updated.',
         baseUrlUpdateFailed: 'Failed to update endpoint. Try again later.',
         providerDeleted: 'Provider deleted.',
@@ -1317,6 +1349,8 @@ export const messages = {
       empty: 'Test job not found.',
       info: {
         viewPrompt: 'View Prompt',
+        retryButton: 'Retry Failed Runs',
+        failureTitle: 'Failure Reason',
         fields: {
           prompt: 'Prompt',
           model: 'Model',
@@ -1340,7 +1374,8 @@ export const messages = {
         modelOutput: 'Model Output',
         tokens: 'Tokens Used',
         latency: 'Latency',
-        noResult: 'No result for this round yet.'
+        noResult: 'No result for this round yet.',
+        failureTitle: 'Failure Reason'
       },
       analysis: {
         title: 'Data Analysis',
@@ -1373,7 +1408,10 @@ export const messages = {
         noneSelected: 'No test job selected.',
         notFound: 'Test job not found.',
         promptContentEmpty: 'No prompt content.',
-        summaryEmpty: 'No content available.'
+        summaryEmpty: 'No content available.',
+        retrySuccess: 'Failed runs re-queued.',
+        retryFailed: 'Retry failed. Please try again later.',
+        noFailedRuns: 'No failed runs to retry.'
       },
       units: {
         milliseconds: '{value} ms'

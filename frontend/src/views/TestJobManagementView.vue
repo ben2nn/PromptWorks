@@ -43,6 +43,11 @@
             <p v-if="row.description" class="table-subtitle">
               {{ t('testJobManagement.table.notePrefix') }}{{ row.description }}
             </p>
+            <p v-if="row.failureReason" class="table-failure">
+              <el-icon class="table-failure__icon"><WarningFilled /></el-icon>
+              <span class="table-failure__label">{{ t('testJobManagement.failureReasonPrefix') }}</span>
+              <span class="table-failure__content">{{ row.failureReason }}</span>
+            </p>
           </template>
         </el-table-column>
         <el-table-column :label="t('testJobManagement.table.columns.model')" min-width="180">
@@ -86,11 +91,23 @@
         <el-table-column :label="t('testJobManagement.table.columns.updatedAt')" min-width="160">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column :label="t('testJobManagement.table.columns.actions')" width="120" fixed="right">
+        <el-table-column :label="t('testJobManagement.table.columns.actions')" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="handleViewJob(row)">
-              {{ t('testJobManagement.table.viewDetails') }}
-            </el-button>
+            <el-space size="4">
+              <el-button type="primary" link size="small" @click="handleViewJob(row)">
+                {{ t('testJobManagement.table.viewDetails') }}
+              </el-button>
+              <el-button
+                v-if="row.failedRunIds.length"
+                type="danger"
+                link
+                size="small"
+                :loading="isJobRetrying(row.id)"
+                @click="handleRetry(row)"
+              >
+                {{ t('testJobManagement.table.retry') }}
+              </el-button>
+            </el-space>
           </template>
         </el-table-column>
       </el-table>
@@ -100,9 +117,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Memo } from '@element-plus/icons-vue'
+import { Memo, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { listTestRuns } from '../api/testRun'
+import { ElMessage } from 'element-plus'
+import { listTestRuns, retryTestRun } from '../api/testRun'
 import type { TestRun } from '../types/testRun'
 import { useI18n } from 'vue-i18n'
 
@@ -120,12 +138,15 @@ interface AggregatedJobRow {
   createdAt: string
   updatedAt: string
   description: string | null
+  failureReason: string | null
   runIds: number[]
+  failedRunIds: number[]
   mode: string
 }
 
 const router = useRouter()
 const { t, locale } = useI18n()
+const retryingJobIds = ref<string[]>([])
 
 const testRuns = ref<TestRun[]>([])
 const isLoading = ref(false)
@@ -150,6 +171,36 @@ function scheduleNextPoll() {
 }
 
 const tableEmptyText = computed(() => errorMessage.value ?? t('testJobManagement.empty'))
+
+function resolveFailureReason(run: TestRun): string | null {
+  const direct = typeof run.failure_reason === 'string' ? run.failure_reason.trim() : ''
+  if (direct) {
+    return direct
+  }
+  const schema = (run.schema ?? {}) as Record<string, unknown>
+  const fallback = schema['last_error']
+  if (typeof fallback === 'string') {
+    const trimmed = fallback.trim()
+    if (trimmed) {
+      return trimmed
+    }
+  }
+  return null
+}
+
+function isJobRetrying(id: string): boolean {
+  return retryingJobIds.value.includes(id)
+}
+
+function markJobRetrying(id: string) {
+  if (isJobRetrying(id)) return
+  retryingJobIds.value = [...retryingJobIds.value, id]
+}
+
+function unmarkJobRetrying(id: string) {
+  if (!isJobRetrying(id)) return
+  retryingJobIds.value = retryingJobIds.value.filter((item) => item !== id)
+}
 
 const jobs = computed<AggregatedJobRow[]>(() => {
   const groups = new Map<string, TestRun[]>()
@@ -197,6 +248,14 @@ const jobs = computed<AggregatedJobRow[]>(() => {
         ordered[0].updated_at
       )
       const mode = typeof schema.mode === 'string' ? String(schema.mode) : 'same-model-different-version'
+      const failedRuns = ordered.filter((run) => run.status === 'failed')
+      const failedRunIds = failedRuns.map((run) => run.id)
+      const failureReasons = failedRuns
+        .map((run) => resolveFailureReason(run))
+        .filter((value): value is string => Boolean(value))
+      const mergedReason = failureReasons.length
+        ? Array.from(new Set(failureReasons)).join('；')
+        : null
 
       return {
         id: key,
@@ -212,7 +271,9 @@ const jobs = computed<AggregatedJobRow[]>(() => {
         createdAt,
         updatedAt,
         description: primary.notes,
+        failureReason: mergedReason,
         runIds: ordered.map((run) => run.id),
+        failedRunIds,
         mode
       }
     })
@@ -319,6 +380,28 @@ function handleViewJob(job: AggregatedJobRow) {
   query.mode = job.mode
   router.push({ name: 'test-job-result', params: { id: firstId }, query })
 }
+
+async function handleRetry(job: AggregatedJobRow) {
+  if (!job.failedRunIds.length) {
+    ElMessage.info(t('testJobManagement.messages.noFailedRuns'))
+    return
+  }
+  if (isJobRetrying(job.id)) {
+    return
+  }
+  markJobRetrying(job.id)
+  try {
+    await Promise.all(job.failedRunIds.map((runId) => retryTestRun(runId)))
+    ElMessage.success(t('testJobManagement.messages.retrySuccess'))
+    await fetchTestRuns()
+  } catch (error) {
+    ElMessage.error(
+      extractErrorMessage(error, t('testJobManagement.messages.retryFailed'))
+    )
+  } finally {
+    unmarkJobRetrying(job.id)
+  }
+}
 </script>
 
 <style scoped>
@@ -387,5 +470,29 @@ function handleViewJob(job: AggregatedJobRow) {
 .table-subtext {
   font-size: 12px;
   color: var(--text-weak-color);
+}
+
+.table-failure {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--el-color-danger);
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.table-failure__icon {
+  margin-top: 2px;
+}
+
+.table-failure__label {
+  font-weight: 600;
+}
+
+.table-failure__content {
+  word-break: break-word;
+  flex: 1;
 }
 </style>

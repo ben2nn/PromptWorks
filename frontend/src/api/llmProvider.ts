@@ -3,6 +3,7 @@ import type {
   KnownLLMProvider,
   LLMModel,
   LLMModelCreatePayload,
+  LLMModelUpdatePayload,
   LLMProvider,
   LLMProviderCreatePayload,
   LLMProviderUpdatePayload,
@@ -54,6 +55,17 @@ export function createLLMModel(
 ): Promise<LLMModel> {
   return request<LLMModel>(`${BASE_PATH}/${providerId}/models`, {
     method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function updateLLMModel(
+  providerId: number,
+  modelId: number,
+  payload: LLMModelUpdatePayload
+): Promise<LLMModel> {
+  return request<LLMModel>(`${BASE_PATH}/${providerId}/models/${modelId}`, {
+    method: 'PATCH',
     body: JSON.stringify(payload)
   })
 }
