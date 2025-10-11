@@ -65,6 +65,29 @@ uv run poe test-all    # 顺序执行上述三项
 npm run build
 ```
 
+## 🐳 Docker 一键部署
+- **环境准备**：确保本机已安装 Docker 与 Docker Compose（Docker Desktop 或 NerdCTL 均可）。
+- **启动命令**：
+```bash
+docker compose up -d --build
+```
+- **访问入口**：前端服务默认暴露在 `http://localhost:18080`，后端 API 为 `http://localhost:8000/api/v1`，数据库与 Redis 对应端口分别为 `15432` 与 `6379`。
+- **停止/清理**：
+```bash
+docker compose down            # 停止容器
+docker compose down -v         # 停止并删除数据卷
+```
+
+### 容器编排说明
+| 服务 | 说明 | 端口 | 额外信息 |
+| --- | --- | --- | --- |
+| `postgres` | PostgreSQL 数据库 | 15432 | 默认账户、密码、库名均为 `promptworks` |
+| `redis` | Redis 缓存/消息队列 | 6379 | 已启用 AOF，适合作为开发环境使用 |
+| `backend` | FastAPI 后端 | 8000 | 启动前自动执行 `alembic upgrade head` 同步结构 |
+| `frontend` | Nginx 托管的前端静态文件 | 18080 | 构建时可通过 `VITE_API_BASE_URL` 定制后端地址 |
+
+> 提示：如需自定义端口或数据库密码，可在 `docker-compose.yml` 中调整对应环境变量与端口映射（当前示例采用 `15432`、`18080`），然后重新执行 `docker compose up -d --build`。
+
 ## ⚙️ 环境变量说明
 | 名称 | 是否必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
