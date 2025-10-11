@@ -254,7 +254,7 @@ export const messages = {
       headerTitle: '测试任务',
       headerDescription: '统一查看批量测试任务与执行状态，后续将支持任务创建与重跑。',
       createButton: '新建测试任务',
-      createButtonNew: '新建测试任务（新）',
+      createButtonNew: '新建测试任务',
       listTitle: '任务列表',
       table: {
         columns: {
@@ -769,9 +769,9 @@ export const messages = {
     },
     promptTestCreate: {
       breadcrumb: {
-        current: '新建测试任务（新）'
+        current: '新建测试任务'
       },
-      headerTitle: '新建测试任务（新）',
+      headerTitle: '新建测试任务',
       headerDescription: '基于 Prompt 测试任务与最小测试单元，快速发起多轮实验。',
       card: {
         title: '测试任务配置',
@@ -1173,7 +1173,7 @@ export const messages = {
       headerTitle: 'Test Jobs',
       headerDescription: 'Review batch test jobs and monitor execution status. Scheduling and re-runs are coming soon.',
       createButton: 'New Test Job',
-      createButtonNew: 'New Test Task (New)',
+      createButtonNew: 'New Test Task',
       listTitle: 'Job List',
       table: {
         columns: {
@@ -1688,9 +1688,9 @@ export const messages = {
     },
     promptTestCreate: {
       breadcrumb: {
-        current: 'Create Test Task (New)'
+        current: 'Create Test Task'
       },
-      headerTitle: 'Create Test Task (New)',
+      headerTitle: 'Create Test Task',
       headerDescription:
         'Use the new workflow to assemble prompt tests, schedule multiple rounds, and launch experiments quickly.',
       card: {

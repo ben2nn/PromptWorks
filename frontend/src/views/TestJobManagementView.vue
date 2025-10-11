@@ -9,7 +9,12 @@
         <el-button type="primary" plain :icon="Memo" @click="handleCreateNewTask">
           {{ t('testJobManagement.createButtonNew') }}
         </el-button>
-        <el-button type="primary" :icon="Memo" @click="handleCreateTestJob">
+        <el-button
+          v-if="showLegacyCreateButton"
+          type="primary"
+          :icon="Memo"
+          @click="handleCreateTestJob"
+        >
           {{ t('testJobManagement.createButton') }}
         </el-button>
       </div>
@@ -82,17 +87,6 @@
         </el-table-column>
         <el-table-column :label="t('testJobManagement.table.columns.repetitions')" width="100">
           <template #default="{ row }">{{ row.repetitions }}</template>
-        </el-table-column>
-        <el-table-column :label="t('testJobManagement.table.columns.version')" width="110">
-          <template #default="{ row }">
-            <el-tag :type="row.isNewResultPage ? 'success' : 'info'" size="small">
-              {{
-                row.isNewResultPage
-                  ? t('testJobManagement.table.version.new')
-                  : t('testJobManagement.table.version.legacy')
-              }}
-            </el-tag>
-          </template>
         </el-table-column>
         <el-table-column :label="t('testJobManagement.table.columns.status')" width="120">
           <template #default="{ row }">
@@ -167,6 +161,7 @@ interface AggregatedJobRow {
 const router = useRouter()
 const { t, locale } = useI18n()
 const retryingJobIds = ref<string[]>([])
+const showLegacyCreateButton = false
 
 const testRuns = ref<TestRun[]>([])
 const promptTestTasks = ref<PromptTestTask[]>([])
