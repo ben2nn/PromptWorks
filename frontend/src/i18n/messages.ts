@@ -859,7 +859,8 @@ export const messages = {
       }
     },
     promptTestResult: {
-      mockDescription: '创建于 {createdAt} · 共 {unitCount} 个最小测试单元 · 当前为模拟数据',
+      headerDescription: '创建于 {createdAt} · 状态：{status} · 共 {unitCount} 个最小测试单元',
+      headerDescriptionPending: '正在加载测试任务信息...',
       tabs: {
         results: '测试结果',
         units: '最小测试单元',
@@ -897,6 +898,16 @@ export const messages = {
         outputsTitle: '全部结果（共 {count} 条）',
         parametersTitle: '参数配置（{name}）',
         parametersEmpty: '暂无参数配置信息'
+      },
+      messages: {
+        loadFailed: '加载测试任务结果失败，请稍后重试',
+        partialFailed: '部分实验数据加载失败，请稍后重试',
+        invalidTask: '无效的测试任务编号',
+        invalidUnit: '无效的最小测试单元编号',
+        unitLoadFailed: '加载最小测试单元详情失败，请稍后重试'
+      },
+      fallback: {
+        taskTitle: '测试任务 #{id}'
       },
       empty: {
         placeholder: '暂无输出',
@@ -1769,7 +1780,8 @@ export const messages = {
       }
     },
     promptTestResult: {
-      mockDescription: 'Created at {createdAt} · {unitCount} minimal test units · Mock data only',
+      headerDescription: 'Created at {createdAt} · Status: {status} · {unitCount} test units',
+      headerDescriptionPending: 'Loading test task information...',
       tabs: {
         results: 'Test Results',
         units: 'Test Units',
@@ -1807,6 +1819,16 @@ export const messages = {
         outputsTitle: 'All Outputs ({count})',
         parametersTitle: 'Parameter Configuration ({name})',
         parametersEmpty: 'No parameter configuration available'
+      },
+      messages: {
+        loadFailed: 'Failed to load test task results. Please try again later.',
+        partialFailed: 'Some experiment data could not be loaded. Please retry later.',
+        invalidTask: 'Invalid test task id.',
+        invalidUnit: 'Invalid test unit id.',
+        unitLoadFailed: 'Failed to load test unit details. Please try again later.'
+      },
+      fallback: {
+        taskTitle: 'Test Task #{id}'
       },
       empty: {
         placeholder: 'No output',

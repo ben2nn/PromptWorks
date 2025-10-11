@@ -11,15 +11,17 @@
       <div class="page-header__text">
         <h2>{{ displayTaskName }}</h2>
         <p class="page-desc">
-          {{ t('promptTestResult.mockDescription', { createdAt: mockSummary.createdAt, unitCount: mockUnits.length }) }}
+          {{ headerDescription }}
         </p>
       </div>
-      <div class="page-header__meta">
-        <el-tag size="small" type="success">Mock</el-tag>
+      <div v-if="taskStatusTag" class="page-header__meta">
+        <el-tag size="small" :type="taskStatusTag.type">
+          {{ taskStatusTag.label }}
+        </el-tag>
       </div>
     </section>
 
-    <el-card>
+    <el-card v-loading="loading">
       <template #header>
         <div class="card-header">
           <el-radio-group v-model="activeTab" size="small">
@@ -29,6 +31,14 @@
           </el-radio-group>
         </div>
       </template>
+
+      <el-alert
+        v-if="errorMessage"
+        :title="errorMessage"
+        type="error"
+        show-icon
+        class="result-alert"
+      />
 
       <div v-if="activeTab === 'results'" class="result-panel">
         <div class="result-toolbar">
@@ -67,7 +77,7 @@
                 <div class="header-select">
                   <el-select v-model="config.unitId" size="small" class="column-selector">
                     <el-option
-                      v-for="unit in mockUnits"
+                      v-for="unit in units"
                       :key="unit.id"
                       :label="formatUnitOption(unit)"
                       :value="unit.id"
@@ -220,12 +230,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { mockSummary as mockSummaryData, mockUnits as mockUnitsData, type MockUnit } from './mockPromptTestData'
+import { ElMessage } from 'element-plus'
+import { getPromptTestTask, listPromptTestUnits, listPromptTestExperiments } from '../api/promptTest'
+import type { PromptTestTask } from '../types/promptTest'
+import type { PromptTestResultUnit } from '../utils/promptTestResult'
+import { buildPromptTestResultUnit } from '../utils/promptTestResult'
 
-type MockOutput = MockUnit['outputs'][number]
+type UnitOutput = PromptTestResultUnit['outputs'][number]
 
 interface UnitColumnConfig {
   columnId: number
@@ -234,20 +248,17 @@ interface UnitColumnConfig {
 
 interface AlignedRow {
   index: number
-  cells: Array<MockOutput | null>
+  cells: Array<UnitOutput | null>
 }
 
 const router = useRouter()
 const route = useRoute()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
-const mockUnits = ref<MockUnit[]>([...mockUnitsData])
-const mockSummary = mockSummaryData
-const taskId = (route.params.taskId as string | undefined) ?? mockSummary.taskId
-
-const displayTaskName = computed(() =>
-  route.params.taskId ? `${mockSummary.taskName} #${route.params.taskId}` : mockSummary.taskName
-)
+const task = ref<PromptTestTask | null>(null)
+const units = ref<PromptTestResultUnit[]>([])
+const loading = ref(false)
+const errorMessage = ref<string | null>(null)
 
 const tabList = ['units', 'results', 'analysis'] as const
 type TabKey = (typeof tabList)[number]
@@ -267,11 +278,78 @@ function resolveTabFromQuery(value: unknown): TabKey | null {
 
 const queryTab = resolveTabFromQuery(route.query.tab)
 const activeTab = ref<TabKey>(queryTab ?? DEFAULT_TAB)
-const columnConfigs = ref<UnitColumnConfig[]>([
-  { columnId: 1, unitId: mockUnits.value[0]?.id ?? null },
-  { columnId: 2, unitId: mockUnits.value[1]?.id ?? mockUnits.value[0]?.id ?? null }
-])
-let columnUid = columnConfigs.value.length
+
+const columnConfigs = ref<UnitColumnConfig[]>([])
+let columnUid = 0
+
+const routeTaskIdParam = computed(() => (route.params.taskId as string | undefined) ?? '')
+
+const statusLabelMap: Record<string, string> = {
+  draft: '草稿',
+  ready: '待执行',
+  running: '执行中',
+  completed: '已完成',
+  failed: '执行失败'
+}
+
+const statusTagType: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
+  draft: 'info',
+  ready: 'info',
+  running: 'warning',
+  completed: 'success',
+  failed: 'danger'
+}
+
+const taskStatusLabel = computed(() =>
+  task.value ? statusLabelMap[task.value.status] ?? task.value.status : null
+)
+
+const taskStatusTag = computed(() => {
+  if (!task.value) return null
+  return {
+    label: taskStatusLabel.value ?? task.value.status,
+    type: statusTagType[task.value.status] ?? 'info'
+  }
+})
+
+const dateTimeFormatter = computed(
+  () =>
+    new Intl.DateTimeFormat(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+)
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '--'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+  return dateTimeFormatter.value.format(date)
+}
+
+const displayTaskName = computed(() => {
+  if (task.value?.name) {
+    return task.value.name
+  }
+  const fallbackId = routeTaskIdParam.value || (task.value ? String(task.value.id) : '')
+  return t('promptTestResult.fallback.taskTitle', { id: fallbackId || '--' })
+})
+
+const headerDescription = computed(() => {
+  if (!task.value) {
+    return t('promptTestResult.headerDescriptionPending')
+  }
+  const createdAt = formatDateTime(task.value.created_at)
+  const unitCount = units.value.length
+  const status = taskStatusLabel.value ?? task.value.status ?? '--'
+  return t('promptTestResult.headerDescription', { createdAt, unitCount, status })
+})
 
 const placeholderText = computed(() => t('promptTestResult.empty.placeholder'))
 
@@ -283,9 +361,15 @@ const filterForm = reactive({
 })
 
 const filterOptions = computed(() => {
-  const promptVersions = Array.from(new Set(mockUnits.value.map((unit) => unit.promptVersion))).filter(Boolean)
-  const modelNames = Array.from(new Set(mockUnits.value.map((unit) => unit.modelName))).filter(Boolean)
-  const parameterSets = Array.from(new Set(mockUnits.value.map((unit) => unit.parameterSet))).filter(Boolean)
+  const promptVersions = Array.from(
+    new Set(units.value.map((unit) => unit.promptVersion))
+  ).filter((value) => typeof value === 'string' && value.trim().length > 0)
+  const modelNames = Array.from(new Set(units.value.map((unit) => unit.modelName))).filter(
+    (value) => typeof value === 'string' && value.trim().length > 0
+  )
+  const parameterSets = Array.from(
+    new Set(units.value.map((unit) => unit.parameterSet))
+  ).filter((value) => typeof value === 'string' && value.trim().length > 0)
   return {
     promptVersions,
     modelNames,
@@ -294,23 +378,25 @@ const filterOptions = computed(() => {
 })
 
 const filteredUnits = computed(() =>
-  mockUnits.value.filter((unit) => {
+  units.value.filter((unit) => {
     const keyword = filterForm.keyword.trim().toLowerCase()
     const keywordMatched =
       !keyword ||
-      unit.name.toLowerCase().includes(keyword) ||
-      unit.modelName.toLowerCase().includes(keyword) ||
-      unit.promptVersion.toLowerCase().includes(keyword)
-    const versionMatched = !filterForm.promptVersion || unit.promptVersion === filterForm.promptVersion
+      [unit.name, unit.modelName, unit.promptVersion]
+        .map((field) => String(field || '').toLowerCase())
+        .some((field) => field.includes(keyword))
+    const versionMatched =
+      !filterForm.promptVersion || unit.promptVersion === filterForm.promptVersion
     const modelMatched = !filterForm.modelName || unit.modelName === filterForm.modelName
-    const parameterMatched = !filterForm.parameterSet || unit.parameterSet === filterForm.parameterSet
+    const parameterMatched =
+      !filterForm.parameterSet || unit.parameterSet === filterForm.parameterSet
     return keywordMatched && versionMatched && modelMatched && parameterMatched
   })
 )
 
 const selectedUnits = computed(() =>
-  columnConfigs.value.map((config) =>
-    mockUnits.value.find((unit) => unit.id === config.unitId) ?? null
+  columnConfigs.value.map(
+    (config) => units.value.find((unit) => unit.id === config.unitId) ?? null
   )
 )
 
@@ -334,54 +420,6 @@ const alignedRows = computed<AlignedRow[]>(() => {
   }))
 })
 
-function formatUnitOption(unit: MockUnit) {
-  return `${unit.name} | ${unit.promptVersion} | ${unit.modelName} | ${unit.parameterSet}`
-}
-
-function addColumn() {
-  if (columnConfigs.value.length >= 5) return
-  columnUid += 1
-  const availableUnit = mockUnits.value.find(
-    (unit) => !columnConfigs.value.some((config) => config.unitId === unit.id)
-  )
-  const fallbackUnitId = availableUnit?.id ?? mockUnits.value[0]?.id ?? null
-  columnConfigs.value = [
-    ...columnConfigs.value,
-    {
-      columnId: columnUid,
-      unitId: fallbackUnitId
-    }
-  ]
-}
-
-function removeColumn(columnId: number) {
-  if (columnConfigs.value.length <= 1) return
-  columnConfigs.value = columnConfigs.value.filter((config) => config.columnId !== columnId)
-}
-
-function removeLastColumn() {
-  if (columnConfigs.value.length <= 1) return
-  const lastId = columnConfigs.value[columnConfigs.value.length - 1].columnId
-  removeColumn(lastId)
-}
-
-watch(
-  columnConfigs,
-  (configs) => {
-    if (!configs.length && mockUnits.value.length) {
-      columnUid = 1
-      columnConfigs.value = [{ columnId: columnUid, unitId: mockUnits.value[0].id }]
-      return
-    }
-    configs.forEach((config) => {
-      if (config.unitId === null && mockUnits.value.length) {
-        config.unitId = mockUnits.value[0].id
-      }
-    })
-  },
-  { deep: true }
-)
-
 watch(
   () => route.query.tab,
   (tab) => {
@@ -402,18 +440,60 @@ watch(
 )
 
 watch(
-  mockUnits,
-  (units) => {
-    const unitIds = new Set(units.map((unit) => unit.id))
-    columnConfigs.value = columnConfigs.value.map((config) => {
-      if (config.unitId !== null && unitIds.has(config.unitId)) {
-        return config
-      }
-      return { ...config, unitId: units[0]?.id ?? null }
-    })
+  units,
+  (list) => {
+    if (!list.length) {
+      columnConfigs.value = []
+      columnUid = 0
+      return
+    }
+    const availableIds = new Set(list.map((unit) => unit.id))
+    let preserved = columnConfigs.value.filter(
+      (config) => config.unitId !== null && availableIds.has(config.unitId)
+    )
+    if (!preserved.length) {
+      columnUid = 0
+      preserved = list.slice(0, Math.min(2, list.length)).map((unit) => ({
+        columnId: ++columnUid,
+        unitId: unit.id
+      }))
+    } else {
+      columnUid = Math.max(...preserved.map((config) => config.columnId))
+    }
+    columnConfigs.value = preserved
   },
-  { deep: true }
+  { immediate: true }
 )
+
+function formatUnitOption(unit: PromptTestResultUnit) {
+  return `${unit.name} | ${unit.promptVersion} | ${unit.modelName} | ${unit.parameterSet}`
+}
+
+function addColumn() {
+  if (columnConfigs.value.length >= 5 || !units.value.length) return
+  const availableUnit = units.value.find(
+    (unit) => !columnConfigs.value.some((config) => config.unitId === unit.id)
+  )
+  const fallbackUnitId = availableUnit?.id ?? units.value[0]?.id ?? null
+  columnConfigs.value = [
+    ...columnConfigs.value,
+    {
+      columnId: ++columnUid,
+      unitId: fallbackUnitId
+    }
+  ]
+}
+
+function removeColumn(columnId: number) {
+  if (columnConfigs.value.length <= 1) return
+  columnConfigs.value = columnConfigs.value.filter((config) => config.columnId !== columnId)
+}
+
+function removeLastColumn() {
+  if (columnConfigs.value.length <= 1) return
+  const lastId = columnConfigs.value[columnConfigs.value.length - 1].columnId
+  removeColumn(lastId)
+}
 
 function goBack() {
   router.push({ name: 'test-job-management' })
@@ -432,9 +512,10 @@ function exportUnitsCsv() {
     'variables'
   ]
 
-  const rows = mockUnits.value.flatMap((unit) =>
+  const rows = units.value.flatMap((unit) =>
     unit.outputs.map((output) => {
-      const variables = output.variables ? JSON.stringify(output.variables) : ''
+      const variables =
+        Object.keys(output.variables).length > 0 ? JSON.stringify(output.variables) : ''
       const safeContent = output.content.replace(/"/g, '""').replace(/\r?\n/g, ' ')
       return [
         unit.id,
@@ -455,14 +536,97 @@ function exportUnitsCsv() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `prompt-test-units-${mockSummary.taskId}.csv`
+  const identifier = routeTaskIdParam.value || (task.value ? String(task.value.id) : 'task')
+  link.download = `prompt-test-units-${identifier}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
 
 function openUnitDetail(unitId: number) {
-  router.push({ name: 'prompt-test-unit-result', params: { taskId, unitId } })
+  const id = routeTaskIdParam.value || (task.value ? String(task.value.id) : '')
+  if (!id) return
+  router.push({ name: 'prompt-test-unit-result', params: { taskId: id, unitId } })
 }
+
+function extractTaskId(value: unknown): number | null {
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value
+  }
+  return null
+}
+
+async function loadTaskResult(taskId: number) {
+  loading.value = true
+  errorMessage.value = null
+  try {
+    const [taskData, unitList] = await Promise.all([
+      getPromptTestTask(taskId),
+      listPromptTestUnits(taskId)
+    ])
+    task.value = taskData
+    const experimentResults = await Promise.allSettled(
+      unitList.map((unit) => listPromptTestExperiments(unit.id))
+    )
+    let hasExperimentError = false
+    const resultUnits = unitList.map((unit, index) => {
+      const experiment = experimentResults[index]
+      if (experiment.status === 'fulfilled') {
+        return buildPromptTestResultUnit(unit, experiment.value)
+      }
+      hasExperimentError = true
+      console.error(`加载测试单元 ${unit.id} 的实验数据失败`, experiment.reason)
+      return buildPromptTestResultUnit(unit, [])
+    })
+    units.value = resultUnits
+    if (hasExperimentError) {
+      const message = t('promptTestResult.messages.partialFailed')
+      errorMessage.value = message
+      ElMessage.warning(message)
+    }
+  } catch (error) {
+    console.error('加载测试任务结果失败', error)
+    task.value = null
+    units.value = []
+    columnConfigs.value = []
+    columnUid = 0
+    const message = t('promptTestResult.messages.loadFailed')
+    errorMessage.value = message
+    ElMessage.error(message)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function refreshTask() {
+  const id = extractTaskId(route.params.taskId)
+  if (id === null) {
+    loading.value = false
+    task.value = null
+    units.value = []
+    columnConfigs.value = []
+    columnUid = 0
+    errorMessage.value = t('promptTestResult.messages.invalidTask')
+    return
+  }
+  await loadTaskResult(id)
+}
+
+onMounted(() => {
+  void refreshTask()
+})
+
+watch(
+  () => route.params.taskId,
+  () => {
+    void refreshTask()
+  }
+)
 </script>
 
 <style scoped>
@@ -488,6 +652,11 @@ function openUnitDetail(unitId: number) {
   gap: 16px;
 }
 
+.page-header__meta {
+  display: flex;
+  align-items: center;
+}
+
 .page-header__text h2 {
   margin: 0;
   font-size: 24px;
@@ -510,6 +679,10 @@ function openUnitDetail(unitId: number) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.result-alert {
+  margin-bottom: 16px;
 }
 
 .result-toolbar {

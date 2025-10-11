@@ -16,15 +16,25 @@
           <span>{{ t('promptTestResult.fields.parameters') }}: {{ unit?.parameterSet ?? '-' }}</span>
         </p>
       </div>
-      <el-tag type="success" size="small">Mock</el-tag>
+      <div v-if="unitStatusTag" class="page-header__meta">
+        <el-tag size="small" :type="unitStatusTag.type">{{ unitStatusTag.label }}</el-tag>
+      </div>
     </section>
 
-    <el-card>
+    <el-card v-loading="loading">
       <template #header>
         <div class="card-header">
-          <span>{{ t('promptTestResult.unitDetail.outputsTitle', { count: unit?.outputs.length ?? 0 }) }}</span>
+          <span>{{ t('promptTestResult.unitDetail.outputsTitle', { count: unitOutputs.length }) }}</span>
         </div>
       </template>
+
+      <el-alert
+        v-if="errorMessage"
+        :title="errorMessage"
+        type="error"
+        show-icon
+        class="unit-alert"
+      />
 
       <div class="unit-parameters">
         <h4 class="unit-parameters__title">
@@ -50,10 +60,10 @@
         </div>
       </div>
 
-      <el-empty v-if="!unit || !unit.outputs.length" :description="t('promptTestResult.empty.noOutputs')" />
+      <el-empty v-if="!unit || !unitOutputs.length" :description="t('promptTestResult.empty.noOutputs')" />
       <el-timeline v-else>
         <el-timeline-item
-          v-for="output in unit.outputs"
+          v-for="output in unitOutputs"
           :key="output.runIndex"
           :timestamp="`#${output.runIndex}`"
           placement="top"
@@ -79,29 +89,119 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-
-import { mockUnits as mockUnitsData, type MockUnit } from './mockPromptTestData'
+import { ElMessage } from 'element-plus'
+import { getPromptTestUnit, listPromptTestExperiments } from '../api/promptTest'
+import type { PromptTestResultUnit } from '../utils/promptTestResult'
+import { buildPromptTestResultUnit, buildParameterEntries } from '../utils/promptTestResult'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
-const taskId = route.params.taskId ?? 'demo'
-const unitId = Number(route.params.unitId)
+const unit = ref<PromptTestResultUnit | null>(null)
+const loading = ref(false)
+const errorMessage = ref<string | null>(null)
 
-const unit = computed<MockUnit | null>(() => mockUnitsData.find((item) => item.id === unitId) ?? null)
-const parameterEntries = computed<Array<[string, string | number]>>(() => {
-  const current = unit.value
-  if (!current) return []
-  return Object.entries(current.parameters) as Array<[string, string | number]>
+const routeTaskId = computed(() => (route.params.taskId as string | undefined) ?? '')
+const unitIdParam = computed(() => route.params.unitId)
+
+const unitStatusLabelMap: Record<string, string> = {
+  pending: '待执行',
+  running: '执行中',
+  completed: '已完成',
+  failed: '执行失败',
+  cancelled: '已取消'
+}
+
+const unitStatusTagType: Record<string, 'info' | 'success' | 'warning' | 'danger'> = {
+  pending: 'info',
+  running: 'warning',
+  completed: 'success',
+  failed: 'danger',
+  cancelled: 'info'
+}
+
+const unitStatusTag = computed(() => {
+  const status = unit.value?.status
+  if (!status) return null
+  return {
+    label: unitStatusLabelMap[status] ?? status,
+    type: unitStatusTagType[status] ?? 'info'
+  }
 })
 
+const parameterEntries = computed(() =>
+  unit.value ? buildParameterEntries(unit.value.parameters) : []
+)
+
+const unitOutputs = computed(() => unit.value?.outputs ?? [])
+
+function extractUnitId(value: unknown): number | null {
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed
+    }
+  }
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+    return value
+  }
+  return null
+}
+
+async function refreshUnit() {
+  const id = extractUnitId(unitIdParam.value)
+  if (id === null) {
+    loading.value = false
+    unit.value = null
+    errorMessage.value = t('promptTestResult.messages.invalidUnit')
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = null
+  try {
+    const unitData = await getPromptTestUnit(id)
+    let experiments = []
+    try {
+      experiments = await listPromptTestExperiments(id)
+    } catch (error) {
+      console.error('加载测试单元实验数据失败', error)
+      const message = t('promptTestResult.messages.partialFailed')
+      errorMessage.value = message
+      ElMessage.warning(message)
+    }
+    unit.value = buildPromptTestResultUnit(unitData, experiments)
+  } catch (error) {
+    console.error('加载测试单元失败', error)
+    unit.value = null
+    const message = t('promptTestResult.messages.unitLoadFailed')
+    errorMessage.value = message
+    ElMessage.error(message)
+  } finally {
+    loading.value = false
+  }
+}
+
 function goTaskResult() {
+  const taskId = routeTaskId.value
+  if (!taskId) return
   router.push({ name: 'prompt-test-task-result', params: { taskId }, query: { tab: 'units' } })
 }
+
+onMounted(() => {
+  void refreshUnit()
+})
+
+watch(
+  () => route.params.unitId,
+  () => {
+    void refreshUnit()
+  }
+)
 </script>
 
 <style scoped>
@@ -127,6 +227,11 @@ function goTaskResult() {
   gap: 16px;
 }
 
+.page-header__meta {
+  display: flex;
+  align-items: center;
+}
+
 .page-header h2 {
   margin: 0;
   font-size: 24px;
@@ -143,6 +248,10 @@ function goTaskResult() {
 
 .card-header {
   font-weight: 600;
+}
+
+.unit-alert {
+  margin-bottom: 16px;
 }
 
 .unit-parameters {
