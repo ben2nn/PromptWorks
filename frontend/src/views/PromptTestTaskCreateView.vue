@@ -310,14 +310,9 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { listPrompts, getPrompt } from '../api/prompt'
 import { listLLMProviders } from '../api/llmProvider'
-import {
-  createPromptTestTask,
-  createPromptTestExperiment,
-  listPromptTestUnits
-} from '../api/promptTest'
+import { createPromptTestTask } from '../api/promptTest'
 import type { Prompt } from '../types/prompt'
 import type { LLMProvider } from '../types/llm'
-import type { PromptTestUnit } from '../types/promptTest'
 
 const router = useRouter()
 const { t } = useI18n()
@@ -900,6 +895,7 @@ async function handleSubmit() {
         variable_headers: unitForm.variableHeaders,
         variable_source: unitForm.variableInputMode
       },
+      auto_execute: taskForm.autoExecute,
       units: unitsPayload.map((unit) => ({
         name: unit.name,
         description: unit.description,
@@ -918,29 +914,7 @@ async function handleSubmit() {
       }))
     }
 
-    const task = await createPromptTestTask(payload)
-    let units: PromptTestUnit[] = task.units ?? []
-    if (!units.length) {
-      try {
-        units = await listPromptTestUnits(task.id)
-      } catch (error) {
-        console.warn('获取任务单元列表失败', error)
-      }
-    }
-
-    if (taskForm.autoExecute && units.length) {
-      await Promise.allSettled(
-        units.map((unit) =>
-          createPromptTestExperiment(unit.id, { auto_execute: true }).catch(
-            (error) => {
-              console.error('自动执行实验失败', error)
-              throw error
-            }
-          )
-        )
-      )
-    }
-
+    await createPromptTestTask(payload)
     ElMessage.success(
       t('promptTestCreate.messages.createSuccess', { count: unitsPayload.length })
     )

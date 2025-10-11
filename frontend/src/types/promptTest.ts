@@ -5,6 +5,7 @@ export interface PromptTestTaskCreatePayload {
   owner_id?: number | null
   config?: Record<string, unknown> | null
   units?: PromptTestUnitCreatePayload[]
+  auto_execute?: boolean
 }
 
 export interface PromptTestUnitCreatePayload {

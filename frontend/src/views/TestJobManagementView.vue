@@ -137,7 +137,9 @@ import { Memo, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { listTestRuns, retryTestRun } from '../api/testRun'
+import { listPromptTestTasks } from '../api/promptTest'
 import type { TestRun } from '../types/testRun'
+import type { PromptTestTask, PromptTestUnit } from '../types/promptTest'
 import { useI18n } from 'vue-i18n'
 
 interface AggregatedJobRow {
@@ -167,6 +169,7 @@ const { t, locale } = useI18n()
 const retryingJobIds = ref<string[]>([])
 
 const testRuns = ref<TestRun[]>([])
+const promptTestTasks = ref<PromptTestTask[]>([])
 const isLoading = ref(false)
 const errorMessage = ref<string | null>(null)
 const pollingTimer = ref<number | null>(null)
@@ -180,10 +183,16 @@ function clearPolling() {
 
 function scheduleNextPoll() {
   clearPolling()
-  const hasInProgress = testRuns.value.some((run) => run.status === 'pending' || run.status === 'running')
-  if (hasInProgress) {
+  const hasLegacyInProgress = testRuns.value.some(
+    (run) => run.status === 'pending' || run.status === 'running'
+  )
+  const hasPromptTaskInProgress = promptTestTasks.value.some((task) => {
+    const status = mapPromptTestTaskStatus(task.status)
+    return status === 'pending' || status === 'running'
+  })
+  if (hasLegacyInProgress || hasPromptTaskInProgress) {
     pollingTimer.value = window.setTimeout(() => {
-      void fetchTestRuns()
+      void fetchAllJobs(false)
     }, 3000)
   }
 }
@@ -221,8 +230,15 @@ function unmarkJobRetrying(id: string) {
 }
 
 const jobs = computed<AggregatedJobRow[]>(() => {
+  const legacyRows = buildLegacyJobRows(testRuns.value)
+  const promptTaskRows = buildPromptTestTaskRows(promptTestTasks.value)
+  const merged = [...legacyRows, ...promptTaskRows]
+  return merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+})
+
+function buildLegacyJobRows(runs: TestRun[]): AggregatedJobRow[] {
   const groups = new Map<string, TestRun[]>()
-  for (const run of testRuns.value) {
+  for (const run of runs) {
     const key = run.batch_id ?? `run-${run.id}`
     const group = groups.get(key)
     if (group) {
@@ -232,87 +248,205 @@ const jobs = computed<AggregatedJobRow[]>(() => {
     }
   }
 
-  const aggregateStatus = (runs: TestRun[]): string => {
-    if (runs.some((item) => item.status === 'failed')) return 'failed'
-    if (runs.some((item) => item.status === 'running')) return 'running'
-    if (runs.some((item) => item.status === 'pending')) return 'pending'
+  const aggregateStatus = (items: TestRun[]): string => {
+    if (items.some((item) => item.status === 'failed')) return 'failed'
+    if (items.some((item) => item.status === 'running')) return 'running'
+    if (items.some((item) => item.status === 'pending')) return 'pending'
     return 'completed'
   }
 
-  return Array.from(groups.entries())
-    .map(([key, items]) => {
-      const ordered = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at))
-      const primary = ordered[0]
-      const schema = (primary.schema ?? {}) as Record<string, unknown>
-      const promptName = primary.prompt?.name ?? t('testJobManagement.unnamedPrompt')
-      const jobNameCandidate = typeof schema.job_name === 'string' ? schema.job_name.trim() : ''
-      const jobName = jobNameCandidate || primary.notes || promptName
-      const versionLabels = ordered.map((run) => {
-        const data = (run.schema ?? {}) as Record<string, unknown>
-        const label = typeof data.version_label === 'string' ? data.version_label : null
-        return (
-          label ??
-          run.prompt_version?.version ??
-          t('testJobManagement.versionFallback', { id: run.prompt_version_id })
-        )
-      })
-      const repetitions = Math.max(...ordered.map((run) => run.repetitions ?? 1))
-      const createdAt = ordered.reduce(
-        (acc, run) => (run.created_at < acc ? run.created_at : acc),
-        ordered[0].created_at
+  return Array.from(groups.entries()).map(([key, items]) => {
+    const ordered = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    const primary = ordered[0]
+    const schema = (primary.schema ?? {}) as Record<string, unknown>
+    const promptName = primary.prompt?.name ?? t('testJobManagement.unnamedPrompt')
+    const jobNameCandidate = typeof schema.job_name === 'string' ? schema.job_name.trim() : ''
+    const jobName = jobNameCandidate || primary.notes || promptName
+    const versionLabels = ordered.map((run) => {
+      const data = (run.schema ?? {}) as Record<string, unknown>
+      const label = typeof data.version_label === 'string' ? data.version_label : null
+      return (
+        label ??
+        run.prompt_version?.version ??
+        t('testJobManagement.versionFallback', { id: run.prompt_version_id })
       )
-      const updatedAt = ordered.reduce(
-        (acc, run) => (run.updated_at > acc ? run.updated_at : acc),
-        ordered[0].updated_at
-      )
-      const mode = typeof schema.mode === 'string' ? String(schema.mode) : 'same-model-different-version'
-      const failedRuns = ordered.filter((run) => run.status === 'failed')
-      const failedRunIds = failedRuns.map((run) => run.id)
-      const failureReasons = failedRuns
-        .map((run) => resolveFailureReason(run))
-        .filter((value): value is string => Boolean(value))
-      const mergedReason = failureReasons.length
-        ? Array.from(new Set(failureReasons)).join('；')
-        : null
-      let newResultTaskId: number | null = null
-      const rawTaskId = schema.prompt_test_task_id
-      if (typeof rawTaskId === 'number') {
-        newResultTaskId = rawTaskId
-      } else if (typeof rawTaskId === 'string' && rawTaskId.trim()) {
-        const parsed = Number(rawTaskId)
-        if (!Number.isNaN(parsed)) {
-          newResultTaskId = parsed
-        }
-      }
-      const isNewResultPage =
-        typeof schema.new_result_page === 'boolean'
-          ? schema.new_result_page
-          : Boolean(newResultTaskId)
-
-      return {
-        id: key,
-        batchId: primary.batch_id ?? null,
-        jobName,
-        promptName,
-        versionLabels,
-        modelName: primary.model_name,
-        providerName: primary.model_version ?? null,
-        temperature: primary.temperature,
-        repetitions,
-        status: aggregateStatus(ordered),
-        createdAt,
-        updatedAt,
-        description: primary.notes,
-        failureReason: mergedReason,
-        runIds: ordered.map((run) => run.id),
-        failedRunIds,
-        mode,
-        isNewResultPage,
-        newResultTaskId
-      }
     })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-})
+    const repetitions = Math.max(...ordered.map((run) => run.repetitions ?? 1))
+    const createdAt = ordered.reduce(
+      (acc, run) => (run.created_at < acc ? run.created_at : acc),
+      ordered[0].created_at
+    )
+    const updatedAt = ordered.reduce(
+      (acc, run) => (run.updated_at > acc ? run.updated_at : acc),
+      ordered[0].updated_at
+    )
+    const mode =
+      typeof schema.mode === 'string' ? String(schema.mode) : 'same-model-different-version'
+    const failedRuns = ordered.filter((run) => run.status === 'failed')
+    const failedRunIds = failedRuns.map((run) => run.id)
+    const failureReasons = failedRuns
+      .map((run) => resolveFailureReason(run))
+      .filter((value): value is string => Boolean(value))
+    const mergedReason = failureReasons.length
+      ? Array.from(new Set(failureReasons)).join('；')
+      : null
+    let newResultTaskId: number | null = null
+    const rawTaskId = schema.prompt_test_task_id
+    if (typeof rawTaskId === 'number') {
+      newResultTaskId = rawTaskId
+    } else if (typeof rawTaskId === 'string' && rawTaskId.trim()) {
+      const parsed = Number(rawTaskId)
+      if (!Number.isNaN(parsed)) {
+        newResultTaskId = parsed
+      }
+    }
+    const isNewResultPage =
+      typeof schema.new_result_page === 'boolean'
+        ? schema.new_result_page
+        : Boolean(newResultTaskId)
+
+    return {
+      id: key,
+      batchId: primary.batch_id ?? null,
+      jobName,
+      promptName,
+      versionLabels,
+      modelName: primary.model_name,
+      providerName: primary.model_version ?? null,
+      temperature: primary.temperature,
+      repetitions,
+      status: aggregateStatus(ordered),
+      createdAt,
+      updatedAt,
+      description: primary.notes,
+      failureReason: mergedReason,
+      runIds: ordered.map((run) => run.id),
+      failedRunIds,
+      mode,
+      isNewResultPage,
+      newResultTaskId
+    }
+  })
+}
+
+function buildPromptTestTaskRows(tasks: PromptTestTask[]): AggregatedJobRow[] {
+  return tasks.map((task) => {
+    const units = Array.isArray(task.units) ? task.units : []
+    const unitExtras = units.map((unit) => extractRecord(unit.extra))
+    const configRecord = extractRecord(task.config)
+    const jobName = task.name?.trim() || t('testJobManagement.unnamedPrompt')
+    const promptNames = deduplicateStrings(
+      unitExtras
+        .map((extra) => extractString(extra.prompt_name))
+        .filter((value): value is string => Boolean(value))
+    )
+    const configPromptName = extractString(configRecord.prompt_name)
+    const promptName =
+      promptNames[0] ?? configPromptName ?? t('testJobManagement.unnamedPrompt')
+
+    const versionLabels = deduplicateStrings(
+      units
+        .map((unit, index) => formatVersionLabel(unit, unitExtras[index]))
+        .filter((label): label is string => Boolean(label))
+    )
+    if (!versionLabels.length) {
+      versionLabels.push(
+        t('testJobManagement.versionFallback', {
+          id: task.prompt_version_id ?? '-'
+        })
+      )
+    }
+
+    const modelNames = deduplicateStrings(
+      units.map((unit) => unit.model_name)
+    )
+    const providerNames = deduplicateStrings(
+      unitExtras
+        .map((extra) => extractString(extra.llm_provider_name))
+        .filter((value): value is string => Boolean(value))
+    )
+
+    const temperatureValues = units
+      .map((unit) => unit.temperature)
+      .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
+    const roundsValues = units
+      .map((unit) => unit.rounds)
+      .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
+
+    const failureDetail = extractString(configRecord.last_error)
+    const status = mapPromptTestTaskStatus(task.status)
+
+    return {
+      id: `task-${task.id}`,
+      batchId: null,
+      jobName,
+      promptName,
+      versionLabels,
+      modelName: modelNames.length ? modelNames.join(' / ') : '--',
+      providerName: providerNames.length ? providerNames.join(' / ') : null,
+      temperature: temperatureValues.length ? temperatureValues[0] : Number.NaN,
+      repetitions: roundsValues.length ? Math.max(...roundsValues) : 1,
+      status,
+      createdAt: task.created_at,
+      updatedAt: task.updated_at,
+      description: task.description ?? null,
+      failureReason: status === 'failed' ? failureDetail : null,
+      runIds: [],
+      failedRunIds: [],
+      mode: 'prompt-test-task',
+      isNewResultPage: true,
+      newResultTaskId: task.id
+    }
+  })
+}
+
+function deduplicateStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => (typeof value === 'string' ? value.trim() : ''))
+        .filter((value) => value.length > 0)
+    )
+  )
+}
+
+function extractString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed || null
+  }
+  return null
+}
+
+function extractRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+function mapPromptTestTaskStatus(status: string): 'pending' | 'running' | 'completed' | 'failed' {
+  const normalized = typeof status === 'string' ? status.toLowerCase() : ''
+  if (normalized === 'running') return 'running'
+  if (normalized === 'completed') return 'completed'
+  if (normalized === 'failed') return 'failed'
+  return 'pending'
+}
+
+function formatVersionLabel(
+  unit: PromptTestUnit,
+  extraRecord?: Record<string, unknown>
+): string | null {
+  const extra = extraRecord ?? extractRecord(unit.extra)
+  const label = extractString(extra.prompt_version)
+  if (label) {
+    return label
+  }
+  if (typeof unit.prompt_version_id === 'number') {
+    return t('testJobManagement.versionFallback', { id: unit.prompt_version_id })
+  }
+  return null
+}
 
 const statusTagType = {
   completed: 'success',
@@ -372,14 +506,22 @@ function extractErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-async function fetchTestRuns() {
-  isLoading.value = true
+async function fetchAllJobs(withLoading = true) {
+  if (withLoading) {
+    isLoading.value = true
+  }
   errorMessage.value = null
   try {
-    testRuns.value = await listTestRuns({ limit: 200 })
+    const [runs, tasks] = await Promise.all([
+      listTestRuns({ limit: 200 }),
+      listPromptTestTasks()
+    ])
+    testRuns.value = runs
+    promptTestTasks.value = tasks
   } catch (error) {
     errorMessage.value = extractErrorMessage(error, t('testJobManagement.messages.loadFailed'))
     testRuns.value = []
+    promptTestTasks.value = []
   } finally {
     isLoading.value = false
     if (!errorMessage.value) {
@@ -391,7 +533,7 @@ async function fetchTestRuns() {
 }
 
 onMounted(() => {
-  void fetchTestRuns()
+  void fetchAllJobs()
 })
 
 onUnmounted(() => {
@@ -439,7 +581,7 @@ async function handleRetry(job: AggregatedJobRow) {
   try {
     await Promise.all(job.failedRunIds.map((runId) => retryTestRun(runId)))
     ElMessage.success(t('testJobManagement.messages.retrySuccess'))
-    await fetchTestRuns()
+    await fetchAllJobs(false)
   } catch (error) {
     ElMessage.error(
       extractErrorMessage(error, t('testJobManagement.messages.retryFailed'))

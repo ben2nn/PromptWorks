@@ -29,6 +29,7 @@ class PromptTestTaskCreate(PromptTestTaskBase):
     __test__ = False
 
     units: list["PromptTestUnitCreate"] | None = None
+    auto_execute: bool = False
 
 
 class PromptTestTaskUpdate(BaseModel):
@@ -51,6 +52,7 @@ class PromptTestTaskRead(PromptTestTaskBase):
     status: PromptTestTaskStatus
     created_at: datetime
     updated_at: datetime
+    units: list["PromptTestUnitRead"] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -153,6 +155,10 @@ class PromptTestExperimentRead(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+PromptTestTaskRead.model_rebuild()
+PromptTestUnitRead.model_rebuild()
+PromptTestExperimentRead.model_rebuild()
 
 __all__ = [
     "PromptTestTaskCreate",

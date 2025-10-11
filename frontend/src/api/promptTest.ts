@@ -16,6 +16,12 @@ export function createPromptTestTask(payload: PromptTestTaskCreatePayload): Prom
   })
 }
 
+export function listPromptTestTasks(): Promise<PromptTestTask[]> {
+  return request<PromptTestTask[]>(`${BASE_PATH}/tasks`, {
+    method: 'GET'
+  })
+}
+
 export function getPromptTestTask(taskId: number): Promise<PromptTestTask> {
   return request<PromptTestTask>(`${BASE_PATH}/tasks/${taskId}`, {
     method: 'GET'

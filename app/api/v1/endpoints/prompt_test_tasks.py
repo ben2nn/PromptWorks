@@ -29,6 +29,7 @@ from app.services.prompt_test_engine import (
     PromptTestExecutionError,
     execute_prompt_test_experiment,
 )
+from app.core.prompt_test_task_queue import enqueue_prompt_test_task
 
 router = APIRouter(prefix="/prompt-test", tags=["prompt-test"])
 
@@ -41,7 +42,11 @@ def list_prompt_test_tasks(
 ) -> Sequence[PromptTestTask]:
     """按状态筛选测试任务列表。"""
 
-    stmt = select(PromptTestTask).order_by(PromptTestTask.created_at.desc())
+    stmt = (
+        select(PromptTestTask)
+        .options(selectinload(PromptTestTask.units))
+        .order_by(PromptTestTask.created_at.desc())
+    )
     if status_filter:
         stmt = stmt.where(PromptTestTask.status == status_filter)
     return list(db.scalars(stmt))
@@ -55,7 +60,7 @@ def create_prompt_test_task(
 ) -> PromptTestTask:
     """创建新的测试任务，可同时定义最小测试单元。"""
 
-    task_data = payload.model_dump(exclude={"units"})
+    task_data = payload.model_dump(exclude={"units", "auto_execute"})
     task = PromptTestTask(**task_data)
     db.add(task)
     db.flush()
@@ -67,8 +72,15 @@ def create_prompt_test_task(
         unit = PromptTestUnit(**unit_data)
         db.add(unit)
 
+    if payload.auto_execute:
+        task.status = PromptTestTaskStatus.READY
+
     db.commit()
     db.refresh(task)
+
+    if payload.auto_execute:
+        enqueue_prompt_test_task(task.id)
+
     return task
 
 
