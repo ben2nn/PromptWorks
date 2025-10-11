@@ -254,6 +254,7 @@ export const messages = {
       headerTitle: '测试任务',
       headerDescription: '统一查看批量测试任务与执行状态，后续将支持任务创建与重跑。',
       createButton: '新建测试任务',
+      createButtonNew: '新建测试任务（新）',
       listTitle: '任务列表',
       table: {
         columns: {
@@ -760,6 +761,97 @@ export const messages = {
         llmList: '加载模型配置失败',
         promptDetail: '获取 Prompt 详情失败'
       }
+    },
+    promptTestCreate: {
+      breadcrumb: {
+        current: '新建测试任务（新）'
+      },
+      headerTitle: '新建测试任务（新）',
+      headerDescription: '基于 Prompt 测试任务与最小测试单元，快速发起多轮实验。',
+      card: {
+        title: '测试任务配置',
+        subtitle: '配置任务元数据、执行模型与测试样本，提交后可自动触发实验。'
+      },
+      form: {
+        autoExecute: '保存后自动执行',
+        sections: {
+          task: '任务信息',
+          unit: '测试单元配置',
+          parameterSets: '参数组合',
+          dataset: '测试样本'
+        },
+        fields: {
+          taskName: '任务名称',
+          taskDescription: '任务描述',
+          prompt: '关联 Prompt',
+          promptVersions: '选择版本',
+          baseUnitName: '单元命名前缀',
+          models: '调用模型',
+          parameterSetName: '参数集名称',
+          temperature: 'Temperature',
+          topP: 'Top P',
+          rounds: '执行轮次',
+          extraParameters: '附加参数（JSON）',
+          inputSamples: '输入样本'
+        },
+        placeholders: {
+          taskName: '请输入任务名称',
+          taskDescription: '用于区分或备注的说明信息',
+          prompt: '请选择要测试的 Prompt',
+          promptVersions: '请选择 Prompt 版本（可多选）',
+          baseUnitName: '若不填写，将使用任务名称生成',
+          models: '请选择模型提供者与模型（可多选）',
+          parameterSetName: '参数集 {index}',
+          extraParameters: '如需覆盖 max_tokens、stop 等参数，请输入 JSON 对象',
+          inputSamples: '每行一个样本，例如：\n你好\n请介绍 PromptWorks'
+        },
+        tips: {
+          noVersions: '该 Prompt 暂无版本，请先在 Prompt 详情中创建版本。',
+          noModels: '暂无可用模型，请先在 LLM 管理中添加模型后再试。',
+          rounds: '建议与样本数量保持一致，若不足将循环使用样本。',
+          baseUnitName: '用于生成最终单元名称，自动附加模型、版本与参数集信息。',
+          samples: '逐行输入样本，执行时按顺序取值；为空则按轮次重复同一提示。',
+          csvFormat: '支持 CSV/TXT 文件，首行定义字段名，后续每行为一组变量。',
+          noSamples: '暂未导入变量样本，提交后将使用统一提示。',
+          variableCount: '当前已解析 {count} 条变量样本。',
+          combinationCount: '将生成 {count} 个最小测试单元，提交后可在列表中查看。'
+        },
+        actions: {
+          addParameterSet: '新增参数组合',
+          removeParameterSet: '移除',
+          inputManual: '手动输入',
+          inputCsv: '导入 CSV',
+          parseVariables: '解析变量',
+          uploadCsv: '上传文件',
+          clearVariables: '清空变量'
+        },
+        defaults: {
+          parameterSet: '参数集 {index}'
+        },
+        submit: '提交任务',
+        cancel: '返回列表'
+      },
+      messages: {
+        loadPromptFailed: '加载 Prompt 数据失败，请稍后重试',
+        loadProviderFailed: '加载模型数据失败，请稍后重试',
+        taskNameRequired: '请填写任务名称',
+        promptRequired: '请选择 Prompt 及版本',
+        modelRequired: '请选择要调用的模型',
+        roundsInvalid: '轮次必须是大于 0 的整数',
+        parameterSetRequired: '请至少配置一套参数组合',
+        parameterSetRemoveLimit: '至少保留一套参数组合',
+        parameterSetJsonInvalid: '参数集「{name}」的 JSON 无效，请检查格式',
+        invalidJson: '附加参数必须是合法的 JSON 对象',
+        variablesFormatInvalid: '变量格式不正确，首行应为字段名，其余行为取值',
+        variablesParsed: '变量样本解析成功，共 {count} 条',
+        variablesCleared: '已清空变量样本',
+        csvParsed: '已从文件解析 {count} 条变量样本',
+        csvParseFailed: '文件格式解析失败，请检查内容',
+        csvReadFailed: '文件读取失败，请重试或更换文件',
+        noUnits: '未生成任何测试单元，请检查选择的模型、版本与参数集',
+        createSuccess: '测试任务创建成功，已提交执行，共生成 {count} 个单元',
+        createFailed: '创建测试任务失败，请稍后重试'
+      }
     }
   },
   'en-US': {
@@ -1017,6 +1109,7 @@ export const messages = {
       headerTitle: 'Test Jobs',
       headerDescription: 'Review batch test jobs and monitor execution status. Scheduling and re-runs are coming soon.',
       createButton: 'New Test Job',
+      createButtonNew: 'New Test Task (New)',
       listTitle: 'Job List',
       table: {
         columns: {
@@ -1522,6 +1615,99 @@ export const messages = {
         promptList: 'Failed to load prompt list.',
         llmList: 'Failed to load model configurations.',
         promptDetail: 'Failed to fetch prompt detail.'
+      }
+    },
+    promptTestCreate: {
+      breadcrumb: {
+        current: 'Create Test Task (New)'
+      },
+      headerTitle: 'Create Test Task (New)',
+      headerDescription:
+        'Use the new workflow to assemble prompt tests, schedule multiple rounds, and launch experiments quickly.',
+      card: {
+        title: 'Task Configuration',
+        subtitle:
+          'Define task metadata, execution model, and sample inputs. Submit the form to run automatically.'
+      },
+      form: {
+        autoExecute: 'Run immediately after save',
+        sections: {
+          task: 'Task Details',
+          unit: 'Test Unit Settings',
+          parameterSets: 'Parameter Sets',
+          dataset: 'Sample Inputs'
+        },
+        fields: {
+          taskName: 'Task Name',
+          taskDescription: 'Description',
+          prompt: 'Prompt',
+          promptVersions: 'Prompt Versions',
+          baseUnitName: 'Unit Name Prefix',
+          models: 'Models',
+          parameterSetName: 'Parameter Set Name',
+          temperature: 'Temperature',
+          topP: 'Top P',
+          rounds: 'Rounds',
+          extraParameters: 'Extra Parameters (JSON)',
+          inputSamples: 'Input Samples'
+        },
+        placeholders: {
+          taskName: 'Enter a friendly name for this task',
+          taskDescription: 'Optional notes about the scenario',
+          prompt: 'Select the prompt to evaluate',
+          promptVersions: 'Choose one or more prompt versions',
+          baseUnitName: 'Defaults to the task name if left empty',
+          models: 'Pick one or more provider models',
+          parameterSetName: 'Parameter Set {index}',
+          extraParameters: 'Override max_tokens, stop, etc. using a JSON object',
+          inputSamples: 'One sample per line, e.g.\nHello\nWhat is PromptWorks?'
+        },
+        tips: {
+          noVersions: 'No versions available. Create a prompt version first.',
+          noModels: 'No models found. Add models under LLM Management and retry.',
+          rounds: 'Recommended to match the number of samples. Samples loop when rounds exceed inputs.',
+          baseUnitName: 'Used to build unit names. Model, version, and parameter set labels will be appended.',
+          samples: 'Provide one sample per line. Leave blank to reuse the same prompt for every round.',
+          csvFormat: 'CSV/TXT supported. First row defines headers, subsequent rows define variable values.',
+          noSamples: 'No variable samples yet. Default prompt will be reused for each round.',
+          variableCount: '{count} variable samples parsed.',
+          combinationCount: '{count} minimal test units will be generated.'
+        },
+        actions: {
+          addParameterSet: 'Add Parameter Set',
+          removeParameterSet: 'Remove',
+          inputManual: 'Manual Input',
+          inputCsv: 'Import CSV',
+          parseVariables: 'Parse Variables',
+          uploadCsv: 'Upload File',
+          clearVariables: 'Clear Variables'
+        },
+        defaults: {
+          parameterSet: 'Parameter Set {index}'
+        },
+        submit: 'Submit Task',
+        cancel: 'Back to List'
+      },
+      messages: {
+        loadPromptFailed: 'Failed to load prompt data. Please try again later.',
+        loadProviderFailed: 'Failed to load model data. Please try again later.',
+        taskNameRequired: 'Task name is required.',
+        promptRequired: 'Please select a prompt and version.',
+        modelRequired: 'Please select a model.',
+        roundsInvalid: 'Rounds must be a positive integer.',
+        parameterSetRequired: 'Configure at least one parameter set.',
+        parameterSetRemoveLimit: 'Keep at least one parameter set.',
+        parameterSetJsonInvalid: 'Invalid JSON in parameter set "{name}". Please review the payload.',
+        invalidJson: 'Extra parameters must be valid JSON.',
+        variablesFormatInvalid: 'Variable format is invalid. The first row must define headers.',
+        variablesParsed: '{count} variable samples parsed successfully.',
+        variablesCleared: 'Variable samples cleared.',
+        csvParsed: '{count} variable samples imported from file.',
+        csvParseFailed: 'Failed to parse the uploaded file. Please verify the format.',
+        csvReadFailed: 'Unable to read the file. Please retry or choose another file.',
+        noUnits: 'No test units were generated. Please review the selected prompts, models, and parameter sets.',
+        createSuccess: 'Test task created and submitted. {count} units scheduled.',
+        createFailed: 'Failed to create test task. Please try again later.'
       }
     }
   }

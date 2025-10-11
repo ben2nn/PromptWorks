@@ -5,9 +5,14 @@
         <h2>{{ t('testJobManagement.headerTitle') }}</h2>
         <p class="page-desc">{{ t('testJobManagement.headerDescription') }}</p>
       </div>
-      <el-button type="primary" :icon="Memo" @click="handleCreateTestJob">
-        {{ t('testJobManagement.createButton') }}
-      </el-button>
+      <div class="page-header__actions">
+        <el-button type="primary" plain :icon="Memo" @click="handleCreateNewTask">
+          {{ t('testJobManagement.createButtonNew') }}
+        </el-button>
+        <el-button type="primary" :icon="Memo" @click="handleCreateTestJob">
+          {{ t('testJobManagement.createButton') }}
+        </el-button>
+      </div>
     </section>
 
     <el-card>
@@ -368,6 +373,10 @@ function handleCreateTestJob() {
   router.push({ name: 'test-job-create' })
 }
 
+function handleCreateNewTask() {
+  router.push({ name: 'prompt-test-task-create' })
+}
+
 function handleViewJob(job: AggregatedJobRow) {
   if (!job.runIds.length) {
     return
@@ -422,6 +431,11 @@ async function handleRetry(job: AggregatedJobRow) {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.page-header__actions {
+  display: flex;
+  gap: 8px;
 }
 
 .page-header__text h2 {

@@ -52,6 +52,12 @@ const router = createRouter({
       meta: { menu: 'test-job', title: '新建测试任务' }
     },
     {
+      path: '/tests/tasks/new',
+      name: 'prompt-test-task-create',
+      component: () => import('../views/PromptTestTaskCreateView.vue'),
+      meta: { menu: 'test-job', title: '新建测试任务（新）' }
+    },
+    {
       path: '/tests/jobs/:id',
       name: 'test-job-result',
       component: () => import('../views/TestJobResultView.vue'),
