@@ -5,6 +5,13 @@ from app.models.prompt import Prompt, PromptClass, PromptTag, PromptVersion
 from app.models.result import Result
 from app.models.usage import LLMUsageLog
 from app.models.test_run import TestRun, TestRunStatus
+from app.models.prompt_test import (
+    PromptTestTask,
+    PromptTestTaskStatus,
+    PromptTestUnit,
+    PromptTestExperiment,
+    PromptTestExperimentStatus,
+)
 
 __all__ = [
     "Base",
@@ -19,4 +26,9 @@ __all__ = [
     "LLMProvider",
     "LLMModel",
     "LLMUsageLog",
+    "PromptTestTask",
+    "PromptTestTaskStatus",
+    "PromptTestUnit",
+    "PromptTestExperiment",
+    "PromptTestExperimentStatus",
 ]

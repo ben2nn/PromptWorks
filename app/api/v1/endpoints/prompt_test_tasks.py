@@ -1,0 +1,304 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Sequence
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from app.db.session import get_db
+from app.models.prompt_test import (
+    PromptTestExperiment,
+    PromptTestExperimentStatus,
+    PromptTestTask,
+    PromptTestTaskStatus,
+    PromptTestUnit,
+)
+from app.schemas.prompt_test import (
+    PromptTestExperimentCreate,
+    PromptTestExperimentRead,
+    PromptTestTaskCreate,
+    PromptTestTaskRead,
+    PromptTestTaskUpdate,
+    PromptTestUnitCreate,
+    PromptTestUnitRead,
+    PromptTestUnitUpdate,
+)
+from app.services.prompt_test_engine import (
+    PromptTestExecutionError,
+    execute_prompt_test_experiment,
+)
+
+router = APIRouter(prefix="/prompt-test", tags=["prompt-test"])
+
+
+@router.get("/tasks", response_model=list[PromptTestTaskRead])
+def list_prompt_test_tasks(
+    *,
+    db: Session = Depends(get_db),
+    status_filter: PromptTestTaskStatus | None = Query(default=None, alias="status"),
+) -> Sequence[PromptTestTask]:
+    """按状态筛选测试任务列表。"""
+
+    stmt = select(PromptTestTask).order_by(PromptTestTask.created_at.desc())
+    if status_filter:
+        stmt = stmt.where(PromptTestTask.status == status_filter)
+    return list(db.scalars(stmt))
+
+
+@router.post(
+    "/tasks", response_model=PromptTestTaskRead, status_code=status.HTTP_201_CREATED
+)
+def create_prompt_test_task(
+    *, db: Session = Depends(get_db), payload: PromptTestTaskCreate
+) -> PromptTestTask:
+    """创建新的测试任务，可同时定义最小测试单元。"""
+
+    task_data = payload.model_dump(exclude={"units"})
+    task = PromptTestTask(**task_data)
+    db.add(task)
+    db.flush()
+
+    units_payload = payload.units or []
+    for unit_payload in units_payload:
+        unit_data = unit_payload.model_dump(exclude_none=True)
+        unit_data["task_id"] = task.id
+        unit = PromptTestUnit(**unit_data)
+        db.add(unit)
+
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.get("/tasks/{task_id}", response_model=PromptTestTaskRead)
+def get_prompt_test_task(
+    *, db: Session = Depends(get_db), task_id: int
+) -> PromptTestTask:
+    """获取单个测试任务详情。"""
+
+    task = db.get(PromptTestTask, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试任务不存在"
+        )
+    return task
+
+
+@router.patch("/tasks/{task_id}", response_model=PromptTestTaskRead)
+def update_prompt_test_task(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    payload: PromptTestTaskUpdate,
+) -> PromptTestTask:
+    """更新测试任务的基础信息或状态。"""
+
+    task = db.get(PromptTestTask, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试任务不存在"
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(task, key, value)
+
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+@router.get("/tasks/{task_id}/units", response_model=list[PromptTestUnitRead])
+def list_units_for_task(
+    *, db: Session = Depends(get_db), task_id: int
+) -> Sequence[PromptTestUnit]:
+    """列出指定任务下的全部最小测试单元。"""
+
+    stmt = (
+        select(PromptTestUnit)
+        .where(PromptTestUnit.task_id == task_id)
+        .order_by(PromptTestUnit.created_at.asc())
+    )
+    return list(db.scalars(stmt))
+
+
+@router.post(
+    "/tasks/{task_id}/units",
+    response_model=PromptTestUnitRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_unit_for_task(
+    *,
+    db: Session = Depends(get_db),
+    task_id: int,
+    payload: PromptTestUnitCreate,
+) -> PromptTestUnit:
+    """在指定任务下新增最小测试单元。"""
+
+    task = db.get(PromptTestTask, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试任务不存在"
+        )
+
+    unit_data = payload.model_dump(exclude_none=True)
+    unit_data["task_id"] = task_id
+    unit = PromptTestUnit(**unit_data)
+    db.add(unit)
+    db.commit()
+    db.refresh(unit)
+    return unit
+
+
+@router.get("/units/{unit_id}", response_model=PromptTestUnitRead)
+def get_prompt_test_unit(
+    *, db: Session = Depends(get_db), unit_id: int
+) -> PromptTestUnit:
+    """获取最小测试单元详情。"""
+
+    unit = db.get(PromptTestUnit, unit_id)
+    if not unit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试单元不存在"
+        )
+    return unit
+
+
+@router.patch("/units/{unit_id}", response_model=PromptTestUnitRead)
+def update_prompt_test_unit(
+    *,
+    db: Session = Depends(get_db),
+    unit_id: int,
+    payload: PromptTestUnitUpdate,
+) -> PromptTestUnit:
+    """更新最小测试单元的配置。"""
+
+    unit = db.get(PromptTestUnit, unit_id)
+    if not unit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试单元不存在"
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(unit, key, value)
+
+    db.commit()
+    db.refresh(unit)
+    return unit
+
+
+@router.get(
+    "/units/{unit_id}/experiments", response_model=list[PromptTestExperimentRead]
+)
+def list_experiments_for_unit(
+    *, db: Session = Depends(get_db), unit_id: int
+) -> Sequence[PromptTestExperiment]:
+    """列出指定测试单元下的实验记录。"""
+
+    stmt = (
+        select(PromptTestExperiment)
+        .where(PromptTestExperiment.unit_id == unit_id)
+        .order_by(PromptTestExperiment.created_at.desc())
+    )
+    return list(db.scalars(stmt))
+
+
+@router.post(
+    "/units/{unit_id}/experiments",
+    response_model=PromptTestExperimentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_experiment_for_unit(
+    *,
+    db: Session = Depends(get_db),
+    unit_id: int,
+    payload: PromptTestExperimentCreate,
+) -> PromptTestExperiment:
+    """为指定测试单元创建实验，可选择立即执行。"""
+
+    unit = db.get(PromptTestUnit, unit_id)
+    if not unit:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试单元不存在"
+        )
+
+    sequence = payload.sequence
+    if sequence is None:
+        sequence = (
+            db.scalar(
+                select(func.max(PromptTestExperiment.sequence)).where(
+                    PromptTestExperiment.unit_id == unit_id
+                )
+            )
+            or 0
+        ) + 1
+
+    experiment_data = payload.model_dump(exclude={"auto_execute"}, exclude_none=True)
+    experiment_data["unit_id"] = unit_id
+    experiment_data["sequence"] = sequence
+
+    experiment = PromptTestExperiment(**experiment_data)
+    db.add(experiment)
+    db.flush()
+
+    if payload.auto_execute:
+        try:
+            execute_prompt_test_experiment(db, experiment)
+        except PromptTestExecutionError as exc:
+            experiment.status = PromptTestExperimentStatus.FAILED
+            experiment.error = str(exc)
+            experiment.finished_at = datetime.now(UTC)
+            db.flush()
+
+    db.commit()
+    db.refresh(experiment)
+    return experiment
+
+
+@router.get("/experiments/{experiment_id}", response_model=PromptTestExperimentRead)
+def get_prompt_test_experiment(
+    *, db: Session = Depends(get_db), experiment_id: int
+) -> PromptTestExperiment:
+    """获取实验结果详情。"""
+
+    stmt = (
+        select(PromptTestExperiment)
+        .where(PromptTestExperiment.id == experiment_id)
+        .options(selectinload(PromptTestExperiment.unit))
+    )
+    experiment = db.execute(stmt).scalar_one_or_none()
+    if not experiment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="实验记录不存在"
+        )
+    return experiment
+
+
+@router.post(
+    "/experiments/{experiment_id}/execute",
+    response_model=PromptTestExperimentRead,
+)
+def execute_existing_experiment(
+    *, db: Session = Depends(get_db), experiment_id: int
+) -> PromptTestExperiment:
+    """重新执行已存在的实验记录。"""
+
+    experiment = db.get(PromptTestExperiment, experiment_id)
+    if not experiment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="实验记录不存在"
+        )
+
+    try:
+        execute_prompt_test_experiment(db, experiment)
+    except PromptTestExecutionError as exc:
+        experiment.status = PromptTestExperimentStatus.FAILED
+        experiment.error = str(exc)
+        experiment.finished_at = datetime.now(UTC)
+
+    db.commit()
+    db.refresh(experiment)
+    return experiment
