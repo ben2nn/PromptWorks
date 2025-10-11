@@ -83,6 +83,17 @@
         <el-table-column :label="t('testJobManagement.table.columns.repetitions')" width="100">
           <template #default="{ row }">{{ row.repetitions }}</template>
         </el-table-column>
+        <el-table-column :label="t('testJobManagement.table.columns.version')" width="110">
+          <template #default="{ row }">
+            <el-tag :type="row.isNewResultPage ? 'success' : 'info'" size="small">
+              {{
+                row.isNewResultPage
+                  ? t('testJobManagement.table.version.new')
+                  : t('testJobManagement.table.version.legacy')
+              }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('testJobManagement.table.columns.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType[row.status] ?? 'info'" size="small">
@@ -147,6 +158,8 @@ interface AggregatedJobRow {
   runIds: number[]
   failedRunIds: number[]
   mode: string
+  isNewResultPage: boolean
+  newResultTaskId: number | null
 }
 
 const router = useRouter()
@@ -261,6 +274,20 @@ const jobs = computed<AggregatedJobRow[]>(() => {
       const mergedReason = failureReasons.length
         ? Array.from(new Set(failureReasons)).join('；')
         : null
+      let newResultTaskId: number | null = null
+      const rawTaskId = schema.prompt_test_task_id
+      if (typeof rawTaskId === 'number') {
+        newResultTaskId = rawTaskId
+      } else if (typeof rawTaskId === 'string' && rawTaskId.trim()) {
+        const parsed = Number(rawTaskId)
+        if (!Number.isNaN(parsed)) {
+          newResultTaskId = parsed
+        }
+      }
+      const isNewResultPage =
+        typeof schema.new_result_page === 'boolean'
+          ? schema.new_result_page
+          : Boolean(newResultTaskId)
 
       return {
         id: key,
@@ -279,7 +306,9 @@ const jobs = computed<AggregatedJobRow[]>(() => {
         failureReason: mergedReason,
         runIds: ordered.map((run) => run.id),
         failedRunIds,
-        mode
+        mode,
+        isNewResultPage,
+        newResultTaskId
       }
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -378,6 +407,14 @@ function handleCreateNewTask() {
 }
 
 function handleViewJob(job: AggregatedJobRow) {
+  if (job.isNewResultPage) {
+    const targetId = job.newResultTaskId ?? job.id
+    router.push({
+      name: 'prompt-test-task-result',
+      params: { taskId: targetId }
+    })
+    return
+  }
   if (!job.runIds.length) {
     return
   }

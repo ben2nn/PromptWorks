@@ -263,6 +263,7 @@ export const messages = {
           versions: '版本列表',
           temperature: '温度',
           repetitions: '测试次数',
+          version: '结果页',
           status: '状态',
           createdAt: '创建时间',
           updatedAt: '最近更新',
@@ -271,7 +272,11 @@ export const messages = {
         promptPrefix: 'Prompt：',
         notePrefix: '备注：',
         viewDetails: '查看详情',
-        retry: '重试'
+        retry: '重试',
+        version: {
+          new: '新版',
+          legacy: '旧版'
+        }
       },
       versionCount: '{count} 版本',
       empty: '暂未创建测试任务',
@@ -852,6 +857,54 @@ export const messages = {
         createSuccess: '测试任务创建成功，已提交执行，共生成 {count} 个单元',
         createFailed: '创建测试任务失败，请稍后重试'
       }
+    },
+    promptTestResult: {
+      mockDescription: '创建于 {createdAt} · 共 {unitCount} 个最小测试单元 · 当前为模拟数据',
+      tabs: {
+        results: '测试结果',
+        units: '最小测试单元',
+        analysis: '分析报告'
+      },
+      breadcrumb: {
+        task: '返回任务结果'
+      },
+      columns: {
+        left: '左侧单元',
+        right: '右侧单元'
+      },
+      fields: {
+        version: '版本',
+        model: '模型',
+        parameters: '参数'
+      },
+      filters: {
+        keywordPlaceholder: '搜索单元名称 / 模型 / 版本',
+        promptVersion: '筛选版本',
+        modelName: '筛选模型',
+        parameterSet: '筛选参数集'
+      },
+      actions: {
+        addColumn: '添加列',
+        removeColumn: '减少列',
+        removeSingleColumn: '移除列',
+        columnCount: '当前列数：{count}',
+        exportCsv: '导出 CSV'
+      },
+      labels: {
+        outputs: '条结果'
+      },
+      unitDetail: {
+        outputsTitle: '全部结果（共 {count} 条）',
+        parametersTitle: '参数配置（{name}）',
+        parametersEmpty: '暂无参数配置信息'
+      },
+      empty: {
+        placeholder: '暂无输出',
+        noSelection: '未选择单元',
+        noOutputs: '暂无输出结果',
+        analysis: '分析报告功能建设中',
+        noUnitsFiltered: '暂无符合筛选条件的最小测试单元'
+      }
     }
   },
   'en-US': {
@@ -1118,6 +1171,7 @@ export const messages = {
           versions: 'Versions',
           temperature: 'Temperature',
           repetitions: 'Runs',
+          version: 'Result Page',
           status: 'Status',
           createdAt: 'Created At',
           updatedAt: 'Last Updated',
@@ -1126,7 +1180,11 @@ export const messages = {
         promptPrefix: 'Prompt: ',
         notePrefix: 'Note: ',
         viewDetails: 'View Details',
-        retry: 'Retry'
+        retry: 'Retry',
+        version: {
+          new: 'New',
+          legacy: 'Legacy'
+        }
       },
       versionCount: '{count} versions',
       empty: 'No test jobs yet',
@@ -1708,6 +1766,54 @@ export const messages = {
         noUnits: 'No test units were generated. Please review the selected prompts, models, and parameter sets.',
         createSuccess: 'Test task created and submitted. {count} units scheduled.',
         createFailed: 'Failed to create test task. Please try again later.'
+      }
+    },
+    promptTestResult: {
+      mockDescription: 'Created at {createdAt} · {unitCount} minimal test units · Mock data only',
+      tabs: {
+        results: 'Test Results',
+        units: 'Test Units',
+        analysis: 'Analysis Report'
+      },
+      breadcrumb: {
+        task: 'Back to Task Results'
+      },
+      columns: {
+        left: 'Left Unit',
+        right: 'Right Unit'
+      },
+      fields: {
+        version: 'Version',
+        model: 'Model',
+        parameters: 'Parameters'
+      },
+      filters: {
+        keywordPlaceholder: 'Search unit name / model / version',
+        promptVersion: 'Filter Versions',
+        modelName: 'Filter Models',
+        parameterSet: 'Filter Parameter Sets'
+      },
+      actions: {
+        addColumn: 'Add Column',
+        removeColumn: 'Remove Column',
+        removeSingleColumn: 'Remove',
+        columnCount: 'Columns: {count}',
+        exportCsv: 'Export CSV'
+      },
+      labels: {
+        outputs: 'outputs'
+      },
+      unitDetail: {
+        outputsTitle: 'All Outputs ({count})',
+        parametersTitle: 'Parameter Configuration ({name})',
+        parametersEmpty: 'No parameter configuration available'
+      },
+      empty: {
+        placeholder: 'No output',
+        noSelection: 'No unit selected',
+        noOutputs: 'No output data available',
+        analysis: 'Analysis report coming soon',
+        noUnitsFiltered: 'No test units match the current filters'
       }
     }
   }
