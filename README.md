@@ -1,4 +1,8 @@
-﻿# PromptWorks 项目总览
+﻿![PromptWorks 标志](docs/logo.jpg)
+
+[中文](README.md) | [English](docs/README_en.md)
+
+# PromptWorks 项目总览
 
 PromptWorks 是一个聚焦 Prompt 资产管理与大模型运营的全栈解决方案，仓库内包含 FastAPI 后端与 Vue + Element Plus 前端。平台支持 Prompt 全生命周期管理、模型配置、版本对比与评估实验，为团队提供统一的提示词协作与测试工作台。
 
