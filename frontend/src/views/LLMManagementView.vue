@@ -24,8 +24,12 @@
           >
             <div class="provider-card__header">
               <div class="provider-card__identity">
-                <el-avatar :size="48" class="provider-card__avatar">
-                  {{ card.logo }}
+                <el-avatar
+                  :size="48"
+                  class="provider-card__avatar"
+                  :src="card.logoUrl || undefined"
+                >
+                  {{ card.logoEmoji ?? '✨' }}
                 </el-avatar>
                 <div class="provider-card__text">
                   <h3>{{ card.providerName }}</h3>
@@ -327,7 +331,8 @@ interface ProviderCard {
   id: number
   providerKey?: string | null
   providerName: string
-  logo: string
+  logoEmoji: string | null
+  logoUrl: string | null
   maskedApiKey: string
   baseUrl: string
   isCustom: boolean
@@ -398,11 +403,11 @@ function applyCommonProvider(key: string) {
   if (provider) {
     llmForm.provider_name = provider.name
     llmForm.base_url = provider.base_url ?? ''
-    llmForm.logo_emoji = provider.logo_emoji ?? '✨'
+    llmForm.logo_emoji = provider.logo_emoji ?? ''
   } else {
     llmForm.provider_name = key
     llmForm.base_url = ''
-    llmForm.logo_emoji = '✨'
+    llmForm.logo_emoji = ''
   }
 }
 
@@ -490,11 +495,15 @@ function mapProviderToCard(
   collapsedState: Map<number, boolean>,
   revealState: Map<number, boolean>
 ): ProviderCard {
+  const logoUrl = provider.logo_url ?? null
+  const logoEmoji =
+    provider.logo_emoji ?? (logoUrl ? null : '✨')
   return {
     id: provider.id,
     providerKey: provider.provider_key,
     providerName: provider.provider_name,
-    logo: provider.logo_emoji ?? '✨',
+    logoEmoji,
+    logoUrl,
     maskedApiKey: provider.masked_api_key,
     baseUrl: provider.base_url ?? '',
     isCustom: provider.is_custom,
