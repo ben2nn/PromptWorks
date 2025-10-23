@@ -305,7 +305,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { listPrompts, getPrompt } from '../api/prompt'
@@ -314,6 +314,7 @@ import { createPromptTestTask } from '../api/promptTest'
 import type { Prompt } from '../types/prompt'
 import type { LLMProvider } from '../types/llm'
 
+const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
@@ -400,6 +401,8 @@ const promptOptions = ref<Prompt[]>([])
 const selectedPrompt = ref<Prompt | null>(null)
 const providers = ref<LLMProvider[]>([])
 const csvInputRef = ref<HTMLInputElement | null>(null)
+const routePromptId = ref<number | null>(null)
+const routeVersionIds = ref<number[]>([])
 
 let parameterSetUid = 1
 const parameterSets = ref<ParameterSet[]>([createParameterSet()])
@@ -500,7 +503,8 @@ async function loadPromptDetail(promptId: number | null) {
     selectedPrompt.value = detail
     const defaultVersionId =
       detail.current_version?.id ?? detail.versions[0]?.id ?? null
-    if (defaultVersionId !== null) {
+    const appliedFromRoute = applyRouteVersionDefaults()
+    if (!appliedFromRoute && defaultVersionId !== null) {
       taskForm.promptVersionIds = [defaultVersionId]
     }
   } catch (error) {
@@ -545,6 +549,102 @@ watch(
   },
   { deep: true }
 )
+
+function normalizeRouteNumber(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  if (raw === null || raw === undefined) {
+    return null
+  }
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw)) {
+      return null
+    }
+    const intValue = Math.trunc(raw)
+    return intValue > 0 ? intValue : null
+  }
+  const text = String(raw).trim()
+  if (!text) {
+    return null
+  }
+  const numeric = Number(text)
+  if (!Number.isFinite(numeric)) {
+    return null
+  }
+  const intValue = Math.trunc(numeric)
+  return intValue > 0 ? intValue : null
+}
+
+function normalizeRouteNumberList(value: unknown): number[] {
+  const values: unknown[] =
+    Array.isArray(value)
+      ? value
+      : typeof value === 'string'
+      ? value.split(',').map((item) => item.trim())
+      : value === null || value === undefined
+      ? []
+      : [value]
+  const result: number[] = []
+  values.forEach((item) => {
+    const parsed = normalizeRouteNumber(item)
+    if (parsed !== null) {
+      result.push(parsed)
+    }
+  })
+  return Array.from(new Set(result))
+}
+
+function applyRouteVersionDefaults(): boolean {
+  const prompt = selectedPrompt.value
+  if (!prompt) {
+    return false
+  }
+  if (routePromptId.value === null || routePromptId.value !== prompt.id) {
+    return false
+  }
+  if (!routeVersionIds.value.length) {
+    return false
+  }
+  const validIds = routeVersionIds.value.filter((id) =>
+    prompt.versions.some((version) => version.id === id)
+  )
+  if (!validIds.length) {
+    return false
+  }
+  taskForm.promptVersionIds = validIds
+  return true
+}
+
+function syncRoutePromptId() {
+  const parsed = normalizeRouteNumber(route.query.promptId)
+  routePromptId.value = parsed
+  if (parsed !== null && parsed !== taskForm.promptId) {
+    taskForm.promptId = parsed
+  }
+}
+
+routeVersionIds.value = normalizeRouteNumberList(route.query.promptVersionIds)
+
+watch(
+  () => route.query.promptId,
+  () => {
+    syncRoutePromptId()
+    if (routePromptId.value === taskForm.promptId) {
+      applyRouteVersionDefaults()
+    }
+  }
+)
+
+watch(
+  () => route.query.promptVersionIds,
+  () => {
+    routeVersionIds.value = normalizeRouteNumberList(route.query.promptVersionIds)
+    if (routePromptId.value === taskForm.promptId) {
+      applyRouteVersionDefaults()
+    }
+  }
+)
+
+syncRoutePromptId()
 
 function createParameterSet(): ParameterSet {
   return {

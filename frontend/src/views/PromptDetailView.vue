@@ -577,7 +577,11 @@ function handleCreateVersion() {
 
 function handleCreateTest() {
   if (!currentId.value) return
-  router.push({ name: 'prompt-test-create', params: { id: currentId.value } })
+  const query: Record<string, string> = { promptId: String(currentId.value) }
+  if (selectedVersionId.value) {
+    query.promptVersionIds = String(selectedVersionId.value)
+  }
+  router.push({ name: 'prompt-test-task-create', query })
 }
 
 function handleViewTestJob(jobId: number) {
