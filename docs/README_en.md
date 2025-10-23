@@ -144,3 +144,7 @@ docker compose down -v         # Stop and remove volumes
 3. Open a pull request summarizing the change scope and verification steps; keep local commit messages concise and in Chinese.
 
 We welcome issues and suggestions—let’s build PromptWorks together!
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=YellowSeaa/PromptWorks&type=date&legend=top-left)](https://www.star-history.com/#YellowSeaa/PromptWorks&type=date&legend=top-left)

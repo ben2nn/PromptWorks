@@ -96,13 +96,19 @@ def _serialize_provider(provider: LLMProvider) -> LLMProviderRead:
         LLMModelRead.model_validate(model, from_attributes=True)
         for model in sorted(provider.models, key=lambda item: item.created_at)
     ]
+    defaults = get_provider_defaults(provider.provider_key)
+    resolved_base_url = provider.base_url or (defaults.base_url if defaults else None)
+    resolved_logo_url = provider.logo_url or (defaults.logo_url if defaults else None)
+    resolved_logo_emoji = provider.logo_emoji
+    if resolved_logo_emoji is None and defaults:
+        resolved_logo_emoji = defaults.logo_emoji
     return LLMProviderRead(
         id=provider.id,
         provider_key=provider.provider_key,
         provider_name=provider.provider_name,
-        base_url=provider.base_url,
-        logo_emoji=provider.logo_emoji,
-        logo_url=provider.logo_url,
+        base_url=resolved_base_url,
+        logo_emoji=resolved_logo_emoji,
+        logo_url=resolved_logo_url,
         is_custom=provider.is_custom,
         is_archived=provider.is_archived,
         default_model_name=provider.default_model_name,
