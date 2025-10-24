@@ -466,7 +466,50 @@ watch(
 )
 
 function formatUnitOption(unit: PromptTestResultUnit) {
-  return `${unit.name} | ${unit.promptVersion} | ${unit.modelName} | ${unit.parameterSet}`
+  const displayParts: string[] = []
+  const seenSegments = new Set<string>()
+
+  const normalize = (segment: string) => segment.replace(/\s+/g, '').toLowerCase()
+  const splitSegments = (value: string) =>
+    value
+      .split('/')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+
+  const addValue = (raw: unknown, force = false) => {
+    if (typeof raw !== 'string') return
+    const text = raw.trim()
+    if (!text) return
+    const segments = splitSegments(text)
+    const normalizedSegments = segments
+      .map((segment) => normalize(segment))
+      .filter((segment) => segment.length > 0)
+    const seenList = Array.from(seenSegments)
+    const hasNewSegment = normalizedSegments.some((segment) => {
+      if (seenSegments.has(segment)) {
+        return false
+      }
+      const redundant =
+        segment.length <= 4 && seenList.some((existing) => existing.includes(segment))
+      return !redundant
+    })
+    if (!force && !hasNewSegment) {
+      normalizedSegments.forEach((segment) => seenSegments.add(segment))
+      return
+    }
+    displayParts.push(text)
+    normalizedSegments.forEach((segment) => seenSegments.add(segment))
+  }
+
+  addValue(unit.name, true)
+  addValue(unit.promptVersion)
+  addValue(unit.modelName)
+  addValue(unit.parameterSet)
+
+  if (!displayParts.length) {
+    return String(unit.id)
+  }
+  return displayParts.join(' | ')
 }
 
 function addColumn() {

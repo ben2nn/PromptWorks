@@ -1,6 +1,6 @@
 ﻿![PromptWorks 标志](docs/logo.jpg)
 
-[中文](README.md) | [English](docs/README_en.md)
+中文 | [English](docs/README_en.md) | [更新记录](docs/UPDATES.md)
 
 # PromptWorks 项目总览
 
@@ -144,3 +144,7 @@ docker compose down -v         # 停止并删除数据卷
 3. 提交 Pull Request，并在描述中说明变更范围与验证方式；本地提交信息建议使用简短中文描述。
 
 欢迎提出 Issue 或改进建议，共建 PromptWorks！
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=YellowSeaa/PromptWorks&type=date&legend=top-left)](https://www.star-history.com/#YellowSeaa/PromptWorks&type=date&legend=top-left)
