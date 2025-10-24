@@ -111,7 +111,20 @@ function buildOutputs(experiment: PromptTestExperiment | null): PromptTestResult
         : record.parsed_output ?? record.output ?? ''
     const content = formatDisplayValue(contentSource)
     const meta = formatOutputMeta(record)
-    const variables = normalizeRecord(record.parameters)
+    const parameterRecord = extractRecord(record.parameters)
+    const directVariables = extractRecord(record.variables)
+    const nestedParameterVariables =
+      'variables' in parameterRecord ? extractRecord(parameterRecord.variables) : {}
+    const contextVariables = extractRecord(record.context)
+    const variablesSource =
+      Object.keys(directVariables).length > 0
+        ? directVariables
+        : Object.keys(nestedParameterVariables).length > 0
+          ? nestedParameterVariables
+          : Object.keys(contextVariables).length > 0
+            ? contextVariables
+            : parameterRecord
+    const variables = normalizeRecord(variablesSource)
     return {
       runIndex,
       content,

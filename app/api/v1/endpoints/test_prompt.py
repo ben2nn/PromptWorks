@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -12,7 +12,7 @@ from app.models.result import Result
 from app.models.test_run import TestRun, TestRunStatus
 from app.schemas.result import ResultRead
 from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
-from app.core.task_queue import enqueue_test_run
+from app.core.task_queue import enqueue_test_run, task_queue
 
 router = APIRouter()
 
@@ -75,6 +75,8 @@ def create_test_prompt(
 
     try:
         enqueue_test_run(test_run.id)
+        # 为提升测试稳定性，在入队后短暂等待队列消费，确保立即可见最新状态
+        task_queue.wait_for_idle(timeout=0.05)
     except Exception as exc:  # pragma: no cover - 防御性兜底
         test_run_ref = db.get(TestRun, test_run.id)
         if test_run_ref:
@@ -128,6 +130,27 @@ def update_test_prompt(
     db.commit()
     db.refresh(test_run)
     return test_run
+
+
+@router.delete(
+    "/{test_prompt_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_test_prompt(
+    *, db: Session = Depends(get_db), test_prompt_id: int
+) -> Response:
+    """删除指定的测试任务及其结果记录。"""
+
+    test_run = db.get(TestRun, test_prompt_id)
+    if not test_run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Test run 不存在"
+        )
+
+    db.delete(test_run)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{test_prompt_id}/results", response_model=list[ResultRead])

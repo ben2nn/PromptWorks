@@ -51,4 +51,10 @@ export function retryTestRun(testRunId: number): Promise<TestRun> {
   })
 }
 
+export function deleteTestRun(testRunId: number): Promise<void> {
+  return request<void>(`/test_prompt/${testRunId}`, {
+    method: 'DELETE'
+  })
+}
+
 export type { TestRun, TestRunStatus }

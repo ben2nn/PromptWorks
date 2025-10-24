@@ -107,12 +107,20 @@ def test_execute_prompt_test_experiment_generates_metrics(db_session, monkeypatc
 
     refreshed = db_session.get(PromptTestExperiment, experiment.id)
     assert refreshed.status == PromptTestExperimentStatus.COMPLETED
-    assert refreshed.outputs is not None and len(refreshed.outputs) == 2
+    assert refreshed.outputs is not None and len(refreshed.outputs) == 4
     assert refreshed.outputs[0]["output_text"] == "Hello"
     assert refreshed.outputs[1]["parsed_output"] == {"value": "Thanks"}
+    assert refreshed.outputs[2]["output_text"] == "Hello"
+    assert refreshed.outputs[3]["parsed_output"] == {"value": "Thanks"}
+    assert [item["variables"] for item in refreshed.outputs] == [
+        {"text": "你好"},
+        {"text": "谢谢"},
+        {"text": "你好"},
+        {"text": "谢谢"},
+    ]
 
     metrics = refreshed.metrics
-    assert metrics and metrics["rounds"] == 2
+    assert metrics and metrics["rounds"] == 4
     assert metrics["json_success_rate"] == pytest.approx(0.5, rel=1e-3)
     assert metrics["avg_latency_ms"] > 0
 
@@ -169,6 +177,7 @@ def test_prompt_test_api_creates_and_executes_experiment(
     assert body["status"] == PromptTestExperimentStatus.COMPLETED.value
     assert body["metrics"]["rounds"] == 1
     assert body["outputs"][0]["output_text"] == "Hello World"
+    assert body["outputs"][0]["variables"] == {"text": "你好"}
 
     detail_resp = client.get(f"/api/v1/prompt-test/experiments/{body['id']}")
     assert detail_resp.status_code == 200
