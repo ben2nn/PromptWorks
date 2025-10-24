@@ -28,6 +28,12 @@ export function getPromptTestTask(taskId: number): Promise<PromptTestTask> {
   })
 }
 
+export function deletePromptTestTask(taskId: number): Promise<void> {
+  return request<void>(`${BASE_PATH}/tasks/${taskId}`, {
+    method: 'DELETE'
+  })
+}
+
 export function createPromptTestExperiment(
   unitId: number,
   payload: PromptTestExperimentCreatePayload

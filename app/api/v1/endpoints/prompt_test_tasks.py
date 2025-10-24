@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Sequence
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -120,6 +120,27 @@ def update_prompt_test_task(
     db.commit()
     db.refresh(task)
     return task
+
+
+@router.delete(
+    "/tasks/{task_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
+def delete_prompt_test_task(
+    *, db: Session = Depends(get_db), task_id: int
+) -> Response:
+    """删除指定测试任务及其关联的最小测试单元。"""
+
+    task = db.get(PromptTestTask, task_id)
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="测试任务不存在"
+        )
+
+    db.delete(task)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/tasks/{task_id}/units", response_model=list[PromptTestUnitRead])

@@ -217,7 +217,19 @@
         <el-divider />
 
         <section class="form-section">
-          <h4 class="section-title">{{ t('promptTestCreate.form.sections.dataset') }}</h4>
+          <div class="section-title-row">
+            <h4 class="section-title">{{ t('promptTestCreate.form.sections.dataset') }}</h4>
+            <el-tooltip :content="datasetTooltip" placement="top">
+              <el-button
+                class="section-help-button"
+                :icon="QuestionFilled"
+                circle
+                size="small"
+                text
+                :aria-label="datasetTooltip"
+              />
+            </el-tooltip>
+          </div>
           <div class="variables-mode">
             <el-radio-group v-model="unitForm.variableInputMode" size="small">
               <el-radio-button label="textarea">
@@ -308,6 +320,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { QuestionFilled } from '@element-plus/icons-vue'
 import { listPrompts, getPrompt } from '../api/prompt'
 import { listLLMProviders } from '../api/llmProvider'
 import { createPromptTestTask } from '../api/promptTest'
@@ -473,6 +486,15 @@ const selectedModelInfos = computed<ModelInfo[]>(() =>
     .map((key) => modelOptionMap.value.get(key))
     .filter((info): info is ModelInfo => Boolean(info))
 )
+const baseNameCustomized = ref(false)
+let syncingBaseName = false
+
+function applyBaseNameFromTaskName(source: string) {
+  const next = source ? source.trim() : ''
+  syncingBaseName = true
+  unitForm.baseName = next
+  syncingBaseName = false
+}
 
 const previewHeaders = computed(() => unitForm.variableHeaders)
 const variablesCount = computed(() => unitForm.variablesPreview.length)
@@ -482,13 +504,46 @@ const combinationCount = computed(
     selectedModelInfos.value.length *
     parameterSets.value.length
 )
+const effectiveRounds = computed(() => {
+  const value = Number(unitForm.rounds)
+  if (Number.isFinite(value) && value > 0) {
+    return Math.max(1, Math.floor(value))
+  }
+  return 1
+})
+const totalDatasetRuns = computed(() =>
+  variablesCount.value > 0
+    ? variablesCount.value * effectiveRounds.value
+    : effectiveRounds.value
+)
+const datasetTooltip = computed(() =>
+  t('promptTestCreate.form.tips.datasetTooltip', {
+    rows: variablesCount.value,
+    rounds: effectiveRounds.value,
+    total: totalDatasetRuns.value
+  })
+)
+
+watch(
+  () => unitForm.baseName,
+  (value) => {
+    if (syncingBaseName) return
+    const normalized = value.trim()
+    const source = (taskForm.name ?? '').trim()
+    baseNameCustomized.value = normalized.length > 0 && normalized !== source
+    if (!normalized.length) {
+      baseNameCustomized.value = false
+    }
+  }
+)
 
 watch(
   () => taskForm.name,
   (value) => {
-    if (!unitForm.baseName.trim()) {
-      unitForm.baseName = value ? value.trim() : ''
+    if (baseNameCustomized.value) {
+      return
     }
+    applyBaseNameFromTaskName(value ?? '')
   }
 )
 
@@ -1109,6 +1164,19 @@ onMounted(() => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+}
+
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-help-button {
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
 }
 
 .form-tip {
