@@ -273,6 +273,7 @@ export const messages = {
         notePrefix: '备注：',
         viewDetails: '查看详情',
         retry: '重试',
+        delete: '删除',
         version: {
           new: '新版',
           legacy: '旧版'
@@ -293,7 +294,12 @@ export const messages = {
         loadFailed: '加载测试任务失败',
         retrySuccess: '已重新入队失败任务',
         retryFailed: '重试失败，请稍后再试',
-        noFailedRuns: '没有需要重试的失败任务'
+        noFailedRuns: '没有需要重试的失败任务',
+        deleteConfirmTitle: '确认删除',
+        deleteConfirmMessage: '确认删除测试任务「{name}」吗？该操作不可撤销。',
+        deleteSuccess: '测试任务已删除',
+        deleteFailed: '删除测试任务失败，请稍后再试',
+        deleteUnavailable: '当前任务暂不支持删除'
       }
     },
     llmManagement: {
@@ -823,6 +829,8 @@ export const messages = {
           csvFormat: '支持 CSV/TXT 文件，首行定义字段名，后续每行为一组变量。',
           noSamples: '暂未导入变量样本，提交后将使用统一提示。',
           variableCount: '当前已解析 {count} 条变量样本。',
+          datasetTooltip:
+            '若导入变量，总测试次数 = 变量行数 × 执行轮次。当前变量 {rows} 行，执行轮次 {rounds} 次，预计每个模型执行 {total} 次；未导入变量时按轮次重复统一提示。',
           combinationCount: '将生成 {count} 个最小测试单元，提交后可在列表中查看。'
         },
         actions: {
@@ -900,8 +908,13 @@ export const messages = {
       },
       unitDetail: {
         outputsTitle: '全部结果（共 {count} 条）',
+        filteredTitle: '筛选结果（共 {count} 条）',
         parametersTitle: '参数配置（{name}）',
-        parametersEmpty: '暂无参数配置信息'
+        parametersEmpty: '暂无参数配置信息',
+        variableFilterLabel: '变量筛选',
+        variableKeyPlaceholder: '选择变量字段',
+        variableValuePlaceholder: '输入变量值关键词',
+        resetVariableFilter: '重置筛选'
       },
       messages: {
         loadFailed: '加载测试任务结果失败，请稍后重试',
@@ -1196,6 +1209,7 @@ export const messages = {
         notePrefix: 'Note: ',
         viewDetails: 'View Details',
         retry: 'Retry',
+        delete: 'Delete',
         version: {
           new: 'New',
           legacy: 'Legacy'
@@ -1216,7 +1230,12 @@ export const messages = {
         loadFailed: 'Failed to load test jobs.',
         retrySuccess: 'Failed runs re-queued.',
         retryFailed: 'Retry failed. Please try again later.',
-        noFailedRuns: 'No failed runs to retry.'
+        noFailedRuns: 'No failed runs to retry.',
+        deleteConfirmTitle: 'Delete Test Job',
+        deleteConfirmMessage: 'Delete test job “{name}”? This action cannot be undone.',
+        deleteSuccess: 'Test job deleted.',
+        deleteFailed: 'Failed to delete test job. Please try again later.',
+        deleteUnavailable: 'This job currently cannot be deleted.'
       }
     },
     llmManagement: {
@@ -1748,6 +1767,8 @@ export const messages = {
           csvFormat: 'CSV/TXT supported. First row defines headers, subsequent rows define variable values.',
           noSamples: 'No variable samples yet. Default prompt will be reused for each round.',
           variableCount: '{count} variable samples parsed.',
+          datasetTooltip:
+            'When variable samples are provided, total runs = variable rows × execution rounds. Currently {rows} rows and {rounds} rounds, estimated {total} runs per model; without variables the same prompt repeats each round.',
           combinationCount: '{count} minimal test units will be generated.'
         },
         actions: {
@@ -1825,8 +1846,13 @@ export const messages = {
       },
       unitDetail: {
         outputsTitle: 'All Outputs ({count})',
+        filteredTitle: 'Filtered Outputs ({count})',
         parametersTitle: 'Parameter Configuration ({name})',
-        parametersEmpty: 'No parameter configuration available'
+        parametersEmpty: 'No parameter configuration available',
+        variableFilterLabel: 'Variable Filter',
+        variableKeyPlaceholder: 'Select a variable key',
+        variableValuePlaceholder: 'Enter keyword',
+        resetVariableFilter: 'Reset'
       },
       messages: {
         loadFailed: 'Failed to load test task results. Please try again later.',

@@ -101,7 +101,7 @@
         <el-table-column :label="t('testJobManagement.table.columns.updatedAt')" min-width="160">
           <template #default="{ row }">{{ formatDateTime(row.updatedAt) }}</template>
         </el-table-column>
-        <el-table-column :label="t('testJobManagement.table.columns.actions')" width="150" fixed="right">
+        <el-table-column :label="t('testJobManagement.table.columns.actions')" width="210" fixed="right">
           <template #default="{ row }">
             <el-space size="4">
               <el-button type="primary" link size="small" @click="handleViewJob(row)">
@@ -117,6 +117,15 @@
               >
                 {{ t('testJobManagement.table.retry') }}
               </el-button>
+              <el-button
+                type="danger"
+                link
+                size="small"
+                :loading="isJobDeleting(row.id)"
+                @click="handleDelete(row)"
+              >
+                {{ t('testJobManagement.table.delete') }}
+              </el-button>
             </el-space>
           </template>
         </el-table-column>
@@ -129,9 +138,9 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Memo, WarningFilled } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { listTestRuns, retryTestRun } from '../api/testRun'
-import { listPromptTestTasks } from '../api/promptTest'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { deleteTestRun, listTestRuns, retryTestRun } from '../api/testRun'
+import { deletePromptTestTask, listPromptTestTasks } from '../api/promptTest'
 import type { TestRun } from '../types/testRun'
 import type { PromptTestTask, PromptTestUnit } from '../types/promptTest'
 import { useI18n } from 'vue-i18n'
@@ -161,6 +170,7 @@ interface AggregatedJobRow {
 const router = useRouter()
 const { t, locale } = useI18n()
 const retryingJobIds = ref<string[]>([])
+const deletingJobIds = ref<string[]>([])
 const showLegacyCreateButton = false
 
 const testRuns = ref<TestRun[]>([])
@@ -222,6 +232,20 @@ function markJobRetrying(id: string) {
 function unmarkJobRetrying(id: string) {
   if (!isJobRetrying(id)) return
   retryingJobIds.value = retryingJobIds.value.filter((item) => item !== id)
+}
+
+function isJobDeleting(id: string): boolean {
+  return deletingJobIds.value.includes(id)
+}
+
+function markJobDeleting(id: string) {
+  if (isJobDeleting(id)) return
+  deletingJobIds.value = [...deletingJobIds.value, id]
+}
+
+function unmarkJobDeleting(id: string) {
+  if (!isJobDeleting(id)) return
+  deletingJobIds.value = deletingJobIds.value.filter((item) => item !== id)
 }
 
 const jobs = computed<AggregatedJobRow[]>(() => {
@@ -583,6 +607,46 @@ async function handleRetry(job: AggregatedJobRow) {
     )
   } finally {
     unmarkJobRetrying(job.id)
+  }
+}
+
+async function handleDelete(job: AggregatedJobRow) {
+  try {
+    await ElMessageBox.confirm(
+      t('testJobManagement.messages.deleteConfirmMessage', { name: job.jobName }),
+      t('testJobManagement.messages.deleteConfirmTitle'),
+      {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  if (isJobDeleting(job.id)) {
+    return
+  }
+
+  markJobDeleting(job.id)
+  try {
+    if (job.mode === 'prompt-test-task' && job.newResultTaskId) {
+      await deletePromptTestTask(job.newResultTaskId)
+    } else if (job.runIds.length) {
+      await Promise.all(job.runIds.map((runId) => deleteTestRun(runId)))
+    } else {
+      ElMessage.warning(t('testJobManagement.messages.deleteUnavailable'))
+      return
+    }
+    ElMessage.success(t('testJobManagement.messages.deleteSuccess'))
+    await fetchAllJobs(false)
+  } catch (error) {
+    ElMessage.error(
+      extractErrorMessage(error, t('testJobManagement.messages.deleteFailed'))
+    )
+  } finally {
+    unmarkJobDeleting(job.id)
   }
 }
 </script>

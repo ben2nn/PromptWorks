@@ -85,9 +85,11 @@ def execute_prompt_test_experiment(
     token_totals: list[int] = []
     json_success = 0
 
-    rounds = max(1, int(unit.rounds or 1))
+    rounds_per_case = max(1, int(unit.rounds or 1))
+    case_count = _count_variable_cases(context_template)
+    total_runs = rounds_per_case * max(case_count, 1)
 
-    for run_index in range(1, rounds + 1):
+    for run_index in range(1, total_runs + 1):
         try:
             run_record = _execute_single_round(
                 provider=provider,
@@ -296,10 +298,13 @@ def _execute_single_round(
     ):
         total_tokens = prompt_tokens + completion_tokens
 
+    variables = _extract_variables(context)
+
     return {
         "run_index": run_index,
         "messages": messages,
         "parameters": request_parameters or None,
+        "variables": variables,
         "output_text": output_text,
         "parsed_output": parsed_output,
         "prompt_tokens": prompt_tokens,
@@ -332,10 +337,18 @@ def _resolve_context(
         for key, value in template.items():
             if key in {"defaults", "cases"}:
                 continue
-            if isinstance(value, (Mapping, Sequence)):
+            if isinstance(value, Mapping):
+                continue
+            if isinstance(value, Sequence) and not isinstance(
+                value, (str, bytes, bytearray)
+            ):
                 continue
             context.setdefault(key, value)
-    elif isinstance(template, Sequence) and template:
+    elif (
+        isinstance(template, Sequence)
+        and not isinstance(template, (str, bytes, bytearray))
+        and template
+    ):
         selected = template[(run_index - 1) % len(template)]
         if isinstance(selected, Mapping):
             context.update(selected)
@@ -343,6 +356,32 @@ def _resolve_context(
             context["value"] = selected
 
     return context
+
+
+def _count_variable_cases(template: Mapping[str, Any] | Sequence[Any] | None) -> int:
+    if isinstance(template, Mapping):
+        cases = template.get("cases")
+        if isinstance(cases, Sequence) and not isinstance(
+            cases, (str, bytes, bytearray)
+        ):
+            return len(cases)
+        return 1 if template else 0
+    if isinstance(template, Sequence) and not isinstance(
+        template, (str, bytes, bytearray)
+    ):
+        return len(template)
+    return 0
+
+
+def _extract_variables(context: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(context, Mapping):
+        return None
+    sanitized: dict[str, Any] = {}
+    for key, value in context.items():
+        if key == "run_index":
+            continue
+        sanitized[key] = value
+    return sanitized or None
 
 
 def _build_messages(

@@ -24,7 +24,7 @@
     <el-card v-loading="loading">
       <template #header>
         <div class="card-header">
-          <span>{{ t('promptTestResult.unitDetail.outputsTitle', { count: unitOutputs.length }) }}</span>
+          <span>{{ outputsTitle }}</span>
         </div>
       </template>
 
@@ -60,10 +60,50 @@
         </div>
       </div>
 
-      <el-empty v-if="!unit || !unitOutputs.length" :description="t('promptTestResult.empty.noOutputs')" />
+      <div v-if="variableFilterVisible" class="variable-filter">
+        <span class="variable-filter__label">
+          {{ t('promptTestResult.unitDetail.variableFilterLabel') }}
+        </span>
+        <el-space wrap>
+          <el-select
+            v-model="variableFilter.key"
+            clearable
+            filterable
+            size="small"
+            :placeholder="t('promptTestResult.unitDetail.variableKeyPlaceholder')"
+          >
+            <el-option
+              v-for="key in availableVariableKeys"
+              :key="key"
+              :label="key"
+              :value="key"
+            />
+          </el-select>
+          <el-input
+            v-model="variableFilter.value"
+            clearable
+            size="small"
+            :placeholder="t('promptTestResult.unitDetail.variableValuePlaceholder')"
+          />
+          <el-button
+            v-if="isVariableFilterActive"
+            size="small"
+            type="primary"
+            link
+            @click="resetVariableFilter"
+          >
+            {{ t('promptTestResult.unitDetail.resetVariableFilter') }}
+          </el-button>
+        </el-space>
+      </div>
+
+      <el-empty
+        v-if="!unit || !filteredOutputs.length"
+        :description="t('promptTestResult.empty.noOutputs')"
+      />
       <el-timeline v-else>
         <el-timeline-item
-          v-for="output in unitOutputs"
+          v-for="output in filteredOutputs"
           :key="output.runIndex"
           :timestamp="`#${output.runIndex}`"
           placement="top"
@@ -89,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -138,6 +178,71 @@ const parameterEntries = computed(() =>
 )
 
 const unitOutputs = computed(() => unit.value?.outputs ?? [])
+const variableFilter = reactive({
+  key: '',
+  value: ''
+})
+const availableVariableKeys = computed(() => {
+  const keys = new Set<string>()
+  unitOutputs.value.forEach((output) => {
+    const variables = output.variables ?? {}
+    Object.keys(variables).forEach((key) => {
+      const trimmed = key.trim()
+      if (trimmed) {
+        keys.add(trimmed)
+      }
+    })
+  })
+  return Array.from(keys).sort((a, b) => a.localeCompare(b))
+})
+const isVariableFilterActive = computed(() => {
+  return Boolean(variableFilter.key.trim()) || Boolean(variableFilter.value.trim())
+})
+const filteredOutputs = computed(() => {
+  const outputs = unitOutputs.value
+  if (!outputs.length) {
+    return []
+  }
+  const key = variableFilter.key.trim()
+  const search = variableFilter.value.trim().toLowerCase()
+  return outputs.filter((output) => {
+    const variables = output.variables ?? {}
+    if (key) {
+      if (!(key in variables)) {
+        return false
+      }
+      if (!search) {
+        return true
+      }
+      return String(variables[key] ?? '')
+        .toLowerCase()
+        .includes(search)
+    }
+    if (!search) {
+      return true
+    }
+    return Object.values(variables).some((value) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(search)
+    )
+  })
+})
+const variableFilterVisible = computed(
+  () => availableVariableKeys.value.length > 0 || isVariableFilterActive.value
+)
+const outputsTitle = computed(() => {
+  const count = isVariableFilterActive.value
+    ? filteredOutputs.value.length
+    : unitOutputs.value.length
+  const key = isVariableFilterActive.value ? 'filteredTitle' : 'outputsTitle'
+  return t(`promptTestResult.unitDetail.${key}`, { count })
+})
+
+function resetVariableFilter() {
+  variableFilter.key = ''
+  variableFilter.value = ''
+}
 
 function extractUnitId(value: unknown): number | null {
   if (typeof value === 'string' && value.trim()) {
@@ -202,6 +307,19 @@ watch(
     void refreshUnit()
   }
 )
+
+watch(
+  () => unit.value?.id,
+  () => {
+    resetVariableFilter()
+  }
+)
+
+watch(availableVariableKeys, (keys) => {
+  if (variableFilter.key && !keys.includes(variableFilter.key)) {
+    variableFilter.key = ''
+  }
+})
 </script>
 
 <style scoped>
@@ -275,6 +393,19 @@ watch(
 .unit-parameters__empty {
   font-size: 12px;
   color: var(--text-weak-color);
+}
+
+.variable-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.variable-filter__label {
+  font-size: 13px;
+  color: var(--text-weak-color);
+  white-space: nowrap;
 }
 
 .output-content {
