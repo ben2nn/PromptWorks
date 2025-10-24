@@ -150,9 +150,21 @@
                 {{ selectedVersion?.version ?? t('promptDetail.content.versionFallback') }}
               </strong>
             </div>
-            <div>
+            <div class="content-main__time">
               <span class="content-main__label">{{ t('promptDetail.content.updatedLabel') }}</span>
               <strong class="content-main__value">{{ formatDateTime(selectedVersion?.updated_at ?? selectedVersion?.created_at) }}</strong>
+              <el-tooltip :content="t('promptDetail.content.copyTooltip')" placement="top">
+                <el-button
+                  class="content-copy-button"
+                  :icon="DocumentCopy"
+                  circle
+                  size="small"
+                  type="primary"
+                  text
+                  :disabled="!selectedVersion?.content"
+                  @click.stop="handleCopyPrompt"
+                />
+              </el-tooltip>
             </div>
           </header>
           <div class="content-scroll">
@@ -252,6 +264,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { DocumentCopy } from '@element-plus/icons-vue'
 import { usePromptDetail } from '../composables/usePromptDetail'
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
@@ -561,6 +574,41 @@ function summarizeContent(content: string) {
   return normalized.length > 80 ? `${normalized.slice(0, 80)}…` : normalized
 }
 
+async function handleCopyPrompt() {
+  const content = selectedVersion.value?.content
+  if (!content) {
+    ElMessage.warning(t('promptDetail.content.copyEmpty'))
+    return
+  }
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(content)
+    } else {
+      legacyCopyToClipboard(content)
+    }
+    ElMessage.success(t('promptDetail.content.copySuccess'))
+  } catch (error) {
+    ElMessage.error(t('promptDetail.content.copyFailed'))
+  }
+}
+
+function legacyCopyToClipboard(text: string) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.top = '0'
+  textarea.style.left = '0'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  const succeeded = document.execCommand('copy')
+  document.body.removeChild(textarea)
+  if (!succeeded) {
+    throw new Error('Copy command failed')
+  }
+}
+
 function handleSelectVersion(id: number) {
   selectedVersionId.value = id
 }
@@ -761,6 +809,16 @@ function goHome() {
   align-items: center;
   font-size: 13px;
   color: var(--text-weak-color);
+}
+
+.content-main__time {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-copy-button {
+  padding: 0;
 }
 
 .content-main__label {

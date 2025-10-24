@@ -9,3 +9,4 @@ PromptWorks 是一个聚焦 Prompt 资产管理与大模型运营的全栈解决方案，代码仓库包含 F
 3. 项目前端使用Vue3+Element Plus开发，代码在./frontend中
 4. 后端的api文件夹内文件仅实现接口定义、类型定义与检测、对应业务逻辑函数调用，具体业务逻辑写在services文件夹中
 5. 每次开发任务完成并测试无误之后，将代码commit到本地git中（禁止：上传到云端和合并到dev或main），需要有简短的中文提交信息
+6. 若要求更新README.md，需要同步修改英文版的docs/README_en.md
