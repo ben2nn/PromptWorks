@@ -546,6 +546,10 @@ export const messages = {
         versionLabel: '版本号',
         versionFallback: '未选择版本',
         updatedLabel: '更新时间',
+        copyTooltip: '复制 Prompt',
+        copySuccess: 'Prompt 内容已复制',
+        copyFailed: '复制失败，请稍后重试',
+        copyEmpty: '当前版本暂无可复制内容',
         empty: '暂无版本内容',
         historyTitle: '历史版本'
       },
@@ -1465,6 +1469,10 @@ export const messages = {
         versionLabel: 'Version',
         versionFallback: 'No version selected',
         updatedLabel: 'Updated At',
+        copyTooltip: 'Copy prompt',
+        copySuccess: 'Prompt content copied.',
+        copyFailed: 'Copy failed. Please try again.',
+        copyEmpty: 'No content to copy for this version.',
         empty: 'No content for this version yet.',
         historyTitle: 'Version History'
       },
