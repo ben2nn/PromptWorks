@@ -5,6 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum as PgEnum,
     ForeignKey,
@@ -65,6 +66,9 @@ class PromptTestTask(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
     prompt_version: Mapped["PromptVersion | None"] = relationship("PromptVersion")
