@@ -18,6 +18,7 @@ from app.models.prompt_test import (
     PromptTestExperimentStatus,
     PromptTestUnit,
 )
+from app.models.usage import LLMUsageLog
 from app.services.test_run import (
     DEFAULT_TEST_TIMEOUT,
     REQUEST_SLEEP_RANGE,
@@ -108,6 +109,13 @@ def execute_prompt_test_experiment(
             return experiment
 
         run_records.append(run_record)
+        usage_log = _build_usage_log(
+            provider=provider,
+            model=model,
+            unit=unit,
+            run_record=run_record,
+        )
+        db.add(usage_log)
         latency = run_record.get("latency_ms")
         if isinstance(latency, (int, float)):
             latencies.append(int(latency))
@@ -492,6 +500,59 @@ def _aggregate_metrics(
         metrics["json_success_rate"] = round(json_success / total_rounds, 4)
 
     return metrics
+
+
+def _build_usage_log(
+    *,
+    provider: LLMProvider,
+    model: LLMModel | None,
+    unit: PromptTestUnit,
+    run_record: Mapping[str, Any],
+) -> LLMUsageLog:
+    prompt_version = unit.prompt_version
+    prompt_id: int | None = None
+    prompt_version_id = unit.prompt_version_id
+
+    if (
+        prompt_version is not None
+        and getattr(prompt_version, "prompt_id", None) is not None
+    ):
+        prompt_id = prompt_version.prompt_id
+    else:
+        task = getattr(unit, "task", None)
+        task_prompt_version = getattr(task, "prompt_version", None) if task else None
+        if prompt_version_id is None and task is not None:
+            prompt_version_id = getattr(task, "prompt_version_id", None)
+        if (
+            task_prompt_version is not None
+            and getattr(task_prompt_version, "prompt_id", None) is not None
+        ):
+            prompt_id = task_prompt_version.prompt_id
+
+    def _safe_int_value(key: str) -> int | None:
+        value = run_record.get(key)
+        if isinstance(value, (int, float)):
+            return int(value)
+        return None
+
+    latency_value = _safe_int_value("latency_ms")
+
+    return LLMUsageLog(
+        provider_id=provider.id,
+        model_id=model.id if model else None,
+        model_name=model.name if model else unit.model_name,
+        source="prompt_test",
+        prompt_id=prompt_id,
+        prompt_version_id=prompt_version_id,
+        messages=run_record.get("messages"),
+        parameters=run_record.get("parameters"),
+        response_text=run_record.get("output_text"),
+        temperature=unit.temperature,
+        latency_ms=latency_value,
+        prompt_tokens=_safe_int_value("prompt_tokens"),
+        completion_tokens=_safe_int_value("completion_tokens"),
+        total_tokens=_safe_int_value("total_tokens"),
+    )
 
 
 def _resolve_base_url(provider: LLMProvider) -> str:

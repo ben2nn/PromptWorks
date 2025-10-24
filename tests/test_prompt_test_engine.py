@@ -4,6 +4,8 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from sqlalchemy import func, select
+
 from app.models.llm_provider import LLMModel, LLMProvider
 from app.models.prompt import Prompt, PromptClass, PromptVersion
 from app.models.prompt_test import (
@@ -12,6 +14,7 @@ from app.models.prompt_test import (
     PromptTestTask,
     PromptTestUnit,
 )
+from app.models.usage import LLMUsageLog
 from app.services import prompt_test_engine
 from app.services.prompt_test_engine import execute_prompt_test_experiment
 
@@ -66,12 +69,13 @@ def test_execute_prompt_test_experiment_generates_metrics(db_session, monkeypatc
     prompt_version = _create_prompt_version(db_session)
     model = _create_provider_and_model(db_session)
     provider = model.provider
+    before_count = db_session.scalar(select(func.count()).select_from(LLMUsageLog)) or 0
 
-    task = PromptTestTask(name="翻译基准测试", prompt_version_id=prompt_version.id)
+    task = PromptTestTask(name="多轮翻译基准", prompt_version_id=prompt_version.id)
     unit = PromptTestUnit(
         task=task,
         prompt_version_id=prompt_version.id,
-        name="中文翻译英文",
+        name="翻译成英语",
         model_name=model.name,
         llm_provider_id=provider.id,
         rounds=2,
@@ -123,6 +127,21 @@ def test_execute_prompt_test_experiment_generates_metrics(db_session, monkeypatc
     assert metrics and metrics["rounds"] == 4
     assert metrics["json_success_rate"] == pytest.approx(0.5, rel=1e-3)
     assert metrics["avg_latency_ms"] > 0
+    after_count = db_session.scalar(select(func.count()).select_from(LLMUsageLog)) or 0
+    assert after_count - before_count == 4
+
+    recent_logs = db_session.scalars(
+        select(LLMUsageLog)
+        .where(
+            LLMUsageLog.source == "prompt_test",
+            LLMUsageLog.prompt_version_id == prompt_version.id,
+        )
+        .order_by(LLMUsageLog.id.desc())
+    ).all()
+    assert len(recent_logs) >= 4
+    latest_log = recent_logs[0]
+    assert latest_log.model_name == model.name
+    assert latest_log.prompt_tokens is not None or latest_log.total_tokens is not None
 
 
 def test_prompt_test_api_creates_and_executes_experiment(
@@ -182,3 +201,49 @@ def test_prompt_test_api_creates_and_executes_experiment(
     detail_resp = client.get(f"/api/v1/prompt-test/experiments/{body['id']}")
     assert detail_resp.status_code == 200
     assert detail_resp.json()["status"] == PromptTestExperimentStatus.COMPLETED.value
+
+
+def test_soft_delete_prompt_test_task_hides_from_list(client, db_session):
+    prompt_version = _create_prompt_version(db_session)
+    model = _create_provider_and_model(db_session)
+    provider = model.provider
+
+    response = client.post(
+        "/api/v1/prompt-test/tasks",
+        json={
+            "name": "软删任务",
+            "prompt_version_id": prompt_version.id,
+            "units": [
+                {
+                    "name": "基础单元",
+                    "model_name": model.name,
+                    "llm_provider_id": provider.id,
+                    "rounds": 1,
+                    "prompt_template": "示例：{text}",
+                    "variables": {"text": "测试"},
+                }
+            ],
+        },
+    )
+    assert response.status_code == 201
+    task_id = response.json()["id"]
+
+    delete_resp = client.delete(f"/api/v1/prompt-test/tasks/{task_id}")
+    assert delete_resp.status_code == 204
+
+    db_session.expire_all()
+    task = db_session.get(PromptTestTask, task_id)
+    assert task is not None and task.is_deleted
+
+    list_resp = client.get("/api/v1/prompt-test/tasks")
+    task_ids = [item["id"] for item in list_resp.json()]
+    assert task_id not in task_ids
+
+    detail_resp = client.get(f"/api/v1/prompt-test/tasks/{task_id}")
+    assert detail_resp.status_code == 404
+
+    units_resp = client.get(f"/api/v1/prompt-test/tasks/{task_id}/units")
+    assert units_resp.status_code == 404
+
+    delete_again = client.delete(f"/api/v1/prompt-test/tasks/{task_id}")
+    assert delete_again.status_code == 404

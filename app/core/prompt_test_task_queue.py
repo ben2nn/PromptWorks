@@ -95,6 +95,9 @@ class PromptTestTaskQueue:
             if not task:
                 logger.warning("Prompt 测试任务 %s 不存在，跳过执行", task_id)
                 return
+            if task.is_deleted:
+                logger.info("Prompt 测试任务 %s 已被标记删除，跳过执行", task_id)
+                return
 
             if not task.units:
                 task.status = PromptTestTaskStatus.COMPLETED
