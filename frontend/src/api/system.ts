@@ -2,7 +2,7 @@
  * 系统信息相关 API
  */
 
-import { request } from './request'
+import { request } from './http'
 
 export interface VersionInfo {
   version: string
@@ -20,12 +20,12 @@ export interface HealthInfo {
  * 获取系统版本信息
  */
 export const getSystemVersion = (): Promise<VersionInfo> => {
-  return request.get('/system/version')
+  return request('/system/version', { method: 'GET' })
 }
 
 /**
  * 系统健康检查
  */
 export const getSystemHealth = (): Promise<HealthInfo> => {
-  return request.get('/system/health')
+  return request('/system/health', { method: 'GET' })
 }

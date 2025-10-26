@@ -24,14 +24,16 @@ export interface PromptVersion {
   updated_at: string
 }
 
-// 媒体类型枚举
-export enum MediaType {
-  TEXT = 'text',
-  IMAGE = 'image',
-  DOCUMENT = 'document',
-  AUDIO = 'audio',
-  VIDEO = 'video'
-}
+// 媒体类型定义
+export type MediaType = 'text' | 'image' | 'document' | 'audio' | 'video'
+
+export const MediaType = {
+  TEXT: 'text' as const,
+  IMAGE: 'image' as const,
+  DOCUMENT: 'document' as const,
+  AUDIO: 'audio' as const,
+  VIDEO: 'video' as const
+} as const
 
 // 媒体类型信息接口
 export interface MediaTypeInfo {
@@ -49,17 +51,17 @@ export interface AttachmentMetadata {
   width?: number
   height?: number
   format?: string
-  
+
   // 文档元数据
   pages?: number
   author?: string
   title?: string
-  
+
   // 音频/视频元数据
   duration?: number
   bitrate?: number
   codec?: string
-  
+
   // 通用元数据
   [key: string]: any
 }
@@ -91,14 +93,16 @@ export interface AttachmentUpdateRequest {
   metadata?: AttachmentMetadata
 }
 
-// 文件上传状态枚举
-export enum UploadStatus {
-  PENDING = 'pending',
-  UPLOADING = 'uploading',
-  SUCCESS = 'success',
-  ERROR = 'error',
-  CANCELLED = 'cancelled'
-}
+// 文件上传状态定义
+export type UploadStatus = 'pending' | 'uploading' | 'success' | 'error' | 'cancelled'
+
+export const UploadStatus = {
+  PENDING: 'pending' as const,
+  UPLOADING: 'uploading' as const,
+  SUCCESS: 'success' as const,
+  ERROR: 'error' as const,
+  CANCELLED: 'cancelled' as const
+} as const
 
 // 文件上传进度接口
 export interface FileUploadProgress {
