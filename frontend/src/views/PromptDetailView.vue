@@ -139,8 +139,8 @@
       </el-dialog>
       </el-card>
 
-      <!-- 文本类型显示传统内容 -->
-      <el-card v-if="detail.media_type === MediaType.TEXT" class="content-card">
+      <!-- 提示词内容卡片 - 所有类型都显示 -->
+      <el-card class="content-card">
       <template #header>
         <div class="content-header">
           <div>
@@ -217,57 +217,6 @@
           </div>
         </aside>
       </div>
-      </el-card>
-
-      <!-- 非文本类型显示附件管理 -->
-      <el-card v-else class="attachments-card">
-        <template #header>
-          <div class="attachments-header">
-            <div>
-              <h3 class="attachments-title">附件管理</h3>
-              <span class="attachments-subtitle">管理 {{ getMediaTypeInfo(detail.media_type)?.label }} 类型的附件文件</span>
-            </div>
-            <div class="attachments-actions">
-              <FileUploader
-                :prompt-id="detail.id"
-                :media-type="detail.media_type"
-                @upload-success="handleAttachmentUpload"
-                @upload-error="handleAttachmentError"
-              />
-            </div>
-          </div>
-        </template>
-        
-        <div class="attachments-body">
-          <el-alert
-            v-if="!detail.attachments?.length"
-            title="暂无附件"
-            type="info"
-            :description="`请上传 ${getMediaTypeInfo(detail.media_type)?.label} 类型的文件`"
-            show-icon
-            :closable="false"
-            class="attachments-empty"
-          />
-          
-          <div v-else class="attachments-grid">
-            <AttachmentPreview
-              v-for="attachment in detail.attachments"
-              :key="attachment.id"
-              :attachment="attachment"
-              @delete="handleAttachmentDelete"
-              @download="handleAttachmentDownload"
-            />
-          </div>
-          
-          <!-- 上传进度显示 -->
-          <div v-if="isUploading" class="upload-progress">
-            <el-progress
-              :percentage="uploadProgress"
-              :status="uploadProgress === 100 ? 'success' : undefined"
-            />
-            <span class="upload-text">正在上传文件...</span>
-          </div>
-        </div>
       </el-card>
 
       <el-card class="test-card">
@@ -348,9 +297,6 @@ import { updatePrompt } from '../api/prompt'
 import { listTestRuns } from '../api/testRun'
 import type { TestRun } from '../types/testRun'
 import { MediaType } from '../types/prompt'
-import AttachmentPreview from '../components/AttachmentPreview.vue'
-import FileUploader from '../components/FileUploader.vue'
-import { useAttachmentManagement } from '../composables/useAttachmentManagement'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
@@ -459,16 +405,6 @@ const mediaTypeOptions = computed(() => [
 function getMediaTypeInfo(mediaType: MediaType) {
   return mediaTypeOptions.value.find(option => option.value === mediaType)
 }
-
-// 附件管理
-const {
-  attachments,
-  isUploading,
-  uploadProgress,
-  uploadAttachment,
-  deleteAttachment,
-  refreshAttachments
-} = useAttachmentManagement(currentId)
 
 const testRecords = computed(() => {
   const promptId = currentId.value
@@ -777,31 +713,6 @@ function handleViewTestJob(jobId: number) {
 
 function goHome() {
   router.push({ name: 'prompt-management' })
-}
-
-// 附件相关处理函数
-async function handleAttachmentUpload(attachment: any) {
-  ElMessage.success('文件上传成功')
-  await refreshDetail() // 刷新提示词详情以获取最新的附件列表
-}
-
-function handleAttachmentError(error: string) {
-  ElMessage.error(`文件上传失败: ${error}`)
-}
-
-async function handleAttachmentDelete(attachmentId: number) {
-  try {
-    await deleteAttachment(attachmentId)
-    ElMessage.success('附件删除成功')
-    await refreshDetail() // 刷新提示词详情
-  } catch (error) {
-    ElMessage.error('附件删除失败')
-  }
-}
-
-function handleAttachmentDownload(attachment: any) {
-  // 直接打开下载链接
-  window.open(attachment.download_url, '_blank')
 }
 </script>
 
@@ -1132,68 +1043,6 @@ function handleAttachmentDownload(attachment: any) {
   font-size: 16px;
 }
 
-/* 附件管理样式 */
-.attachments-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.attachments-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.attachments-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.attachments-subtitle {
-  font-size: 13px;
-  color: var(--text-weak-color);
-}
-
-.attachments-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.attachments-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.attachments-empty {
-  margin: 20px 0;
-}
-
-.attachments-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  padding: 16px 0;
-}
-
-.upload-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: var(--el-fill-color-lighter);
-  border-radius: 8px;
-  border: 1px dashed var(--el-border-color);
-}
-
-.upload-text {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-  text-align: center;
-}
-
 /* 响应式设计 */
 @media (max-width: 768px) {
   .info-header {
@@ -1257,21 +1106,6 @@ function handleAttachmentDownload(attachment: any) {
     max-height: 300px;
   }
 
-  .attachments-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .attachments-actions {
-    justify-content: flex-start;
-  }
-
-  .attachments-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
   .test-header {
     flex-direction: column;
     align-items: stretch;
@@ -1299,8 +1133,7 @@ function handleAttachmentDownload(attachment: any) {
   }
 
   .content-subtitle,
-  .test-subtitle,
-  .attachments-subtitle {
+  .test-subtitle {
     font-size: 12px;
   }
 
@@ -1333,10 +1166,6 @@ function handleAttachmentDownload(attachment: any) {
   .media-type-icon {
     font-size: 14px;
   }
-
-  .upload-progress {
-    padding: 12px;
-  }
 }
 
 /* 超小屏幕优化 */
@@ -1350,13 +1179,8 @@ function handleAttachmentDownload(attachment: any) {
   }
 
   .content-title,
-  .test-title,
-  .attachments-title {
+  .test-title {
     font-size: 15px;
-  }
-
-  .attachments-grid {
-    gap: 8px;
   }
 
   .content-scroll,

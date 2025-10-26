@@ -34,6 +34,7 @@ export interface AttachmentValidationResult {
 
 export const attachmentApi = {
   // 上传附件（支持进度回调）
+  // promptId=0 表示临时上传
   async upload(
     promptId: number, 
     file: File, 
@@ -60,7 +61,7 @@ export const attachmentApi = {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const result = JSON.parse(xhr.responseText)
-            resolve(result)
+            resolve(result.attachment)
           } catch (error) {
             reject(new Error('响应解析失败'))
           }
@@ -227,6 +228,14 @@ export const attachmentApi = {
     return request<AttachmentInfo>(`/attachments/${attachmentId}/move`, {
       method: 'PUT',
       body: JSON.stringify({ target_prompt_id: targetPromptId })
+    })
+  },
+
+  // 批量更新附件关联
+  async batchUpdatePrompt(attachmentIds: number[], promptId: number): Promise<AttachmentInfo[]> {
+    return request<AttachmentInfo[]>(`/prompts/${promptId}/attachments/batch-update`, {
+      method: 'PUT',
+      body: JSON.stringify(attachmentIds)
     })
   }
 }

@@ -53,14 +53,14 @@
         </el-form-item>
 
         <!-- 版本信息 -->
-        <el-form-item label="版本号" prop="version" :required="mode === 'create'">
+        <el-form-item label="版本号" prop="version">
           <el-input
             v-model="form.version"
-            :placeholder="mode === 'create' ? '请输入版本号（如 v1.0.0）' : '请输入版本号（如 v1.0.0）'"
+            placeholder="请输入版本号（如 1.0.0），留空则默认为 1.0.0"
             :disabled="disabled"
           />
           <div class="field-tip">
-            {{ mode === 'create' ? '请输入初始版本号' : '留空将自动生成版本号' }}
+            {{ mode === 'create' ? '留空将使用默认版本号 1.0.0' : '留空将自动生成版本号' }}
           </div>
         </el-form-item>
 
@@ -136,33 +136,15 @@
           </div>
         </el-form-item>
 
-        <!-- 附件上传（当媒体类型非文本时显示） -->
-        <el-form-item 
-          v-if="form.media_type !== MediaType.TEXT"
-          label="附件" 
-          prop="attachments"
-        >
-          <FileUploader
-            :prompt-id="promptId"
-            :media-type="form.media_type"
-            :disabled="disabled"
-            @upload-success="handleAttachmentUpload"
-            @upload-error="handleUploadError"
-          />
-          <div class="field-tip">
-            {{ getMediaTypeDescription(form.media_type) }}
-          </div>
-        </el-form-item>
-
         
       </div>
 
-      <!-- 附件列表 -->
-      <div v-if="attachments.length > 0" class="form-section">
+      <!-- 附件管理（当媒体类型非文本时显示） -->
+      <div v-if="form.media_type !== MediaType.TEXT" class="form-section">
         <div class="section-header">
-          <h4 class="section-title">附件列表 ({{ attachments.length }})</h4>
+          <h4 class="section-title">附件 ({{ attachments.length }})</h4>
           <el-button 
-            v-if="!disabled"
+            v-if="!disabled && attachments.length > 0"
             size="small" 
             type="danger" 
             text 
@@ -172,38 +154,32 @@
           </el-button>
         </div>
         
-        <div class="attachments-grid" :class="{ 'grid-view': isGridView }">
+        <div class="attachments-grid">
+          <!-- 上传插件卡片 - 始终显示在第一个 -->
+          <div v-if="!disabled" class="upload-card">
+            <FileUploader
+              ref="fileUploaderRef"
+              :prompt-id="promptId"
+              :media-type="form.media_type"
+              :disabled="disabled"
+              :defer-upload="mode === 'create'"
+              @upload-success="handleAttachmentUpload"
+              @upload-error="handleUploadError"
+              @files-ready="handleFilesReady"
+            />
+          </div>
+          
+          <!-- 附件预览卡片 - 图片排在后面 -->
           <AttachmentPreview
             v-for="attachment in attachments"
             :key="attachment.id"
             :attachment="attachment"
-            :is-grid-view="isGridView"
+            :is-grid-view="true"
             :show-actions="!disabled"
             @delete="handleAttachmentDelete"
             @preview="handleAttachmentPreview"
             @download="handleAttachmentDownload"
           />
-        </div>
-        
-        <div class="attachments-actions">
-          <el-button-group>
-            <el-button 
-              size="small" 
-              :type="isGridView ? 'primary' : ''"
-              @click="isGridView = true"
-            >
-              <el-icon><Grid /></el-icon>
-              网格视图
-            </el-button>
-            <el-button 
-              size="small" 
-              :type="!isGridView ? 'primary' : ''"
-              @click="isGridView = false"
-            >
-              <el-icon><List /></el-icon>
-              列表视图
-            </el-button>
-          </el-button-group>
         </div>
       </div>
 
@@ -233,14 +209,12 @@ import {
   ElFormItem, 
   ElInput, 
   ElButton, 
-  ElButtonGroup,
   ElIcon,
   ElMessage,
   ElMessageBox,
   type FormInstance,
   type FormRules
 } from 'element-plus'
-import { Grid, List } from '@element-plus/icons-vue'
 import { MediaType, type AttachmentInfo } from '../types/prompt'
 import MediaTypeSelector from './MediaTypeSelector.vue'
 import FileUploader from './FileUploader.vue'
@@ -283,9 +257,10 @@ const emit = defineEmits<Emits>()
 
 // 响应式数据
 const formRef = ref<FormInstance>()
+const fileUploaderRef = ref<InstanceType<typeof FileUploader>>()
 const attachments = ref<AttachmentInfo[]>([])
+const pendingFiles = ref<File[]>([]) // 待上传的文件（创建模式）
 const isSubmitting = ref(false)
-const isGridView = ref(true)
 
 // 表单数据
 const form = reactive<PromptFormData>({
@@ -308,10 +283,9 @@ const formRules = computed<FormRules>(() => ({
   media_type: [
     { required: true, message: '请选择媒体类型', trigger: 'change' }
   ],
-  version: props.mode === 'create' ? [
-    { required: true, message: '请输入版本号', trigger: 'blur' },
-    { min: 1, max: 50, message: '版本号长度应在 1 到 50 个字符', trigger: 'blur' }
-  ] : [],
+  version: [
+    { max: 50, message: '版本号长度不能超过 50 个字符', trigger: 'blur' }
+  ],
   content: form.media_type === MediaType.TEXT ? [
     { required: true, message: '请输入提示词内容', trigger: 'blur' },
     { min: 1, max: 10000, message: '内容长度应在 1 到 10000 个字符', trigger: 'blur' }
@@ -334,6 +308,11 @@ watch(() => props.initialData, (newData) => {
       version: newData.version || '',
       summary: newData.summary || ''
     })
+    
+    // 加载附件数据
+    if (newData.attachments && Array.isArray(newData.attachments)) {
+      attachments.value = [...newData.attachments]
+    }
   }
 }, { immediate: true, deep: true })
 
@@ -395,13 +374,20 @@ const handleMediaTypeChange = (newType: MediaType) => {
 
 // 处理附件上传成功
 const handleAttachmentUpload = (attachment: AttachmentInfo) => {
-  attachments.value.push(attachment)
-  ElMessage.success('附件上传成功')
+  // 添加到附件列表以显示预览
+  if (attachment && attachment.id) {
+    attachments.value.push(attachment)
+  }
 }
 
 // 处理上传错误
 const handleUploadError = (error: Error) => {
   ElMessage.error('上传失败：' + error.message)
+}
+
+// 处理文件准备就绪（创建模式）
+const handleFilesReady = (files: File[]) => {
+  pendingFiles.value = files
 }
 
 // 处理附件删除
@@ -461,9 +447,14 @@ const handleSubmit = async () => {
     
     isSubmitting.value = true
     
+    // 如果版本号为空，设置默认值
+    const version = form.version.trim() || '1.0.0'
+    
     const submitData = {
       ...form,
-      attachments: attachments.value
+      version,
+      attachments: attachments.value,
+      pendingFiles: pendingFiles.value // 传递待上传的文件
     }
     
     emit('submit', submitData)
@@ -488,11 +479,34 @@ const handlePreview = () => {
   emit('preview', previewData)
 }
 
+// 关联临时附件到提示词
+const attachPendingFiles = async (promptId: number): Promise<AttachmentInfo[]> => {
+  if (!fileUploaderRef.value || pendingFiles.value.length === 0) {
+    return []
+  }
+  
+  try {
+    const attachedFiles = await fileUploaderRef.value.attachToPrompt(promptId)
+    attachments.value.push(...attachedFiles)
+    pendingFiles.value = []
+    return attachedFiles
+  } catch (error) {
+    console.error('关联附件失败:', error)
+    throw error
+  }
+}
+
+// 兼容旧方法名
+const uploadPendingFiles = attachPendingFiles
+
 // 暴露给父组件的方法
 defineExpose({
   validate: () => formRef.value?.validate(),
   resetFields: () => formRef.value?.resetFields(),
-  clearValidate: () => formRef.value?.clearValidate()
+  clearValidate: () => formRef.value?.clearValidate(),
+  uploadPendingFiles,
+  attachPendingFiles,
+  getPendingFiles: () => pendingFiles.value
 })
 </script>
 
@@ -611,23 +625,80 @@ defineExpose({
 
 .attachments-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
-  margin-bottom: 16px;
 }
 
-.attachments-grid:not(.grid-view) {
-  grid-template-columns: 1fr;
+/* 上传卡片样式 */
+.upload-card {
+  border: 2px dashed var(--el-border-color);
+  border-radius: 12px;
+  background-color: var(--el-fill-color-blank);
+  transition: all 0.3s ease;
+  overflow: hidden;
+  aspect-ratio: 1;
+  position: relative;
 }
 
-.attachments-grid.grid-view {
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+.upload-card:hover {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
 }
 
-.attachments-actions {
+.upload-card :deep(.file-uploader) {
+  height: 100%;
   display: flex;
+  flex-direction: column;
+}
+
+.upload-card :deep(.upload-dragger) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.upload-card :deep(.el-upload) {
+  width: 100%;
+  height: 100%;
+}
+
+.upload-card :deep(.el-upload-dragger) {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  padding: 0;
+}
+
+.upload-card :deep(.upload-content) {
+  padding: 20px 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.upload-card :deep(.upload-icon) {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+
+.upload-card :deep(.primary-text) {
+  font-size: 13px;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.upload-card :deep(.secondary-text) {
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+  padding: 0 8px;
 }
 
 .form-actions {
@@ -675,8 +746,25 @@ defineExpose({
     padding: 20px;
   }
   
-  .attachments-grid.grid-view {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  .attachments-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+  
+  .upload-card :deep(.upload-content) {
+    padding: 16px 12px;
+  }
+  
+  .upload-card :deep(.upload-icon) {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+  
+  .upload-card :deep(.primary-text) {
+    font-size: 12px;
+  }
+  
+  .upload-card :deep(.secondary-text) {
+    font-size: 10px;
   }
   
   .form-actions {
@@ -700,6 +788,28 @@ defineExpose({
   
   .form-actions {
     padding: 16px;
+  }
+  
+  .attachments-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .upload-card :deep(.upload-content) {
+    padding: 16px 12px;
+  }
+  
+  .upload-card :deep(.upload-icon) {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+  
+  .upload-card :deep(.primary-text) {
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  
+  .upload-card :deep(.secondary-text) {
+    font-size: 10px;
   }
 }
 

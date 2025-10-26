@@ -94,7 +94,7 @@
 
     <template v-else>
       <div v-if="filteredPrompts.length" class="card-grid">
-        <div v-for="prompt in filteredPrompts" :key="prompt.id" class="card-grid__item">
+        <div v-for="prompt in paginatedPrompts" :key="prompt.id" class="card-grid__item">
           <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
             <div class="prompt-card__header">
               <div class="prompt-card__title-section">
@@ -113,26 +113,28 @@
                     <h3 class="prompt-title">{{ prompt.name }}</h3>
                   </div>
                 </div>
-                <!-- 图片类型显示缩略图 -->
-                <div v-if="prompt.media_type === MediaType.IMAGE && prompt.attachments.length > 0" class="thumbnail-preview">
-                  <el-image
-                    v-for="attachment in prompt.attachments.slice(0, 3)"
-                    :key="attachment.id"
-                    :src="attachment.thumbnail_url || attachment.download_url"
-                    :alt="attachment.original_filename"
-                    fit="cover"
-                    class="thumbnail-image"
-                    :preview-src-list="[attachment.download_url]"
-                  />
-                  <div v-if="prompt.attachments.length > 3" class="thumbnail-more">
-                    +{{ prompt.attachments.length - 3 }}
+                <div class="version-and-thumbnail">
+                  <el-tag type="success" round size="small">
+                    {{ t('promptManagement.currentVersion') }}
+                    {{ prompt.current_version?.version ?? t('common.notEnabled') }}
+                  </el-tag>
+                  <!-- 图片类型显示缩略图 - 放在版本下面 -->
+                  <div v-if="prompt.media_type === MediaType.IMAGE && prompt.attachments.length > 0" class="thumbnail-preview">
+                    <el-image
+                      v-for="attachment in prompt.attachments.slice(0, 3)"
+                      :key="attachment.id"
+                      :src="attachment.thumbnail_url || attachment.download_url"
+                      :alt="attachment.original_filename"
+                      fit="contain"
+                      class="thumbnail-image"
+                      :preview-src-list="[attachment.download_url]"
+                    />
+                    <div v-if="prompt.attachments.length > 3" class="thumbnail-more">
+                      +{{ prompt.attachments.length - 3 }}
+                    </div>
                   </div>
                 </div>
               </div>
-              <el-tag type="success" round size="small">
-                {{ t('promptManagement.currentVersion') }}
-                {{ prompt.current_version?.version ?? t('common.notEnabled') }}
-              </el-tag>
             </div>
             <p class="prompt-desc">{{ prompt.description ?? t('common.descriptionNone') }}</p>
             <div class="prompt-meta">
@@ -161,36 +163,62 @@
                   {{ tag.name }}
                 </el-tag>
               </div>
-              <el-popconfirm
-                :title="t('promptManagement.confirmDelete', { name: prompt.name })"
-                :confirm-button-text="t('promptManagement.delete')"
-                :cancel-button-text="t('promptManagement.cancel')"
-                icon=""
-                @confirm="() => handleDeletePrompt(prompt)"
-              >
-                <template #reference>
-                  <el-button
-                    type="danger"
-                    text
-                    size="small"
-                    class="card-delete"
-                    :loading="isDeleting(prompt.id)"
-                    @click.stop
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </template>
-              </el-popconfirm>
+              <div class="card-actions">
+                <el-button
+                  type="primary"
+                  text
+                  size="small"
+                  class="card-edit"
+                  @click.stop="openEditDialog(prompt.id)"
+                >
+                  <el-icon><Edit /></el-icon>
+                  <span>编辑</span>
+                </el-button>
+                <el-popconfirm
+                  :title="t('promptManagement.confirmDelete', { name: prompt.name })"
+                  :confirm-button-text="t('promptManagement.delete')"
+                  :cancel-button-text="t('promptManagement.cancel')"
+                  icon=""
+                  @confirm="() => handleDeletePrompt(prompt)"
+                >
+                  <template #reference>
+                    <el-button
+                      type="danger"
+                      text
+                      size="small"
+                      class="card-delete"
+                      :loading="isDeleting(prompt.id)"
+                      @click.stop
+                    >
+                      <el-icon><Delete /></el-icon>
+                      <span>删除</span>
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
           </el-card>
         </div>
       </div>
       <el-empty v-else :description="t('promptManagement.emptyDescription')" />
+      
+      <!-- 分页组件 -->
+      <el-pagination
+        v-if="filteredPrompts.length > 0"
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :page-sizes="[20, 50, 100, 200]"
+        :total="filteredPrompts.length"
+        layout="total, sizes, prev, pager, next, jumper"
+        class="pagination"
+        @size-change="handleSizeChange"
+        @current-change="handleCurrentChange"
+      />
     </template>
 
     <el-dialog 
       v-model="createDialogVisible" 
-      :title="t('promptManagement.dialogTitle')" 
+      :title="dialogMode === 'edit' ? '编辑提示词' : t('promptManagement.dialogTitle')" 
       width="95%"
       top="2vh"
       :close-on-click-modal="false"
@@ -247,7 +275,7 @@
       <!-- 使用 PromptEditor 组件 -->
       <PromptEditor
         ref="promptEditorRef"
-        mode="create"
+        :mode="dialogMode"
         :initial-data="editorInitialData"
         :disabled="isSubmitting"
         @submit="handleEditorSubmit"
@@ -263,10 +291,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Delete, Plus, Search, Document, Picture, VideoPlay, Headset, EditPen } from '@element-plus/icons-vue'
+import { Delete, Plus, Search, Document, Picture, VideoPlay, Headset, EditPen, Edit } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { listPrompts, createPrompt, deletePrompt, type HttpError } from '../api/prompt'
+import { listPrompts, createPrompt, updatePrompt, deletePrompt, getPrompt, type HttpError } from '../api/prompt'
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 import type { Prompt, AttachmentInfo } from '../types/prompt'
@@ -286,6 +314,7 @@ interface PromptFormState {
   content: string
   contentzh: string
   mediaType: MediaType
+  attachments: AttachmentInfo[]
 }
 
 const router = useRouter()
@@ -305,6 +334,10 @@ const searchKeyword = ref('')
 const selectedTagIds = ref<number[]>([])
 const selectedMediaTypes = ref<MediaType[]>([])
 const sortKey = ref<SortKey>('default')
+
+// 分页相关状态
+const currentPage = ref(1)
+const pageSize = ref(50)
 
 const classOptions = computed(() => {
   return promptClasses.value
@@ -444,7 +477,18 @@ const filteredPrompts = computed(() => {
   return sortPrompts(list)
 })
 
+// 分页后的数据
+const paginatedPrompts = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredPrompts.value.slice(start, end)
+})
+
 const createDialogVisible = ref(false)
+const editDialogVisible = ref(false)
+const editingPromptId = ref<number | null>(null)
+const dialogMode = ref<'create' | 'edit'>('create')
+
 const promptForm = reactive<PromptFormState>({
   name: '',
   description: '',
@@ -454,7 +498,8 @@ const promptForm = reactive<PromptFormState>({
   version: '',
   content: '',
   contentzh: '',
-  mediaType: MediaType.TEXT
+  mediaType: MediaType.TEXT,
+  attachments: []
 })
 
 // PromptEditor 相关数据
@@ -468,7 +513,8 @@ const editorInitialData = computed(() => ({
   media_type: promptForm.mediaType,
   content: promptForm.content,
   contentzh: promptForm.contentzh,
-  version: promptForm.version
+  version: promptForm.version,
+  attachments: promptForm.attachments
 }))
 
 function resetPromptForm() {
@@ -481,11 +527,45 @@ function resetPromptForm() {
   promptForm.content = ''
   promptForm.contentzh = ''
   promptForm.mediaType = MediaType.TEXT
+  promptForm.attachments = []
 }
 
 function openCreateDialog() {
+  dialogMode.value = 'create'
+  editingPromptId.value = null
   resetPromptForm()
   createDialogVisible.value = true
+}
+
+async function openEditDialog(promptId: number) {
+  dialogMode.value = 'edit'
+  editingPromptId.value = promptId
+  
+  try {
+    // 获取 Prompt 详情
+    const prompt = await getPrompt(promptId)
+    
+    // 填充表单数据
+    promptForm.name = prompt.name
+    promptForm.description = prompt.description || ''
+    promptForm.author = prompt.author || ''
+    promptForm.classId = prompt.prompt_class.id
+    promptForm.tagIds = prompt.tags.map(tag => tag.id)
+    promptForm.mediaType = prompt.media_type
+    promptForm.attachments = prompt.attachments || []
+    
+    // 填充当前版本的内容
+    if (prompt.current_version) {
+      promptForm.version = prompt.current_version.version
+      promptForm.content = prompt.current_version.content
+      promptForm.contentzh = prompt.current_version.contentzh || ''
+    }
+    
+    createDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error('加载 Prompt 数据失败')
+    console.error('Failed to load prompt:', error)
+  }
 }
 
 function isDeleting(id: number) {
@@ -493,7 +573,7 @@ function isDeleting(id: number) {
 }
 
 // 处理 PromptEditor 提交事件
-function handleEditorSubmit(data: {
+async function handleEditorSubmit(data: {
   name: string
   description: string
   author: string
@@ -503,6 +583,7 @@ function handleEditorSubmit(data: {
   version: string
   summary: string
   attachments: AttachmentInfo[]
+  pendingFiles?: File[]
 }) {
   // 验证必填字段
   if (!data.name.trim()) {
@@ -525,7 +606,9 @@ function handleEditorSubmit(data: {
       return
     }
   } else {
-    if (!data.attachments.length) {
+    // 检查是否有附件或待上传的文件
+    const hasPendingFiles = data.pendingFiles && data.pendingFiles.length > 0
+    if (!data.attachments.length && !hasPendingFiles) {
       ElMessage.warning('请上传至少一个附件')
       return
     }
@@ -548,19 +631,53 @@ function handleEditorSubmit(data: {
     media_type: data.media_type
   }
 
-  createPrompt(payload)
-    .then(async () => {
-      ElMessage.success(t('promptManagement.messages.createSuccess'))
-      createDialogVisible.value = false
-      resetPromptForm()
-      await Promise.all([fetchPrompts(), fetchCollections()])
-    })
-    .catch((error) => {
-      ElMessage.error(extractErrorMessage(error, t('promptManagement.messages.createFailed')))
-    })
-    .finally(() => {
-      isSubmitting.value = false
-    })
+  try {
+    if (dialogMode.value === 'edit' && editingPromptId.value) {
+      // 编辑模式：更新 Prompt
+      await updatePrompt(editingPromptId.value, payload)
+      
+      // 如果有待关联的文件，关联它们
+      if (data.pendingFiles && data.pendingFiles.length > 0 && promptEditorRef.value) {
+        try {
+          await promptEditorRef.value.attachPendingFiles(editingPromptId.value)
+          ElMessage.success(`提示词更新成功，已关联 ${data.pendingFiles.length} 个附件`)
+        } catch (attachError) {
+          console.error('关联附件失败:', attachError)
+          ElMessage.warning('提示词更新成功，但部分附件关联失败')
+        }
+      } else {
+        ElMessage.success('提示词更新成功')
+      }
+    } else {
+      // 创建模式：创建新 Prompt
+      const createdPrompt = await createPrompt(payload)
+      
+      // 如果有待关联的文件，关联它们
+      if (data.pendingFiles && data.pendingFiles.length > 0 && promptEditorRef.value) {
+        try {
+          await promptEditorRef.value.attachPendingFiles(createdPrompt.id)
+          ElMessage.success(`提示词创建成功，已关联 ${data.pendingFiles.length} 个附件`)
+        } catch (attachError) {
+          console.error('关联附件失败:', attachError)
+          ElMessage.warning('提示词创建成功，但部分附件关联失败')
+        }
+      } else {
+        ElMessage.success(t('promptManagement.messages.createSuccess'))
+      }
+    }
+    
+    createDialogVisible.value = false
+    resetPromptForm()
+    editingPromptId.value = null
+    await Promise.all([fetchPrompts(), fetchCollections()])
+  } catch (error) {
+    const errorMsg = dialogMode.value === 'edit' 
+      ? '更新提示词失败' 
+      : t('promptManagement.messages.createFailed')
+    ElMessage.error(extractErrorMessage(error, errorMsg))
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 // 处理 PromptEditor 取消事件
@@ -654,7 +771,8 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 
 async function fetchPrompts() {
   try {
-    const data = await listPrompts({ limit: 200 })
+    // 设置较大的 limit 值以获取所有数据
+    const data = await listPrompts({ limit: 10000 })
     prompts.value = data
     promptError.value = null
   } catch (error) {
@@ -663,6 +781,16 @@ async function fetchPrompts() {
     ElMessage.error(message)
     prompts.value = []
   }
+}
+
+// 分页处理函数
+function handleSizeChange(newSize: number) {
+  pageSize.value = newSize
+  currentPage.value = 1 // 改变每页数量时重置到第一页
+}
+
+function handleCurrentChange(newPage: number) {
+  currentPage.value = newPage
 }
 
 async function fetchCollections() {
@@ -714,6 +842,11 @@ watch(tagOptions, (options) => {
   }
   const available = new Set(options.map((item) => item.id))
   selectedTagIds.value = selectedTagIds.value.filter((id) => available.has(id))
+})
+
+// 监听筛选条件变化，重置到第一页
+watch([activeClassKey, searchKeyword, selectedTagIds, selectedMediaTypes, sortKey], () => {
+  currentPage.value = 1
 })
 
 onMounted(() => {
@@ -849,17 +982,19 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
 }
 
 .prompt-card__title-section {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: row;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .prompt-title-row {
+  flex: 1;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -876,6 +1011,7 @@ onMounted(() => {
 
 .title-content {
   flex: 1;
+  min-width: 0;
 }
 
 .prompt-class {
@@ -888,34 +1024,58 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  word-break: break-word;
+}
+
+.version-and-thumbnail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .thumbnail-preview {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .thumbnail-image {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
   border: 1px solid var(--el-border-color-light);
+  background-color: var(--el-fill-color-light);
   flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbnail-image:hover {
+  transform: scale(1.05);
+}
+
+.thumbnail-image :deep(img) {
+  object-fit: contain;
 }
 
 .thumbnail-more {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
   background: var(--el-fill-color-light);
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .prompt-desc {
@@ -949,22 +1109,58 @@ onMounted(() => {
 .prompt-tags {
   margin-top: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  min-height: 60px;
 }
 
 .prompt-tags__list {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  flex: 1;
+  align-content: flex-start;
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.card-edit {
+  color: var(--el-color-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 16px;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.card-edit:hover {
+  background-color: var(--el-color-primary-light-9);
 }
 
 .card-delete {
   color: var(--el-color-danger);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  padding: 4px;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 16px;
+  white-space: nowrap;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.card-delete:hover {
+  background-color: var(--el-color-danger-light-9);
 }
 
 .dialog-form {
@@ -1016,11 +1212,16 @@ onMounted(() => {
 
   .prompt-card__header {
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
+  }
+
+  .prompt-card__title-section {
+    flex-direction: column;
+    gap: 12px;
   }
 
   .prompt-title-row {
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
@@ -1028,8 +1229,24 @@ onMounted(() => {
     align-self: flex-start;
   }
 
+  .version-and-thumbnail {
+    align-items: flex-start;
+    width: 100%;
+  }
+
   .thumbnail-preview {
-    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .thumbnail-image {
+    width: 50px;
+    height: 50px;
+  }
+
+  .thumbnail-more {
+    width: 50px;
+    height: 50px;
+    font-size: 13px;
   }
 
   .prompt-meta {
@@ -1054,6 +1271,15 @@ onMounted(() => {
 
   .prompt-tags__list {
     justify-content: flex-start;
+  }
+
+  .card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .card-edit span {
+    display: inline; /* 移动端也显示文字 */
   }
 }
 
@@ -1161,8 +1387,8 @@ onMounted(() => {
   
   .el-dialog__body {
     padding: 0;
-    height: calc(96vh - 60px);
-    overflow: hidden;
+    max-height: calc(96vh - 60px);
+    overflow-y: auto;
   }
   
   .el-dialog__footer {
@@ -1185,6 +1411,13 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+/* 分页组件样式 */
+.pagination {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+}
+
 /* 移动端优化 */
 @media (max-width: 768px) {
   :deep(.fullscreen-editor-dialog) {
@@ -1196,12 +1429,24 @@ onMounted(() => {
     }
     
     .el-dialog__body {
-      height: calc(100vh - 60px);
+      max-height: calc(100vh - 60px);
+      overflow-y: auto;
     }
   }
   
   .create-form-header {
     padding: 16px;
+  }
+  
+  .pagination {
+    margin-top: 16px;
+  }
+  
+  :deep(.pagination) {
+    .el-pagination__sizes,
+    .el-pagination__jump {
+      display: none;
+    }
   }
 }
 </style>

@@ -3,20 +3,18 @@
     <!-- 图片预览 -->
     <div v-if="isImage" class="image-preview">
       <div class="image-container">
-        <el-image
+        <img
+          v-if="!imageError"
           :src="attachment.thumbnail_url || attachment.download_url"
-          :preview-src-list="[attachment.download_url]"
-          fit="cover"
+          :alt="attachment.original_filename"
           class="preview-image"
-          :preview-teleported="true"
-        >
-          <template #error>
-            <div class="image-error">
-              <el-icon><Picture /></el-icon>
-              <span>图片加载失败</span>
-            </div>
-          </template>
-        </el-image>
+          @click="previewImage"
+          @error="handleImageError"
+        />
+        <div v-else class="image-error">
+          <el-icon><Picture /></el-icon>
+          <span>图片加载失败</span>
+        </div>
         
         <!-- 图片信息覆盖层 -->
         <div class="image-overlay">
@@ -82,6 +80,26 @@
         </el-button>
       </el-button-group>
     </div>
+
+    <!-- 图片预览对话框 -->
+    <el-dialog
+      v-model="showImagePreview"
+      :title="attachment.original_filename"
+      :width="dialogWidth"
+      top="5vh"
+      append-to-body
+      class="image-preview-dialog-wrapper"
+      destroy-on-close
+    >
+      <div class="image-preview-dialog">
+        <img
+          :src="attachment.download_url"
+          :alt="attachment.original_filename"
+          class="preview-dialog-image"
+          @load="handleImageLoad"
+        />
+      </div>
+    </el-dialog>
 
     <!-- 删除确认对话框 -->
     <el-dialog
@@ -156,6 +174,9 @@ const emit = defineEmits<Emits>()
 const isDownloading = ref(false)
 const isDeleting = ref(false)
 const showDeleteDialog = ref(false)
+const imageError = ref(false)
+const showImagePreview = ref(false)
+const dialogWidth = ref('90%')
 
 // 计算属性
 const isImage = computed(() => {
@@ -255,10 +276,78 @@ const downloadFile = async () => {
   }
 }
 
+// 预览图片
+const previewImage = () => {
+  if (isImage.value) {
+    // 根据图片元数据计算对话框宽度
+    calculateDialogWidth()
+    showImagePreview.value = true
+    emit('preview', props.attachment)
+  }
+}
+
+// 处理图片加载错误
+const handleImageError = () => {
+  imageError.value = true
+}
+
+// 处理预览图片加载完成
+const handleImageLoad = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  const imgWidth = img.naturalWidth
+  const imgHeight = img.naturalHeight
+  
+  // 根据图片实际尺寸调整对话框宽度
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const maxDialogWidth = viewportWidth * 0.9
+  const maxDialogHeight = viewportHeight * 0.85
+  
+  // 计算合适的对话框宽度
+  let targetWidth = imgWidth + 48 // 加上对话框的内边距
+  
+  // 如果图片高度超过最大高度，按比例缩放宽度
+  if (imgHeight > maxDialogHeight) {
+    const scale = maxDialogHeight / imgHeight
+    targetWidth = imgWidth * scale + 48
+  }
+  
+  // 限制在最小和最大宽度之间
+  targetWidth = Math.max(400, Math.min(targetWidth, maxDialogWidth))
+  
+  dialogWidth.value = `${targetWidth}px`
+}
+
+// 计算对话框初始宽度
+const calculateDialogWidth = () => {
+  // 如果有图片元数据，使用元数据计算
+  if (props.attachment.metadata?.width && props.attachment.metadata?.height) {
+    const imgWidth = props.attachment.metadata.width
+    const imgHeight = props.attachment.metadata.height
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const maxDialogWidth = viewportWidth * 0.9
+    const maxDialogHeight = viewportHeight * 0.85
+    
+    let targetWidth = imgWidth + 48
+    
+    if (imgHeight > maxDialogHeight) {
+      const scale = maxDialogHeight / imgHeight
+      targetWidth = imgWidth * scale + 48
+    }
+    
+    targetWidth = Math.max(400, Math.min(targetWidth, maxDialogWidth))
+    dialogWidth.value = `${targetWidth}px`
+  } else {
+    // 没有元数据时使用默认宽度
+    dialogWidth.value = '90%'
+  }
+}
+
 // 预览文件
 const previewFile = () => {
   if (isImage.value) {
-    // 图片预览由 el-image 组件处理
+    previewImage()
     return
   }
   
@@ -347,6 +436,8 @@ const handleDeleteDialogClose = (done: () => void) => {
 
 /* 图片预览样式 */
 .image-preview {
+  width: 100%;
+  height: 100%;
   position: relative;
 }
 
@@ -355,6 +446,10 @@ const handleDeleteDialogClose = (done: () => void) => {
   width: 100%;
   height: 200px;
   overflow: hidden;
+  background-color: var(--el-fill-color-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .attachment-preview.is-grid-view .image-container {
@@ -362,9 +457,11 @@ const handleDeleteDialogClose = (done: () => void) => {
 }
 
 .preview-image {
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .image-error {
@@ -494,6 +591,40 @@ const handleDeleteDialogClose = (done: () => void) => {
   color: var(--el-color-warning);
   font-size: 14px;
   margin-top: 8px;
+}
+
+/* 图片预览对话框样式 */
+.image-preview-dialog-wrapper :deep(.el-dialog) {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.image-preview-dialog-wrapper :deep(.el-dialog__body) {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--el-fill-color-light);
+}
+
+.image-preview-dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 400px;
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.preview-dialog-image {
+  max-width: 100%;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
 }
 
 /* 响应式设计 */

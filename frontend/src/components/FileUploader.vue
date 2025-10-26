@@ -3,6 +3,7 @@
     <el-upload
       ref="uploadRef"
       :action="uploadAction"
+      :http-request="handleCustomUpload"
       :before-upload="beforeUpload"
       :on-success="handleSuccess"
       :on-error="handleError"
@@ -12,6 +13,7 @@
       :multiple="allowMultiple"
       :disabled="disabled || isUploading"
       :show-file-list="showFileList"
+      :auto-upload="true"
       drag
       class="upload-dragger"
     >
@@ -106,6 +108,7 @@ interface Props {
   allowMultiple?: boolean
   disabled?: boolean
   showFileList?: boolean
+  deferUpload?: boolean // 延迟上传模式，先暂存文件不立即上传
 }
 
 // 组件事件
@@ -113,13 +116,15 @@ interface Emits {
   (e: 'upload-success', file: any): void
   (e: 'upload-error', error: Error): void
   (e: 'files-change', files: UploadFiles): void
+  (e: 'files-ready', files: File[]): void // 文件准备就绪（延迟上传模式）
 }
 
 const props = withDefaults(defineProps<Props>(), {
   maxSize: 10 * 1024 * 1024, // 默认10MB
   allowMultiple: false,
   disabled: false,
-  showFileList: true
+  showFileList: true,
+  deferUpload: false
 })
 
 const emit = defineEmits<Emits>()
@@ -127,6 +132,8 @@ const emit = defineEmits<Emits>()
 // 响应式数据
 const uploadRef = ref<InstanceType<typeof ElUpload>>()
 const fileList = ref<UploadFiles>([])
+const pendingFiles = ref<File[]>([]) // 暂存的文件对象（延迟上传模式）
+const uploadedAttachmentIds = ref<number[]>([]) // 已上传的临时附件 ID
 const isUploading = ref(false)
 const uploadProgress = ref(0)
 
@@ -222,12 +229,10 @@ const validateFileType = (file: File, mediaType: MediaType): boolean => {
   }
 }
 
-// 处理上传成功
+// 处理上传成功（由 Element Plus 自动调用）
 const handleSuccess = (response: any, file: UploadFile) => {
-  isUploading.value = false
-  uploadProgress.value = 0
-  ElMessage.success('文件上传成功')
-  emit('upload-success', response)
+  // 不需要处理，已经在 handleCustomUpload 中处理了
+  // 这里只是为了兼容 Element Plus 的回调
 }
 
 // 处理上传错误
@@ -244,19 +249,76 @@ const handleProgress = (event: UploadProgressEvent) => {
   uploadProgress.value = Math.round(event.percent || 0)
 }
 
-// 自定义上传方法
-const customUpload = async (file: File) => {
-  if (!props.promptId) {
-    throw new Error('缺少 promptId 参数')
+// Element Plus 自定义上传处理器
+const handleCustomUpload = async (options: any) => {
+  const { file, onProgress, onSuccess, onError } = options
+  
+  try {
+    isUploading.value = true
+    
+    // 使用 promptId=0 表示临时上传，否则正常上传
+    const uploadPromptId = (props.deferUpload || !props.promptId) ? 0 : props.promptId
+    
+    const result = await attachmentApi.upload(
+      uploadPromptId,
+      file,
+      (progress) => {
+        uploadProgress.value = progress
+        onProgress({ percent: progress })
+      }
+    )
+    
+    isUploading.value = false
+    uploadProgress.value = 0
+    
+    // 如果是临时上传，保存附件 ID
+    if (uploadPromptId === 0) {
+      pendingFiles.value.push(file)
+      uploadedAttachmentIds.value.push(result.id)
+      ElMessage.success('文件已上传，将在保存时关联')
+      emit('files-ready', pendingFiles.value)
+    } else {
+      ElMessage.success('文件上传成功')
+    }
+    
+    // 发出上传成功事件，用于显示预览
+    emit('upload-success', result)
+    onSuccess(result)
+  } catch (error) {
+    isUploading.value = false
+    uploadProgress.value = 0
+    onError(error)
+    ElMessage.error('文件上传失败：' + (error as Error).message)
+    emit('upload-error', error as Error)
   }
+}
+
+// 自定义上传方法（供外部调用）
+const customUpload = async (file: File) => {
+  const uploadPromptId = props.promptId || 0
 
   try {
     isUploading.value = true
-    const result = await attachmentApi.upload(props.promptId, file)
-    handleSuccess(result, { name: file.name, size: file.size } as UploadFile)
+    const result = await attachmentApi.upload(uploadPromptId, file, (progress) => {
+      uploadProgress.value = progress
+    })
+    isUploading.value = false
+    uploadProgress.value = 0
+    
+    if (uploadPromptId === 0) {
+      uploadedAttachmentIds.value.push(result.id)
+      ElMessage.success('文件已上传，将在保存时关联')
+    } else {
+      ElMessage.success('文件上传成功')
+      emit('upload-success', result)
+    }
+    
     return result
   } catch (error) {
-    handleError(error as Error)
+    isUploading.value = false
+    uploadProgress.value = 0
+    ElMessage.error('文件上传失败：' + (error as Error).message)
+    emit('upload-error', error as Error)
     throw error
   }
 }
@@ -273,15 +335,66 @@ const formatFileSize = (bytes: number): string => {
 // 清空文件列表
 const clearFiles = () => {
   fileList.value = []
+  pendingFiles.value = []
+  uploadedAttachmentIds.value = []
   uploadRef.value?.clearFiles()
   emit('files-change', [])
+  emit('files-ready', [])
 }
 
 // 移除单个文件
-const removeFile = (index: number) => {
+const removeFile = async (index: number) => {
   fileList.value.splice(index, 1)
+  
+  // 如果是临时上传的文件，需要删除服务器上的文件
+  if (index < uploadedAttachmentIds.value.length) {
+    const attachmentId = uploadedAttachmentIds.value[index]
+    try {
+      await attachmentApi.delete(attachmentId)
+    } catch (error) {
+      console.error('删除临时附件失败:', error)
+    }
+    uploadedAttachmentIds.value.splice(index, 1)
+  }
+  
+  if (index < pendingFiles.value.length) {
+    pendingFiles.value.splice(index, 1)
+    emit('files-ready', pendingFiles.value)
+  }
+  
   emit('files-change', fileList.value)
 }
+
+// 关联临时附件到提示词（供外部调用）
+const attachToPrompt = async (promptId: number): Promise<AttachmentInfo[]> => {
+  if (uploadedAttachmentIds.value.length === 0) {
+    return []
+  }
+
+  try {
+    // 调用批量更新 API
+    const results = await attachmentApi.batchUpdatePrompt(
+      uploadedAttachmentIds.value,
+      promptId
+    )
+
+    ElMessage.success(`成功关联 ${results.length} 个附件`)
+
+    // 清空临时数据
+    pendingFiles.value = []
+    uploadedAttachmentIds.value = []
+    clearFiles()
+    
+    return results
+  } catch (error) {
+    console.error('关联附件失败:', error)
+    ElMessage.error('关联附件失败：' + (error as Error).message)
+    throw error
+  }
+}
+
+// 兼容旧方法名
+const uploadPendingFiles = attachToPrompt
 
 // 监听文件列表变化
 watch(fileList, (newFiles) => {
@@ -291,7 +404,11 @@ watch(fileList, (newFiles) => {
 // 暴露给父组件的方法
 defineExpose({
   clearFiles,
-  customUpload
+  customUpload,
+  uploadPendingFiles,
+  attachToPrompt,
+  getPendingFiles: () => pendingFiles.value,
+  getUploadedAttachmentIds: () => uploadedAttachmentIds.value
 })
 </script>
 
