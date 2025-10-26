@@ -11,7 +11,10 @@ dist/
 #kiro
 .kiro
 
-gallery_
+impdata
+devdocs
+tests
+uploads
 
 # Virtual environments
 .venv/
