@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.__version__ import get_version
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging, get_logger
@@ -18,7 +19,7 @@ def create_application() -> FastAPI:
 
     app = FastAPI(
         title=settings.PROJECT_NAME,
-        version="0.1.0",
+        version=get_version(),
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
     )
 

@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.models.media_type import MediaType
+
 
 class PromptTagBase(BaseModel):
     name: str = Field(..., max_length=100)
@@ -103,7 +105,8 @@ class PromptClassStats(PromptClassRead):
 
 class PromptVersionBase(BaseModel):
     version: str = Field(..., max_length=50)
-    content: str
+    content: str = Field(..., description="英文提示词内容")
+    contentzh: str | None = Field(default=None, description="中文提示词内容")
 
 
 class PromptVersionCreate(PromptVersionBase):
@@ -129,8 +132,10 @@ class PromptCreate(PromptBase):
     class_id: int | None = Field(default=None, ge=1)
     class_name: str | None = Field(default=None, max_length=255)
     class_description: str | None = None
+    media_type: MediaType = Field(default=MediaType.TEXT, description="提示词媒体类型")
     version: str = Field(..., max_length=50)
-    content: str
+    content: str = Field(..., description="英文提示词内容")
+    contentzh: str | None = Field(default=None, description="中文提示词内容")
     tag_ids: list[int] | None = Field(
         default=None,
         description="为 Prompt 选择的标签 ID 列表，未提供时保持既有设置",
@@ -142,6 +147,17 @@ class PromptCreate(PromptBase):
             raise ValueError("class_id 或 class_name 至少需要提供一个")
         return self
 
+    @model_validator(mode="after")
+    def validate_content_by_media_type(self):
+        """根据媒体类型验证内容"""
+        if self.media_type == MediaType.TEXT:
+            if not self.content or not self.content.strip():
+                raise ValueError("文本类型的提示词必须提供英文内容")
+        else:
+            # 非文本类型的提示词，内容可以为空（通过附件提供）
+            pass
+        return self
+
 
 class PromptUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
@@ -150,8 +166,10 @@ class PromptUpdate(BaseModel):
     class_id: int | None = Field(default=None, ge=1)
     class_name: str | None = Field(default=None, max_length=255)
     class_description: str | None = None
+    media_type: MediaType | None = Field(default=None, description="提示词媒体类型")
     version: str | None = Field(default=None, max_length=50)
-    content: str | None = None
+    content: str | None = Field(default=None, description="英文提示词内容")
+    contentzh: str | None = Field(default=None, description="中文提示词内容")
     activate_version_id: int | None = Field(default=None, ge=1)
     tag_ids: list[int] | None = Field(
         default=None,
@@ -178,10 +196,13 @@ class PromptUpdate(BaseModel):
 class PromptRead(PromptBase):
     id: int
     prompt_class: PromptClassRead
+    media_type: MediaType
     current_version: PromptVersionRead | None = None
     versions: list[PromptVersionRead] = Field(default_factory=list)
     tags: list[PromptTagRead] = Field(default_factory=list)
+    attachments: list = Field(default_factory=list, description="附件列表")
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+

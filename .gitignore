@@ -8,6 +8,11 @@ build/
 dist/
 *.egg-info/
 
+#kiro
+.kiro
+
+gallery
+
 # Virtual environments
 .venv/
 venv/

@@ -1,13 +1,20 @@
-import { ref, watch, type Ref } from 'vue'
+import { ref, watch, computed, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getPrompt, type HttpError } from '../api/prompt'
 import type { Prompt } from '../types/prompt'
+import { MediaType } from '../types/prompt'
+import { useAttachmentManagement } from './useAttachmentManagement'
 
 interface UsePromptDetailResult {
   prompt: Ref<Prompt | null>
   loading: Ref<boolean>
   error: Ref<string | null>
   refresh: () => Promise<void>
+  
+  // 附件管理相关
+  attachmentManager: ReturnType<typeof useAttachmentManagement>
+  isMediaTypeWithAttachments: Ref<boolean>
+  canUploadAttachments: Ref<boolean>
 }
 
 function extractErrorMessage(error: unknown): string {
@@ -29,6 +36,20 @@ export function usePromptDetail(promptId: Ref<number | null>): UsePromptDetailRe
   const error = ref<string | null>(null)
   let requestToken = 0
 
+  // 初始化附件管理
+  const attachmentManager = useAttachmentManagement()
+
+  // 计算属性：判断当前媒体类型是否支持附件
+  const isMediaTypeWithAttachments = computed(() => {
+    const mediaType = prompt.value?.media_type
+    return mediaType !== undefined && mediaType !== MediaType.TEXT
+  })
+
+  // 计算属性：判断是否可以上传附件
+  const canUploadAttachments = computed(() => {
+    return prompt.value !== null && isMediaTypeWithAttachments.value
+  })
+
   async function refresh() {
     const id = promptId.value
     const currentToken = ++requestToken
@@ -45,6 +66,11 @@ export function usePromptDetail(promptId: Ref<number | null>): UsePromptDetailRe
       const detail = await getPrompt(id)
       if (currentToken === requestToken) {
         prompt.value = detail
+        
+        // 同步加载附件信息
+        if (detail && isMediaTypeWithAttachments.value) {
+          await attachmentManager.loadAttachments(detail.id)
+        }
       }
     } catch (err) {
       if (currentToken === requestToken) {
@@ -60,6 +86,7 @@ export function usePromptDetail(promptId: Ref<number | null>): UsePromptDetailRe
     }
   }
 
+  // 监听 promptId 变化
   watch(
     promptId,
     () => {
@@ -68,10 +95,30 @@ export function usePromptDetail(promptId: Ref<number | null>): UsePromptDetailRe
     { immediate: true }
   )
 
+  // 监听媒体类型变化，重新加载附件
+  watch(
+    () => prompt.value?.media_type,
+    async (newMediaType: MediaType | undefined, oldMediaType: MediaType | undefined) => {
+      if (newMediaType !== oldMediaType && prompt.value) {
+        if (isMediaTypeWithAttachments.value) {
+          await attachmentManager.loadAttachments(prompt.value.id)
+        } else {
+          // 如果切换到文本类型，清空附件列表
+          attachmentManager.attachments.value = []
+        }
+      }
+    }
+  )
+
   return {
     prompt,
     loading,
     error,
-    refresh
+    refresh,
+    
+    // 附件管理相关
+    attachmentManager,
+    isMediaTypeWithAttachments,
+    canUploadAttachments
   }
 }

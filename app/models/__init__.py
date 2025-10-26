@@ -12,6 +12,8 @@ from app.models.prompt_test import (
     PromptTestExperiment,
     PromptTestExperimentStatus,
 )
+from app.models.media_type import MediaType
+from app.models.attachment import PromptAttachment
 
 __all__ = [
     "Base",
@@ -31,4 +33,6 @@ __all__ = [
     "PromptTestUnit",
     "PromptTestExperiment",
     "PromptTestExperimentStatus",
+    "MediaType",
+    "PromptAttachment",
 ]

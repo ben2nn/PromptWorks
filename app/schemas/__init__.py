@@ -1,3 +1,11 @@
+from app.schemas.attachment import (
+    AttachmentBase,
+    AttachmentCreate,
+    AttachmentRead,
+    AttachmentUpdate,
+    AttachmentListResponse,
+    AttachmentUploadResponse,
+)
 from app.schemas.llm_provider import (
     LLMProviderCreate,
     LLMProviderRead,
@@ -27,6 +35,12 @@ from app.schemas.test_run import TestRunCreate, TestRunRead, TestRunUpdate
 from app.schemas.usage import UsageModelSummary, UsageOverview, UsageTimeseriesPoint
 
 __all__ = [
+    "AttachmentBase",
+    "AttachmentCreate",
+    "AttachmentRead",
+    "AttachmentUpdate",
+    "AttachmentListResponse",
+    "AttachmentUploadResponse",
     "PromptClassRead",
     "PromptClassCreate",
     "PromptClassUpdate",

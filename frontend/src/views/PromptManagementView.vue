@@ -50,6 +50,29 @@
             </span>
           </el-option>
         </el-select>
+        <el-select
+          v-model="selectedMediaTypes"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          class="filter-item media-type-select"
+          placeholder="媒体类型筛选"
+          clearable
+        >
+          <el-option
+            v-for="mediaType in mediaTypeOptions"
+            :key="mediaType.value"
+            :label="mediaType.label"
+            :value="mediaType.value"
+          >
+            <div class="media-type-option">
+              <el-icon :color="mediaType.color" class="media-type-icon">
+                <component :is="mediaType.icon" />
+              </el-icon>
+              <span>{{ mediaType.label }}</span>
+            </div>
+          </el-option>
+        </el-select>
         <el-select v-model="sortKey" class="filter-item sort-select" :placeholder="t('promptManagement.sortPlaceholder')">
           <el-option :label="t('promptManagement.sortDefault')" value="default" />
           <el-option :label="t('promptManagement.sortCreatedAt')" value="created_at" />
@@ -74,9 +97,37 @@
         <div v-for="prompt in filteredPrompts" :key="prompt.id" class="card-grid__item">
           <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
             <div class="prompt-card__header">
-              <div>
-                <p class="prompt-class">{{ prompt.prompt_class.name }}</p>
-                <h3 class="prompt-title">{{ prompt.name }}</h3>
+              <div class="prompt-card__title-section">
+                <div class="prompt-title-row">
+                  <div class="media-type-indicator">
+                    <el-icon 
+                      :color="getMediaTypeInfo(prompt.media_type)?.color" 
+                      class="media-type-card-icon"
+                      :title="getMediaTypeInfo(prompt.media_type)?.label"
+                    >
+                      <component :is="getMediaTypeInfo(prompt.media_type)?.icon" />
+                    </el-icon>
+                  </div>
+                  <div class="title-content">
+                    <p class="prompt-class">{{ prompt.prompt_class.name }}</p>
+                    <h3 class="prompt-title">{{ prompt.name }}</h3>
+                  </div>
+                </div>
+                <!-- 图片类型显示缩略图 -->
+                <div v-if="prompt.media_type === MediaType.IMAGE && prompt.attachments.length > 0" class="thumbnail-preview">
+                  <el-image
+                    v-for="attachment in prompt.attachments.slice(0, 3)"
+                    :key="attachment.id"
+                    :src="attachment.thumbnail_url || attachment.download_url"
+                    :alt="attachment.original_filename"
+                    fit="cover"
+                    class="thumbnail-image"
+                    :preview-src-list="[attachment.download_url]"
+                  />
+                  <div v-if="prompt.attachments.length > 3" class="thumbnail-more">
+                    +{{ prompt.attachments.length - 3 }}
+                  </div>
+                </div>
               </div>
               <el-tag type="success" round size="small">
                 {{ t('promptManagement.currentVersion') }}
@@ -137,7 +188,15 @@
       <el-empty v-else :description="t('promptManagement.emptyDescription')" />
     </template>
 
-    <el-dialog v-model="createDialogVisible" :title="t('promptManagement.dialogTitle')" width="720px">
+    <el-dialog 
+      v-model="createDialogVisible" 
+      :title="t('promptManagement.dialogTitle')" 
+      width="95%"
+      top="2vh"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      class="fullscreen-editor-dialog"
+    >
       <el-alert
         v-if="!classOptions.length"
         :title="t('promptManagement.dialogAlert')"
@@ -145,64 +204,58 @@
         show-icon
         class="dialog-alert"
       />
-      <el-form :model="promptForm" label-width="100px" class="dialog-form">
-        <el-form-item :label="t('promptManagement.form.title')">
-          <el-input v-model="promptForm.name" :placeholder="t('promptManagement.form.titlePlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.author')">
-          <el-input v-model="promptForm.author" :placeholder="t('promptManagement.form.authorPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.description')">
-          <el-input
-            v-model="promptForm.description"
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 4 }"
-            :placeholder="t('promptManagement.form.descriptionPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.class')">
-          <el-select v-model="promptForm.classId" :placeholder="t('promptManagement.form.classPlaceholder')">
-            <el-option
-              v-for="item in classOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.tags')">
-          <el-select
-            v-model="promptForm.tagIds"
-            multiple
-            collapse-tags
-            collapse-tags-tooltip
-            :placeholder="t('promptManagement.form.tagsPlaceholder')"
-          >
-            <el-option
-              v-for="tag in tagOptions"
-              :key="tag.id"
-              :label="tag.name"
-              :value="tag.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.version')">
-          <el-input v-model="promptForm.version" :placeholder="t('promptManagement.form.versionPlaceholder')" />
-        </el-form-item>
-        <el-form-item :label="t('promptManagement.form.content')">
-          <el-input
-            v-model="promptForm.content"
-            type="textarea"
-            :autosize="{ minRows: 6, maxRows: 12 }"
-            :placeholder="t('promptManagement.form.contentPlaceholder')"
-          />
-        </el-form-item>
-      </el-form>
+      
+      <!-- 分类和标签选择 -->
+      <div class="create-form-header">
+        <el-form :model="promptForm" label-width="80px" class="header-form">
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item :label="t('promptManagement.form.class')">
+                <el-select v-model="promptForm.classId" :placeholder="t('promptManagement.form.classPlaceholder')" style="width: 100%">
+                  <el-option
+                    v-for="item in classOptions"
+                    :key="item.id"
+                    :label="item.name"
+                    :value="item.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="t('promptManagement.form.tags')">
+                <el-select
+                  v-model="promptForm.tagIds"
+                  multiple
+                  collapse-tags
+                  collapse-tags-tooltip
+                  :placeholder="t('promptManagement.form.tagsPlaceholder')"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="tag in tagOptions"
+                    :key="tag.id"
+                    :label="tag.name"
+                    :value="tag.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-form>
+      </div>
+
+      <!-- 使用 PromptEditor 组件 -->
+      <PromptEditor
+        ref="promptEditorRef"
+        mode="create"
+        :initial-data="editorInitialData"
+        :disabled="isSubmitting"
+        @submit="handleEditorSubmit"
+        @cancel="handleEditorCancel"
+      />
+      
       <template #footer>
-        <el-button @click="createDialogVisible = false">{{ t('promptManagement.footer.cancel') }}</el-button>
-        <el-button type="primary" :loading="isSubmitting" @click="handleCreatePrompt">
-          {{ t('promptManagement.footer.submit') }}
-        </el-button>
+        <span></span> <!-- 空的 footer，让 PromptEditor 自己处理按钮 -->
       </template>
     </el-dialog>
   </div>
@@ -210,14 +263,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Delete, Plus, Search } from '@element-plus/icons-vue'
+import { Delete, Plus, Search, Document, Picture, VideoPlay, Headset, EditPen } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { listPrompts, createPrompt, deletePrompt, type HttpError } from '../api/prompt'
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
-import type { Prompt } from '../types/prompt'
+import type { Prompt, AttachmentInfo } from '../types/prompt'
+import { MediaType } from '../types/prompt'
 import { useI18n } from 'vue-i18n'
+import PromptEditor from '../components/PromptEditor.vue'
 
 type SortKey = 'default' | 'created_at' | 'updated_at' | 'author'
 
@@ -229,6 +284,8 @@ interface PromptFormState {
   tagIds: number[]
   version: string
   content: string
+  contentzh: string
+  mediaType: MediaType
 }
 
 const router = useRouter()
@@ -246,6 +303,7 @@ const deletingIds = ref<number[]>([])
 const activeClassKey = ref('all')
 const searchKeyword = ref('')
 const selectedTagIds = ref<number[]>([])
+const selectedMediaTypes = ref<MediaType[]>([])
 const sortKey = ref<SortKey>('default')
 
 const classOptions = computed(() => {
@@ -259,6 +317,45 @@ const tagOptions = computed(() => {
     .map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }))
     .sort((a, b) => a.name.localeCompare(b.name, locale.value))
 })
+
+// 媒体类型选项
+const mediaTypeOptions = computed(() => [
+  {
+    value: MediaType.TEXT,
+    label: '文本',
+    icon: EditPen,
+    color: '#409EFF'
+  },
+  {
+    value: MediaType.IMAGE,
+    label: '图片',
+    icon: Picture,
+    color: '#67C23A'
+  },
+  {
+    value: MediaType.DOCUMENT,
+    label: '文档',
+    icon: Document,
+    color: '#E6A23C'
+  },
+  {
+    value: MediaType.AUDIO,
+    label: '音频',
+    icon: Headset,
+    color: '#F56C6C'
+  },
+  {
+    value: MediaType.VIDEO,
+    label: '视频',
+    icon: VideoPlay,
+    color: '#909399'
+  }
+])
+
+// 获取媒体类型信息
+function getMediaTypeInfo(mediaType: MediaType) {
+  return mediaTypeOptions.value.find(option => option.value === mediaType)
+}
 
 const dateFormatter = computed(
   () =>
@@ -323,6 +420,7 @@ const filteredPrompts = computed(() => {
   const keyword = searchKeyword.value
   const activeClass = activeClassKey.value
   const tagIds = selectedTagIds.value
+  const mediaTypes = selectedMediaTypes.value
 
   const list = prompts.value.filter((prompt) => {
     if (activeClass !== 'all' && String(prompt.prompt_class.id) !== activeClass) {
@@ -336,6 +434,9 @@ const filteredPrompts = computed(() => {
       if (!tagIds.every((tagId) => tagSet.has(tagId))) {
         return false
       }
+    }
+    if (mediaTypes.length && !mediaTypes.includes(prompt.media_type)) {
+      return false
     }
     return true
   })
@@ -351,8 +452,24 @@ const promptForm = reactive<PromptFormState>({
   classId: null,
   tagIds: [],
   version: '',
-  content: ''
+  content: '',
+  contentzh: '',
+  mediaType: MediaType.TEXT
 })
+
+// PromptEditor 相关数据
+const promptEditorRef = ref<InstanceType<typeof PromptEditor>>()
+
+// 计算传递给 PromptEditor 的初始数据
+const editorInitialData = computed(() => ({
+  name: promptForm.name,
+  description: promptForm.description,
+  author: promptForm.author,
+  media_type: promptForm.mediaType,
+  content: promptForm.content,
+  contentzh: promptForm.contentzh,
+  version: promptForm.version
+}))
 
 function resetPromptForm() {
   promptForm.name = ''
@@ -362,6 +479,8 @@ function resetPromptForm() {
   promptForm.tagIds = []
   promptForm.version = ''
   promptForm.content = ''
+  promptForm.contentzh = ''
+  promptForm.mediaType = MediaType.TEXT
 }
 
 function openCreateDialog() {
@@ -371,6 +490,83 @@ function openCreateDialog() {
 
 function isDeleting(id: number) {
   return deletingIds.value.includes(id)
+}
+
+// 处理 PromptEditor 提交事件
+function handleEditorSubmit(data: {
+  name: string
+  description: string
+  author: string
+  media_type: MediaType
+  content: string
+  contentzh?: string
+  version: string
+  summary: string
+  attachments: AttachmentInfo[]
+}) {
+  // 验证必填字段
+  if (!data.name.trim()) {
+    ElMessage.warning('请输入提示词名称')
+    return
+  }
+  if (!data.version.trim()) {
+    ElMessage.warning('请输入版本号')
+    return
+  }
+  if (!promptForm.classId) {
+    ElMessage.warning(t('promptManagement.messages.selectClass'))
+    return
+  }
+  
+  // 验证内容或附件
+  if (data.media_type === MediaType.TEXT) {
+    if (!data.content.trim()) {
+      ElMessage.warning('请输入提示词内容')
+      return
+    }
+  } else {
+    if (!data.attachments.length) {
+      ElMessage.warning('请上传至少一个附件')
+      return
+    }
+  }
+
+  if (isSubmitting.value) {
+    return
+  }
+
+  isSubmitting.value = true
+  const payload = {
+    name: data.name.trim(),
+    description: data.description.trim() || null,
+    author: data.author.trim() || null,
+    class_id: promptForm.classId,
+    version: data.version.trim(),
+    content: data.content || '',
+    contentzh: data.contentzh?.trim() || null,
+    tag_ids: promptForm.tagIds.length ? promptForm.tagIds : [],
+    media_type: data.media_type
+  }
+
+  createPrompt(payload)
+    .then(async () => {
+      ElMessage.success(t('promptManagement.messages.createSuccess'))
+      createDialogVisible.value = false
+      resetPromptForm()
+      await Promise.all([fetchPrompts(), fetchCollections()])
+    })
+    .catch((error) => {
+      ElMessage.error(extractErrorMessage(error, t('promptManagement.messages.createFailed')))
+    })
+    .finally(() => {
+      isSubmitting.value = false
+    })
+}
+
+// 处理 PromptEditor 取消事件
+function handleEditorCancel() {
+  createDialogVisible.value = false
+  resetPromptForm()
 }
 
 function handleCreatePrompt() {
@@ -399,7 +595,8 @@ function handleCreatePrompt() {
     class_id: promptForm.classId,
     version: promptForm.version.trim(),
     content: promptForm.content,
-    tag_ids: promptForm.tagIds.length ? promptForm.tagIds : []
+    tag_ids: promptForm.tagIds.length ? promptForm.tagIds : [],
+    media_type: promptForm.mediaType
   }
 
   createPrompt(payload)
@@ -586,6 +783,10 @@ onMounted(() => {
   max-width: 320px;
 }
 
+.media-type-select {
+  max-width: 280px;
+}
+
 .sort-select {
   width: 180px;
   flex: initial;
@@ -602,6 +803,16 @@ onMounted(() => {
   height: 10px;
   border-radius: 50%;
   background: #909399;
+}
+
+.media-type-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-type-icon {
+  font-size: 14px;
 }
 
 .card-grid {
@@ -641,6 +852,32 @@ onMounted(() => {
   gap: 12px;
 }
 
+.prompt-card__title-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompt-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.media-type-indicator {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.media-type-card-icon {
+  font-size: 20px;
+}
+
+.title-content {
+  flex: 1;
+}
+
 .prompt-class {
   margin: 0 0 4px;
   font-size: 13px;
@@ -651,6 +888,34 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+
+.thumbnail-preview {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.thumbnail-image {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  flex-shrink: 0;
+}
+
+.thumbnail-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .prompt-desc {
@@ -710,5 +975,233 @@ onMounted(() => {
 
 .dialog-alert {
   margin-bottom: 12px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-header__text h2 {
+    font-size: 20px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .filter-item {
+    min-width: unset;
+    max-width: unset;
+  }
+
+  .search-input,
+  .tag-select,
+  .media-type-select {
+    max-width: unset;
+  }
+
+  .sort-select {
+    width: 100%;
+  }
+
+  .card-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .prompt-card__header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .prompt-title-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .media-type-indicator {
+    align-self: flex-start;
+  }
+
+  .thumbnail-preview {
+    justify-content: flex-start;
+  }
+
+  .prompt-meta {
+    font-size: 12px;
+  }
+
+  .meta-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .meta-label {
+    min-width: unset;
+  }
+
+  .prompt-tags {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .prompt-tags__list {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-header__text h2 {
+    font-size: 18px;
+  }
+
+  .page-desc {
+    font-size: 13px;
+  }
+
+  .class-tabs {
+    --el-tabs-header-height: 36px;
+  }
+
+  .prompt-card {
+    padding: 12px;
+  }
+
+  .prompt-title {
+    font-size: 16px;
+  }
+
+  .thumbnail-image {
+    width: 32px;
+    height: 32px;
+  }
+
+  .thumbnail-more {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .media-type-card-icon {
+    font-size: 18px;
+  }
+}
+
+/* 新建对话框样式 */
+.dialog-alert {
+  margin-bottom: 16px;
+}
+
+.create-form-header {
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+}
+
+.header-form {
+  margin: 0;
+}
+
+.header-form .el-form-item {
+  margin-bottom: 0;
+}
+
+/* 媒体类型选项样式 */
+.media-type-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-type-icon {
+  font-size: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .create-form-header .el-row {
+    flex-direction: column;
+  }
+  
+  .create-form-header .el-col {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* 全屏编辑器对话框样式 */
+:deep(.fullscreen-editor-dialog) {
+  .el-dialog {
+    margin: 0 !important;
+    max-height: 96vh;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  
+  .el-dialog__header {
+    padding: 16px 24px;
+    background-color: var(--el-fill-color-blank);
+    border-bottom: 1px solid var(--el-border-color-lighter);
+    margin: 0;
+  }
+  
+  .el-dialog__title {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  
+  .el-dialog__body {
+    padding: 0;
+    height: calc(96vh - 60px);
+    overflow: hidden;
+  }
+  
+  .el-dialog__footer {
+    display: none;
+  }
+}
+
+/* 对话框内的表单头部样式 */
+.create-form-header {
+  padding: 20px 24px;
+  background-color: var(--el-fill-color-light);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.header-form {
+  margin: 0;
+}
+
+.dialog-alert {
+  margin-bottom: 16px;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  :deep(.fullscreen-editor-dialog) {
+    .el-dialog {
+      width: 100% !important;
+      margin: 0 !important;
+      max-height: 100vh;
+      border-radius: 0;
+    }
+    
+    .el-dialog__body {
+      height: calc(100vh - 60px);
+    }
+  }
+  
+  .create-form-header {
+    padding: 16px;
+  }
 }
 </style>

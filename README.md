@@ -138,10 +138,34 @@ docker compose down -v         # 停止并删除数据卷
 - Prompt 详情页已预置版本 diff 组件与测试面板，接入接口后可实现端到端的提示词验证闭环。
 - 测试任务列表默认展示新版任务入口，旧版“新建测试任务”按钮已隐藏，新版入口文案统一为“新建测试任务”。
 
+## 📋 版本管理
+项目采用统一的版本管理策略，版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范：
+
+### 版本号格式
+- **主版本号**：不兼容的 API 修改
+- **次版本号**：向下兼容的功能性新增
+- **修订号**：向下兼容的问题修正
+
+### 版本更新流程
+```bash
+# 使用版本更新脚本统一更新所有文件中的版本号
+uv run python scripts/update_version.py 0.2.0
+
+# 验证版本更新
+uv run python -c "from app import get_version; print(f'后端版本: {get_version()}')"
+cd frontend && npm run build  # 验证前端构建
+```
+
+### 版本信息查看
+- **API 端点**：`GET /api/v1/system/version` - 获取详细版本信息
+- **健康检查**：`GET /api/v1/system/health` - 系统状态和版本
+- **前端组件**：`VersionInfo.vue` - 页面版本显示组件
+
 ## 🤝 贡献指南
 1. 新建功能分支，遵循“格式化 → 类型检查 → 测试”工作流。
 2. 开发完成后运行 `uv run poe test-all` 确保质量基线。
-3. 提交 Pull Request，并在描述中说明变更范围与验证方式；本地提交信息建议使用简短中文描述。
+3. 如有版本变更，使用 `scripts/update_version.py` 统一更新版本号。
+4. 提交 Pull Request，并在描述中说明变更范围与验证方式；本地提交信息建议使用简短中文描述。
 
 欢迎提出 Issue 或改进建议，共建 PromptWorks！
 

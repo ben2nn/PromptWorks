@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     Column,
     DateTime,
+    Enum,
     ForeignKey,
     Integer,
     String,
@@ -18,8 +19,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.models.test_run import TestRun
+    from app.models.attachment import PromptAttachment
 
 from app.models.base import Base
+from app.models.media_type import MediaType
 
 
 prompt_tag_association = Table(
@@ -103,6 +106,12 @@ class Prompt(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     author: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    media_type: Mapped[MediaType] = mapped_column(
+        Enum(MediaType, values_callable=lambda obj: [e.value for e in obj]), 
+        default=MediaType.TEXT, 
+        nullable=False,
+        index=True
+    )
     current_version_id: Mapped[int | None] = mapped_column(
         ForeignKey(
             "prompts_versions.id",
@@ -143,6 +152,12 @@ class Prompt(Base):
         secondary=prompt_tag_association,
         back_populates="prompts",
     )
+    attachments: Mapped[list["PromptAttachment"]] = relationship(
+        "PromptAttachment",
+        back_populates="prompt",
+        cascade="all, delete-orphan",
+        order_by="PromptAttachment.created_at.desc()",
+    )
 
 
 class PromptVersion(Base):
@@ -162,7 +177,8 @@ class PromptVersion(Base):
         index=True,
     )
     version: Mapped[str] = mapped_column(String(50), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="英文提示词内容")
+    contentzh: Mapped[str | None] = mapped_column(Text, nullable=True, comment="中文提示词内容")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

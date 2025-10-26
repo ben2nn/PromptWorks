@@ -40,8 +40,19 @@
         </div>
       </template>
       <el-descriptions :column="3" border size="small" class="info-descriptions">
+        <el-descriptions-item label="媒体类型">
+          <div class="media-type-display">
+            <el-icon :color="getMediaTypeInfo(detail.media_type)?.color" class="media-type-icon">
+              <component :is="getMediaTypeInfo(detail.media_type)?.icon" />
+            </el-icon>
+            <span>{{ getMediaTypeInfo(detail.media_type)?.label }}</span>
+          </div>
+        </el-descriptions-item>
         <el-descriptions-item :label="t('promptDetail.info.fields.author')">
           {{ detail.author ?? t('common.notSet') }}
+        </el-descriptions-item>
+        <el-descriptions-item label="附件数量">
+          {{ detail.attachments?.length || 0 }} 个文件
         </el-descriptions-item>
         <el-descriptions-item :label="t('promptDetail.info.fields.createdAt')">
           {{ formatDateTime(detail.created_at) }}
@@ -49,7 +60,7 @@
         <el-descriptions-item :label="t('promptDetail.info.fields.updatedAt')">
           {{ formatDateTime(detail.updated_at) }}
         </el-descriptions-item>
-        <el-descriptions-item :label="t('promptDetail.info.fields.classDescription')" :span="3">
+        <el-descriptions-item :label="t('promptDetail.info.fields.classDescription')" :span="1">
           {{ detail.prompt_class.description ?? t('promptDetail.info.fields.classDescriptionFallback') }}
         </el-descriptions-item>
       </el-descriptions>
@@ -128,7 +139,8 @@
       </el-dialog>
       </el-card>
 
-      <el-card class="content-card">
+      <!-- 文本类型显示传统内容 -->
+      <el-card v-if="detail.media_type === MediaType.TEXT" class="content-card">
       <template #header>
         <div class="content-header">
           <div>
@@ -169,7 +181,20 @@
           </header>
           <div class="content-scroll">
             <template v-if="selectedVersion">
-              <pre class="content-text">{{ selectedVersion.content }}</pre>
+              <!-- 语言切换按钮 -->
+              <div v-if="selectedVersion.contentzh" class="language-switcher">
+                <el-radio-group v-model="currentLanguage" size="small">
+                  <el-radio-button value="en">英文</el-radio-button>
+                  <el-radio-button value="zh">中文</el-radio-button>
+                </el-radio-group>
+              </div>
+              
+              <!-- 内容显示 -->
+              <pre class="content-text">{{ 
+                currentLanguage === 'zh' && selectedVersion.contentzh 
+                  ? selectedVersion.contentzh 
+                  : selectedVersion.content 
+              }}</pre>
             </template>
             <el-empty v-else :description="t('promptDetail.content.empty')" />
           </div>
@@ -192,6 +217,57 @@
           </div>
         </aside>
       </div>
+      </el-card>
+
+      <!-- 非文本类型显示附件管理 -->
+      <el-card v-else class="attachments-card">
+        <template #header>
+          <div class="attachments-header">
+            <div>
+              <h3 class="attachments-title">附件管理</h3>
+              <span class="attachments-subtitle">管理 {{ getMediaTypeInfo(detail.media_type)?.label }} 类型的附件文件</span>
+            </div>
+            <div class="attachments-actions">
+              <FileUploader
+                :prompt-id="detail.id"
+                :media-type="detail.media_type"
+                @upload-success="handleAttachmentUpload"
+                @upload-error="handleAttachmentError"
+              />
+            </div>
+          </div>
+        </template>
+        
+        <div class="attachments-body">
+          <el-alert
+            v-if="!detail.attachments?.length"
+            title="暂无附件"
+            type="info"
+            :description="`请上传 ${getMediaTypeInfo(detail.media_type)?.label} 类型的文件`"
+            show-icon
+            :closable="false"
+            class="attachments-empty"
+          />
+          
+          <div v-else class="attachments-grid">
+            <AttachmentPreview
+              v-for="attachment in detail.attachments"
+              :key="attachment.id"
+              :attachment="attachment"
+              @delete="handleAttachmentDelete"
+              @download="handleAttachmentDownload"
+            />
+          </div>
+          
+          <!-- 上传进度显示 -->
+          <div v-if="isUploading" class="upload-progress">
+            <el-progress
+              :percentage="uploadProgress"
+              :status="uploadProgress === 100 ? 'success' : undefined"
+            />
+            <span class="upload-text">正在上传文件...</span>
+          </div>
+        </div>
       </el-card>
 
       <el-card class="test-card">
@@ -264,13 +340,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DocumentCopy } from '@element-plus/icons-vue'
+import { DocumentCopy, Document, Picture, VideoPlay, Headset, EditPen } from '@element-plus/icons-vue'
 import { usePromptDetail } from '../composables/usePromptDetail'
 import { listPromptClasses, type PromptClassStats } from '../api/promptClass'
 import { listPromptTags, type PromptTagStats } from '../api/promptTag'
 import { updatePrompt } from '../api/prompt'
 import { listTestRuns } from '../api/testRun'
 import type { TestRun } from '../types/testRun'
+import { MediaType } from '../types/prompt'
+import AttachmentPreview from '../components/AttachmentPreview.vue'
+import FileUploader from '../components/FileUploader.vue'
+import { useAttachmentManagement } from '../composables/useAttachmentManagement'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 
@@ -290,6 +370,7 @@ const {
 } = usePromptDetail(currentId)
 
 const selectedVersionId = ref<number | null>(null)
+const currentLanguage = ref<'en' | 'zh'>('en')
 const promptClasses = ref<PromptClassStats[]>([])
 const promptTags = ref<PromptTagStats[]>([])
 const metaError = ref<string | null>(null)
@@ -339,6 +420,55 @@ const selectedVersion = computed(() => {
 const testRuns = ref<TestRun[]>([])
 const testRunLoading = ref(false)
 const testRunError = ref<string | null>(null)
+
+// 媒体类型相关
+const mediaTypeOptions = computed(() => [
+  {
+    value: MediaType.TEXT,
+    label: '文本',
+    icon: EditPen,
+    color: '#409EFF'
+  },
+  {
+    value: MediaType.IMAGE,
+    label: '图片',
+    icon: Picture,
+    color: '#67C23A'
+  },
+  {
+    value: MediaType.DOCUMENT,
+    label: '文档',
+    icon: Document,
+    color: '#E6A23C'
+  },
+  {
+    value: MediaType.AUDIO,
+    label: '音频',
+    icon: Headset,
+    color: '#F56C6C'
+  },
+  {
+    value: MediaType.VIDEO,
+    label: '视频',
+    icon: VideoPlay,
+    color: '#909399'
+  }
+])
+
+// 获取媒体类型信息
+function getMediaTypeInfo(mediaType: MediaType) {
+  return mediaTypeOptions.value.find(option => option.value === mediaType)
+}
+
+// 附件管理
+const {
+  attachments,
+  isUploading,
+  uploadProgress,
+  uploadAttachment,
+  deleteAttachment,
+  refreshAttachments
+} = useAttachmentManagement(currentId)
 
 const testRecords = computed(() => {
   const promptId = currentId.value
@@ -575,7 +705,16 @@ function summarizeContent(content: string) {
 }
 
 async function handleCopyPrompt() {
-  const content = selectedVersion.value?.content
+  const version = selectedVersion.value
+  if (!version) {
+    ElMessage.warning(t('promptDetail.content.copyEmpty'))
+    return
+  }
+  
+  const content = currentLanguage.value === 'zh' && version.contentzh 
+    ? version.contentzh 
+    : version.content
+    
   if (!content) {
     ElMessage.warning(t('promptDetail.content.copyEmpty'))
     return
@@ -638,6 +777,31 @@ function handleViewTestJob(jobId: number) {
 
 function goHome() {
   router.push({ name: 'prompt-management' })
+}
+
+// 附件相关处理函数
+async function handleAttachmentUpload(attachment: any) {
+  ElMessage.success('文件上传成功')
+  await refreshDetail() // 刷新提示词详情以获取最新的附件列表
+}
+
+function handleAttachmentError(error: string) {
+  ElMessage.error(`文件上传失败: ${error}`)
+}
+
+async function handleAttachmentDelete(attachmentId: number) {
+  try {
+    await deleteAttachment(attachmentId)
+    ElMessage.success('附件删除成功')
+    await refreshDetail() // 刷新提示词详情
+  } catch (error) {
+    ElMessage.error('附件删除失败')
+  }
+}
+
+function handleAttachmentDownload(attachment: any) {
+  // 直接打开下载链接
+  window.open(attachment.download_url, '_blank')
 }
 </script>
 
@@ -840,6 +1004,12 @@ function goHome() {
   max-height: 460px;
 }
 
+.language-switcher {
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .content-text {
   margin: 0;
   white-space: pre-wrap;
@@ -949,5 +1119,250 @@ function goHome() {
 
 .test-alert {
   margin-bottom: 12px;
+}
+
+/* 媒体类型显示样式 */
+.media-type-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.media-type-icon {
+  font-size: 16px;
+}
+
+/* 附件管理样式 */
+.attachments-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.attachments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.attachments-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.attachments-subtitle {
+  font-size: 13px;
+  color: var(--text-weak-color);
+}
+
+.attachments-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.attachments-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.attachments-empty {
+  margin: 20px 0;
+}
+
+.attachments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.upload-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--el-fill-color-lighter);
+  border-radius: 8px;
+  border: 1px dashed var(--el-border-color);
+}
+
+.upload-text {
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .info-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .info-meta {
+    align-items: flex-start;
+  }
+
+  .info-descriptions {
+    --el-descriptions-item-bordered-label-background: var(--el-fill-color-lighter);
+  }
+
+  .info-descriptions :deep(.el-descriptions__body) {
+    font-size: 12px;
+  }
+
+  .info-tags {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .content-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .content-actions {
+    justify-content: flex-start;
+  }
+
+  .content-body {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .content-main {
+    order: 2;
+  }
+
+  .content-history {
+    order: 1;
+  }
+
+  .content-main__meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .content-main__time {
+    justify-content: flex-start;
+  }
+
+  .content-scroll,
+  .history-scroll {
+    max-height: 300px;
+  }
+
+  .attachments-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .attachments-actions {
+    justify-content: flex-start;
+  }
+
+  .attachments-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .test-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .detail-page {
+    gap: 12px;
+  }
+
+  .info-title {
+    font-size: 20px;
+  }
+
+  .info-desc {
+    font-size: 13px;
+  }
+
+  .content-title,
+  .test-title,
+  .attachments-title {
+    font-size: 16px;
+  }
+
+  .content-subtitle,
+  .test-subtitle,
+  .attachments-subtitle {
+    font-size: 12px;
+  }
+
+  .content-text {
+    font-size: 12px;
+  }
+
+  .history-title {
+    font-size: 13px;
+  }
+
+  .history-item {
+    padding: 8px;
+  }
+
+  .history-item__meta {
+    font-size: 12px;
+  }
+
+  .history-preview {
+    font-size: 12px;
+  }
+
+  .content-scroll,
+  .history-scroll {
+    max-height: 250px;
+    padding: 12px;
+  }
+
+  .media-type-icon {
+    font-size: 14px;
+  }
+
+  .upload-progress {
+    padding: 12px;
+  }
+}
+
+/* 超小屏幕优化 */
+@media (max-width: 360px) {
+  .detail-page {
+    gap: 8px;
+  }
+
+  .info-title {
+    font-size: 18px;
+  }
+
+  .content-title,
+  .test-title,
+  .attachments-title {
+    font-size: 15px;
+  }
+
+  .attachments-grid {
+    gap: 8px;
+  }
+
+  .content-scroll,
+  .history-scroll {
+    max-height: 200px;
+    padding: 8px;
+  }
 }
 </style>

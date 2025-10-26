@@ -37,12 +37,20 @@
         <el-form-item :label="t('promptVersionCreate.form.summaryLabel')">
           <el-input v-model="form.summary" :placeholder="t('promptVersionCreate.form.summaryPlaceholder')" />
         </el-form-item>
-        <el-form-item :label="t('promptVersionCreate.form.contentLabel')">
+        <el-form-item label="英文内容">
           <el-input
             v-model="form.content"
             type="textarea"
-            :rows="12"
-            :placeholder="t('promptVersionCreate.form.contentPlaceholder')"
+            :rows="8"
+            placeholder="请输入英文提示词内容"
+          />
+        </el-form-item>
+        <el-form-item label="中文内容">
+          <el-input
+            v-model="form.contentzh"
+            type="textarea"
+            :rows="8"
+            placeholder="请输入中文提示词内容（可选）"
           />
         </el-form-item>
         <el-form-item :label="t('promptVersionCreate.form.referenceLabel')">
@@ -73,7 +81,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { usePromptDetail } from '../composables/usePromptDetail'
-import { updatePrompt, type HttpError } from '../api/prompt'
+import { createPromptVersion, type HttpError } from '../api/prompt'
 import { useI18n } from 'vue-i18n'
 
 const router = useRouter()
@@ -95,6 +103,7 @@ const form = reactive({
   version: '',
   summary: '',
   content: '',
+  contentzh: '',
   reference: undefined as number | undefined
 })
 
@@ -139,10 +148,12 @@ async function handleSubmit() {
 
   isSubmitting.value = true
   try {
-    await updatePrompt(currentId.value, {
-      version: form.version.trim(),
-      content: form.content
-    })
+    await createPromptVersion(
+      currentId.value,
+      form.version.trim(),
+      form.content,
+      form.contentzh.trim() || null
+    )
     ElMessage.success(t('promptVersionCreate.messages.success'))
     router.push({ name: 'prompt-detail', params: { id: currentId.value } })
   } catch (error) {

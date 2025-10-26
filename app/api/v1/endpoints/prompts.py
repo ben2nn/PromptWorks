@@ -8,8 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.db.session import get_db
-from app.models.prompt import Prompt, PromptClass, PromptTag, PromptVersion
+from app.models.prompt import Prompt, PromptClass, PromptTag, PromptVersion, MediaType
 from app.schemas.prompt import PromptCreate, PromptRead, PromptUpdate
+from app.services.attachment import attachment_service
 
 router = APIRouter()
 
@@ -20,6 +21,7 @@ def _prompt_query():
         joinedload(Prompt.current_version),
         selectinload(Prompt.versions),
         selectinload(Prompt.tags),
+        selectinload(Prompt.attachments),
     )
 
 
@@ -87,14 +89,17 @@ def list_prompts(
     *,
     db: Session = Depends(get_db),
     q: str | None = Query(default=None, description="根据名称、作者或分类模糊搜索"),
+    media_type: MediaType | None = Query(default=None, description="按媒体类型筛选"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> Sequence[Prompt]:
-    """按更新时间倒序分页列出 Prompt。"""
+    """按更新时间倒序分页列出 Prompt，支持媒体类型筛选。"""
 
     stmt = (
         _prompt_query().order_by(Prompt.updated_at.desc()).offset(offset).limit(limit)
     )
+    
+    # 文本搜索
     if q:
         like_term = f"%{q}%"
         stmt = stmt.join(Prompt.prompt_class).where(
@@ -102,8 +107,24 @@ def list_prompts(
             | (Prompt.author.ilike(like_term))
             | (PromptClass.name.ilike(like_term))
         )
+    
+    # 媒体类型筛选
+    if media_type:
+        stmt = stmt.where(Prompt.media_type == media_type)
 
-    return list(db.execute(stmt).unique().scalars().all())
+    prompts = list(db.execute(stmt).unique().scalars().all())
+    
+    # 为每个提示词添加附件信息
+    for prompt in prompts:
+        if prompt.media_type != MediaType.TEXT:
+            # 获取附件列表并转换为响应格式
+            attachments = attachment_service.get_prompt_attachments(db, prompt.id)
+            prompt.attachments = [
+                attachment_service.to_attachment_read(attachment)
+                for attachment in attachments
+            ]
+    
+    return prompts
 
 
 @router.post("/", response_model=PromptRead, status_code=status.HTTP_201_CREATED)
@@ -127,6 +148,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
             name=payload.name,
             description=payload.description,
             author=payload.author,
+            media_type=payload.media_type,
             prompt_class=prompt_class,
         )
         db.add(prompt)
@@ -137,6 +159,8 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
             prompt.description = payload.description
         if payload.author is not None:
             prompt.author = payload.author
+        if payload.media_type is not None:
+            prompt.media_type = payload.media_type
 
     if payload.tag_ids is not None:
         prompt.tags = _resolve_prompt_tags(db, payload.tag_ids)
@@ -159,6 +183,7 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
         prompt=prompt,
         version=payload.version,
         content=payload.content,
+        contentzh=payload.contentzh,
     )
     db.add(prompt_version)
     db.flush()
@@ -177,9 +202,19 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
 
 @router.get("/{prompt_id}", response_model=PromptRead)
 def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Prompt:
-    """根据 ID 获取 Prompt 详情，包含全部版本信息。"""
+    """根据 ID 获取 Prompt 详情，包含全部版本信息和附件。"""
 
-    return _get_prompt_or_404(db, prompt_id)
+    prompt = _get_prompt_or_404(db, prompt_id)
+    
+    # 为非文本类型的提示词加载附件信息
+    if prompt.media_type != MediaType.TEXT:
+        attachments = attachment_service.get_prompt_attachments(db, prompt.id)
+        prompt.attachments = [
+            attachment_service.to_attachment_read(attachment)
+            for attachment in attachments
+        ]
+    
+    return prompt
 
 
 @router.put("/{prompt_id}", response_model=PromptRead)
@@ -226,6 +261,7 @@ def update_prompt(
             prompt=prompt,
             version=payload.version,
             content=payload.content,
+            contentzh=payload.contentzh,
         )
         db.add(new_version)
         db.flush()
@@ -256,17 +292,57 @@ def update_prompt(
     return _get_prompt_or_404(db, prompt_id)
 
 
+@router.put("/{prompt_id}/media-type", response_model=PromptRead)
+def update_prompt_media_type(
+    *, 
+    db: Session = Depends(get_db), 
+    prompt_id: int, 
+    media_type: MediaType
+) -> Prompt:
+    """更新提示词的媒体类型。"""
+
+    prompt = _get_prompt_or_404(db, prompt_id)
+    
+    # 如果从非文本类型切换到文本类型，需要确保有内容
+    if media_type == MediaType.TEXT and prompt.media_type != MediaType.TEXT:
+        if not prompt.current_version or not prompt.current_version.content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="切换到文本类型时必须有文本内容"
+            )
+    
+    # 更新媒体类型
+    prompt.media_type = media_type
+    
+    try:
+        db.commit()
+        db.refresh(prompt)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="更新媒体类型失败"
+        ) from exc
+    
+    # 返回更新后的提示词（包含附件信息）
+    return get_prompt(db=db, prompt_id=prompt_id)
+
+
 @router.delete(
     "/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
 def delete_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Response:
-    """删除 Prompt 及其全部版本。"""
+    """删除 Prompt 及其全部版本和附件。"""
 
     prompt = db.get(Prompt, prompt_id)
     if not prompt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prompt 不存在"
         )
+
+    # 删除关联的附件
+    if prompt.media_type != MediaType.TEXT:
+        attachment_service.delete_prompt_attachments(db, prompt_id)
 
     db.delete(prompt)
     db.commit()
