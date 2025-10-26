@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     usage,
     prompt_test_tasks,
 )
+from app.api.v1.gallery import router as gallery_router
 
 
 api_router = APIRouter()
@@ -34,3 +35,5 @@ api_router.include_router(
 )
 api_router.include_router(attachments.router, tags=["attachments"])
 api_router.include_router(system.router, prefix="/system", tags=["system"])
+# 画廊API路由 - 为画廊展示提供专门的API接口
+api_router.include_router(gallery_router, tags=["gallery"])

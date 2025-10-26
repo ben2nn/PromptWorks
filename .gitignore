@@ -11,7 +11,7 @@ dist/
 #kiro
 .kiro
 
-gallery
+gallery_
 
 # Virtual environments
 .venv/
