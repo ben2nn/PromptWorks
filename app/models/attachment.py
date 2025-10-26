@@ -25,9 +25,9 @@ class PromptAttachment(Base):
     __tablename__ = "prompt_attachments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    prompt_id: Mapped[int] = mapped_column(
+    prompt_id: Mapped[int | None] = mapped_column(
         ForeignKey("prompts.id", ondelete="CASCADE"), 
-        nullable=False,
+        nullable=True,  # 允许为空，支持临时上传
         index=True
     )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)

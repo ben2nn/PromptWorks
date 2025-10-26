@@ -17,6 +17,7 @@ from app.schemas import (
 router = APIRouter()
 
 
+@router.get("", response_model=PromptTagListResponse)
 @router.get("/", response_model=PromptTagListResponse)
 def list_prompt_tags(*, db: Session = Depends(get_db)) -> PromptTagListResponse:
     """按名称排序返回全部 Prompt 标签及其引用统计。"""
@@ -56,6 +57,7 @@ def list_prompt_tags(*, db: Session = Depends(get_db)) -> PromptTagListResponse:
     )
 
 
+@router.post("", response_model=PromptTagRead, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=PromptTagRead, status_code=status.HTTP_201_CREATED)
 def create_prompt_tag(
     *, db: Session = Depends(get_db), payload: PromptTagCreate

@@ -1,8 +1,12 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.media_type import MediaType
+
+if TYPE_CHECKING:
+    from app.schemas.attachment import AttachmentRead
 
 
 class PromptTagBase(BaseModel):
@@ -200,9 +204,13 @@ class PromptRead(PromptBase):
     current_version: PromptVersionRead | None = None
     versions: list[PromptVersionRead] = Field(default_factory=list)
     tags: list[PromptTagRead] = Field(default_factory=list)
-    attachments: list = Field(default_factory=list, description="附件列表")
+    attachments: list["AttachmentRead"] = Field(default_factory=list, description="附件列表")
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# 解析前向引用 - 在所有模型定义之后导入
+from app.schemas.attachment import AttachmentRead  # noqa: E402
+PromptRead.model_rebuild()

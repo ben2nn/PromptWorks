@@ -53,7 +53,7 @@ class AttachmentBase(BaseModel):
 
 class AttachmentCreate(AttachmentBase):
     """附件创建模式"""
-    prompt_id: int = Field(..., ge=1, description="关联的提示词 ID")
+    prompt_id: int | None = Field(None, ge=1, description="关联的提示词 ID（可选，用于临时上传）")
     file_path: str = Field(..., max_length=500, description="文件存储路径")
     thumbnail_path: str | None = Field(None, max_length=500, description="缩略图路径")
     file_metadata: dict[str, Any] | None = Field(None, description="文件元数据")
@@ -62,7 +62,7 @@ class AttachmentCreate(AttachmentBase):
 class AttachmentRead(AttachmentBase):
     """附件读取模式"""
     id: int
-    prompt_id: int
+    prompt_id: int | None = None  # 允许为空
     thumbnail_path: str | None = None
     file_metadata: dict[str, Any] | None = None
     created_at: datetime

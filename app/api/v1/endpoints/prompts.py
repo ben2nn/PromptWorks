@@ -15,6 +15,38 @@ from app.services.attachment import attachment_service
 router = APIRouter()
 
 
+def _convert_prompt_to_read(prompt: Prompt) -> PromptRead:
+    """将 Prompt SQLAlchemy 对象转换为 PromptRead Pydantic 对象
+    
+    手动转换附件列表，因为 AttachmentRead 需要额外的 URL 字段
+    """
+    from app.schemas.prompt import PromptRead
+    from app.schemas.attachment import AttachmentRead
+    
+    # 转换附件列表
+    attachment_reads = [
+        attachment_service.to_attachment_read(att)
+        for att in prompt.attachments
+    ]
+    
+    # 使用 model_validate 从 SQLAlchemy 对象创建 Pydantic 对象
+    prompt_dict = {
+        "id": prompt.id,
+        "name": prompt.name,
+        "description": prompt.description,
+        "prompt_class": prompt.prompt_class,
+        "media_type": prompt.media_type,
+        "current_version": prompt.current_version,
+        "versions": prompt.versions,
+        "tags": prompt.tags,
+        "attachments": attachment_reads,  # 使用转换后的附件列表
+        "created_at": prompt.created_at,
+        "updated_at": prompt.updated_at,
+    }
+    
+    return PromptRead.model_validate(prompt_dict)
+
+
 def _prompt_query():
     return select(Prompt).options(
         joinedload(Prompt.prompt_class),
@@ -84,15 +116,16 @@ def _resolve_prompt_tags(db: Session, tag_ids: list[int]) -> list[PromptTag]:
     return [id_to_tag[tag_id] for tag_id in unique_ids]
 
 
+@router.get("", response_model=list[PromptRead])
 @router.get("/", response_model=list[PromptRead])
 def list_prompts(
     *,
     db: Session = Depends(get_db),
     q: str | None = Query(default=None, description="根据名称、作者或分类模糊搜索"),
     media_type: MediaType | None = Query(default=None, description="按媒体类型筛选"),
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=1000, ge=1, le=10000),
     offset: int = Query(default=0, ge=0),
-) -> Sequence[Prompt]:
+) -> list[PromptRead]:
     """按更新时间倒序分页列出 Prompt，支持媒体类型筛选。"""
 
     stmt = (
@@ -114,21 +147,13 @@ def list_prompts(
 
     prompts = list(db.execute(stmt).unique().scalars().all())
     
-    # 为每个提示词添加附件信息
-    for prompt in prompts:
-        if prompt.media_type != MediaType.TEXT:
-            # 获取附件列表并转换为响应格式
-            attachments = attachment_service.get_prompt_attachments(db, prompt.id)
-            prompt.attachments = [
-                attachment_service.to_attachment_read(attachment)
-                for attachment in attachments
-            ]
-    
-    return prompts
+    # 转换为 PromptRead，包括附件的 URL 字段
+    return [_convert_prompt_to_read(prompt) for prompt in prompts]
 
 
+@router.post("", response_model=PromptRead, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=PromptRead, status_code=status.HTTP_201_CREATED)
-def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Prompt:
+def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> PromptRead:
     """创建 Prompt 并写入首个版本，缺少分类时自动创建分类。"""
 
     prompt_class = _resolve_prompt_class(
@@ -197,30 +222,24 @@ def create_prompt(*, db: Session = Depends(get_db), payload: PromptCreate) -> Pr
             status_code=status.HTTP_400_BAD_REQUEST, detail="创建 Prompt 时发生数据冲突"
         ) from exc
 
-    return _get_prompt_or_404(db, prompt.id)
+    prompt = _get_prompt_or_404(db, prompt.id)
+    return _convert_prompt_to_read(prompt)
 
 
 @router.get("/{prompt_id}", response_model=PromptRead)
-def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> Prompt:
+def get_prompt(*, db: Session = Depends(get_db), prompt_id: int) -> PromptRead:
     """根据 ID 获取 Prompt 详情，包含全部版本信息和附件。"""
 
     prompt = _get_prompt_or_404(db, prompt_id)
     
-    # 为非文本类型的提示词加载附件信息
-    if prompt.media_type != MediaType.TEXT:
-        attachments = attachment_service.get_prompt_attachments(db, prompt.id)
-        prompt.attachments = [
-            attachment_service.to_attachment_read(attachment)
-            for attachment in attachments
-        ]
-    
-    return prompt
+    # 转换为 PromptRead，包括附件的 URL 字段
+    return _convert_prompt_to_read(prompt)
 
 
 @router.put("/{prompt_id}", response_model=PromptRead)
 def update_prompt(
     *, db: Session = Depends(get_db), prompt_id: int, payload: PromptUpdate
-) -> Prompt:
+) -> PromptRead:
     """更新 Prompt 及其元数据，可选择创建新版本或切换当前版本。"""
 
     prompt = _get_prompt_or_404(db, prompt_id)
@@ -289,7 +308,8 @@ def update_prompt(
             status_code=status.HTTP_400_BAD_REQUEST, detail="更新 Prompt 失败"
         ) from exc
 
-    return _get_prompt_or_404(db, prompt_id)
+    prompt = _get_prompt_or_404(db, prompt_id)
+    return _convert_prompt_to_read(prompt)
 
 
 @router.put("/{prompt_id}/media-type", response_model=PromptRead)
@@ -298,7 +318,7 @@ def update_prompt_media_type(
     db: Session = Depends(get_db), 
     prompt_id: int, 
     media_type: MediaType
-) -> Prompt:
+) -> PromptRead:
     """更新提示词的媒体类型。"""
 
     prompt = _get_prompt_or_404(db, prompt_id)

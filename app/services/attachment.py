@@ -29,6 +29,99 @@ class AttachmentService:
         self.validation_service = file_validation_service
         self.thumbnail_service = thumbnail_service
     
+    async def upload_temporary_attachment(
+        self,
+        db: Session,
+        file: UploadFile,
+        media_type: MediaType | None = None
+    ) -> PromptAttachment:
+        """临时上传附件（不关联提示词）
+        
+        Args:
+            db: 数据库会话
+            file: 上传的文件对象
+            media_type: 媒体类型（可选）
+            
+        Returns:
+            创建的附件对象（prompt_id 为 None）
+            
+        Raises:
+            HTTPException: 上传失败时抛出异常
+        """
+        # 使用默认媒体类型或指定的类型
+        target_media_type = media_type or MediaType.IMAGE
+        
+        # 验证文件
+        is_valid, error_msg, detected_mime = await self.validation_service.validate_upload_file(
+            file, target_media_type
+        )
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        
+        try:
+            # 保存原始文件
+            filename, file_path = await self.storage_service.save_file(file, "attachments")
+            
+            # 读取文件内容用于后续处理
+            content = await file.read()
+            await file.seek(0)  # 重置文件指针
+            
+            # 初始化附件数据（不关联 prompt_id）
+            attachment_data = AttachmentCreate(
+                prompt_id=None,  # 临时上传，不关联提示词
+                filename=filename,
+                original_filename=file.filename or "unknown",
+                file_size=len(content),
+                mime_type=detected_mime,
+                file_path=file_path,
+                thumbnail_path=None,
+                file_metadata={}
+            )
+            
+            # 如果是图片，生成缩略图和提取元数据
+            if self.thumbnail_service.is_image_file(detected_mime):
+                try:
+                    thumbnail_content, thumbnail_filename, image_metadata = (
+                        self.thumbnail_service.process_image(
+                            content, file.filename or "unknown", detected_mime
+                        )
+                    )
+                    
+                    # 保存缩略图
+                    thumbnail_path = self.storage_service.save_binary_file(
+                        thumbnail_content, thumbnail_filename, "thumbnails"
+                    )
+                    
+                    attachment_data.thumbnail_path = thumbnail_path
+                    attachment_data.file_metadata = image_metadata
+                    
+                except Exception as e:
+                    # 缩略图生成失败不影响文件上传，只记录错误
+                    attachment_data.file_metadata = {
+                        "thumbnail_error": f"缩略图生成失败: {str(e)}"
+                    }
+            
+            # 保存到数据库
+            db_attachment = PromptAttachment(**attachment_data.model_dump())
+            db.add(db_attachment)
+            db.commit()
+            db.refresh(db_attachment)
+            
+            return db_attachment
+            
+        except Exception as e:
+            # 如果数据库操作失败，清理已保存的文件
+            if 'file_path' in locals():
+                self.storage_service.delete_file(file_path)
+            if 'thumbnail_path' in locals():
+                self.storage_service.delete_file(thumbnail_path)
+            
+            db.rollback()
+            raise HTTPException(
+                status_code=500, 
+                detail=f"附件上传失败: {str(e)}"
+            ) from e
+
     async def upload_attachment(
         self, 
         db: Session, 
@@ -373,6 +466,117 @@ class AttachmentService:
             "storage_info": storage_info
         }
     
+    def attach_to_prompt(
+        self,
+        db: Session,
+        attachment_ids: list[int],
+        prompt_id: int
+    ) -> list[PromptAttachment]:
+        """将临时附件关联到提示词
+        
+        Args:
+            db: 数据库会话
+            attachment_ids: 附件 ID 列表
+            prompt_id: 提示词 ID
+            
+        Returns:
+            更新后的附件列表
+            
+        Raises:
+            HTTPException: 关联失败时抛出异常
+        """
+        # 验证提示词是否存在
+        prompt = db.query(Prompt).filter(Prompt.id == prompt_id).first()
+        if not prompt:
+            raise HTTPException(status_code=404, detail="提示词不存在")
+        
+        # 获取所有附件
+        attachments = db.query(PromptAttachment).filter(
+            PromptAttachment.id.in_(attachment_ids)
+        ).all()
+        
+        if len(attachments) != len(attachment_ids):
+            raise HTTPException(status_code=404, detail="部分附件不存在")
+        
+        # 检查是否有已关联的附件
+        already_attached = [att for att in attachments if att.prompt_id is not None]
+        if already_attached:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"附件 {[att.id for att in already_attached]} 已关联到其他提示词"
+            )
+        
+        try:
+            # 关联附件到提示词
+            for attachment in attachments:
+                attachment.prompt_id = prompt_id
+            
+            db.commit()
+            
+            # 刷新所有附件
+            for attachment in attachments:
+                db.refresh(attachment)
+            
+            return attachments
+            
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"关联附件失败: {str(e)}"
+            ) from e
+    
+    def get_temporary_attachments(
+        self,
+        db: Session,
+        skip: int = 0,
+        limit: int = 100
+    ) -> list[PromptAttachment]:
+        """获取所有临时附件（未关联提示词的附件）
+        
+        Args:
+            db: 数据库会话
+            skip: 跳过的记录数
+            limit: 返回的最大记录数
+            
+        Returns:
+            临时附件列表
+        """
+        return db.query(PromptAttachment).filter(
+            PromptAttachment.prompt_id.is_(None)
+        ).offset(skip).limit(limit).all()
+    
+    def cleanup_temporary_attachments(
+        self,
+        db: Session,
+        older_than_hours: int = 24
+    ) -> int:
+        """清理过期的临时附件
+        
+        Args:
+            db: 数据库会话
+            older_than_hours: 清理多少小时前的临时附件
+            
+        Returns:
+            清理的附件数量
+        """
+        from datetime import datetime, timedelta
+        
+        cutoff_time = datetime.utcnow() - timedelta(hours=older_than_hours)
+        
+        # 查找过期的临时附件
+        old_attachments = db.query(PromptAttachment).filter(
+            PromptAttachment.prompt_id.is_(None),
+            PromptAttachment.created_at < cutoff_time
+        ).all()
+        
+        deleted_count = 0
+        for attachment in old_attachments:
+            if self.delete_attachment(db, attachment.id):
+                deleted_count += 1
+        
+        return deleted_count
+
     def cleanup_orphaned_files(self, db: Session) -> dict[str, int]:
         """清理孤立的文件（数据库中不存在但文件系统中存在的文件）
         

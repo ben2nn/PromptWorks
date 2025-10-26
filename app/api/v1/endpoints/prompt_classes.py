@@ -17,6 +17,7 @@ from app.schemas import (
 router = APIRouter()
 
 
+@router.get("", response_model=list[PromptClassStats])
 @router.get("/", response_model=list[PromptClassStats])
 def list_prompt_classes(
     *,
@@ -63,6 +64,7 @@ def list_prompt_classes(
     ]
 
 
+@router.post("", response_model=PromptClassRead, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=PromptClassRead, status_code=status.HTTP_201_CREATED)
 def create_prompt_class(
     *, db: Session = Depends(get_db), payload: PromptClassCreate

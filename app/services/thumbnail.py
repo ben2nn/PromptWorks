@@ -57,8 +57,19 @@ class ThumbnailService:
         """
         metadata = {}
         
+        if not image_content or len(image_content) == 0:
+            metadata['error'] = "图片内容为空"
+            return metadata
+        
         try:
-            with Image.open(io.BytesIO(image_content)) as img:
+            # 创建 BytesIO 对象并确保指针在开始位置
+            image_buffer = io.BytesIO(image_content)
+            image_buffer.seek(0)
+            
+            with Image.open(image_buffer) as img:
+                # 加载图片数据
+                img.load()
+                
                 # 基本信息
                 metadata['width'] = img.width
                 metadata['height'] = img.height
@@ -70,13 +81,17 @@ class ThumbnailService:
                 
                 # EXIF 信息（如果存在）
                 exif_data = {}
-                if hasattr(img, '_getexif') and img._getexif() is not None:
-                    exif = img._getexif()
-                    for tag_id, value in exif.items():
-                        tag = ExifTags.TAGS.get(tag_id, tag_id)
-                        # 只保留常用的 EXIF 信息
-                        if tag in ['DateTime', 'Make', 'Model', 'Software', 'Orientation']:
-                            exif_data[tag] = str(value)
+                try:
+                    if hasattr(img, '_getexif') and img._getexif() is not None:
+                        exif = img._getexif()
+                        for tag_id, value in exif.items():
+                            tag = ExifTags.TAGS.get(tag_id, tag_id)
+                            # 只保留常用的 EXIF 信息
+                            if tag in ['DateTime', 'Make', 'Model', 'Software', 'Orientation']:
+                                exif_data[tag] = str(value)
+                except Exception:
+                    # EXIF 提取失败不影响其他元数据
+                    pass
                 
                 if exif_data:
                     metadata['exif'] = exif_data
@@ -111,41 +126,70 @@ class ThumbnailService:
         Raises:
             ValueError: 图片处理失败
         """
+        if not image_content or len(image_content) == 0:
+            raise ValueError("图片内容为空")
+        
         try:
-            with Image.open(io.BytesIO(image_content)) as img:
-                # 自动旋转图片（根据 EXIF 信息）
+            # 创建 BytesIO 对象并确保指针在开始位置
+            image_buffer = io.BytesIO(image_content)
+            image_buffer.seek(0)
+            
+            # 尝试打开图片
+            try:
+                img = Image.open(image_buffer)
+                # 加载图片数据以确保图片有效
+                img.load()
+            except Exception as e:
+                raise ValueError(f"无法识别图片格式: {str(e)}")
+            
+            # 自动旋转图片（根据 EXIF 信息）
+            try:
                 img = ImageOps.exif_transpose(img)
+            except Exception:
+                # 如果 EXIF 处理失败，继续使用原图
+                pass
+            
+            # 转换为 RGB 模式（如果需要）
+            if output_format == 'JPEG' and img.mode in ('RGBA', 'LA', 'P'):
+                # 创建白色背景
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            elif output_format == 'JPEG' and img.mode not in ('RGB', 'L'):
+                # 其他模式也转换为 RGB
+                img = img.convert('RGB')
+            
+            # 生成缩略图（保持宽高比）
+            img.thumbnail(self.thumbnail_size, Resampling.LANCZOS)
+            
+            # 保存到内存
+            output = io.BytesIO()
+            
+            # 设置保存参数
+            save_kwargs = {}
+            if output_format == 'JPEG':
+                save_kwargs['quality'] = self.thumbnail_quality
+                save_kwargs['optimize'] = True
+            elif output_format == 'PNG':
+                save_kwargs['optimize'] = True
+            elif output_format == 'WEBP':
+                save_kwargs['quality'] = self.thumbnail_quality
+                save_kwargs['method'] = 6  # 最佳压缩
+            
+            img.save(output, format=output_format, **save_kwargs)
+            
+            # 确保有数据生成
+            thumbnail_data = output.getvalue()
+            if not thumbnail_data or len(thumbnail_data) == 0:
+                raise ValueError("生成的缩略图为空")
+            
+            return thumbnail_data
                 
-                # 转换为 RGB 模式（如果需要）
-                if output_format == 'JPEG' and img.mode in ('RGBA', 'LA', 'P'):
-                    # 创建白色背景
-                    background = Image.new('RGB', img.size, (255, 255, 255))
-                    if img.mode == 'P':
-                        img = img.convert('RGBA')
-                    background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
-                    img = background
-                
-                # 生成缩略图（保持宽高比）
-                img.thumbnail(self.thumbnail_size, Resampling.LANCZOS)
-                
-                # 保存到内存
-                output = io.BytesIO()
-                
-                # 设置保存参数
-                save_kwargs = {}
-                if output_format == 'JPEG':
-                    save_kwargs['quality'] = self.thumbnail_quality
-                    save_kwargs['optimize'] = True
-                elif output_format == 'PNG':
-                    save_kwargs['optimize'] = True
-                elif output_format == 'WEBP':
-                    save_kwargs['quality'] = self.thumbnail_quality
-                    save_kwargs['method'] = 6  # 最佳压缩
-                
-                img.save(output, format=output_format, **save_kwargs)
-                
-                return output.getvalue()
-                
+        except ValueError:
+            # 重新抛出 ValueError
+            raise
         except Exception as e:
             raise ValueError(f"缩略图生成失败: {str(e)}") from e
     

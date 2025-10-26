@@ -306,6 +306,7 @@ def list_quick_test_history(
     return history
 
 
+@router.get("", response_model=list[LLMProviderRead])
 @router.get("/", response_model=list[LLMProviderRead])
 def list_llm_providers(
     *,
@@ -338,6 +339,7 @@ def list_llm_providers(
     return [_serialize_provider(provider) for provider in providers]
 
 
+@router.post("", response_model=LLMProviderRead, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=LLMProviderRead, status_code=status.HTTP_201_CREATED)
 def create_llm_provider(
     *,

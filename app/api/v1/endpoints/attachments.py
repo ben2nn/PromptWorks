@@ -50,7 +50,7 @@ def _get_attachment_or_404(db: Session, attachment_id: int) -> PromptAttachment:
     response_model=AttachmentUploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="上传附件",
-    description="为指定提示词上传附件文件，支持图片、文档、音频、视频等格式"
+    description="为指定提示词上传附件文件，支持图片、文档、音频、视频等格式。prompt_id=0 表示临时上传"
 )
 async def upload_attachment(
     prompt_id: int,
@@ -58,7 +58,7 @@ async def upload_attachment(
     media_type: MediaType | None = Query(None, description="指定媒体类型（可选）"),
     db: Session = Depends(get_db)
 ) -> AttachmentUploadResponse:
-    """上传附件到指定提示词"""
+    """上传附件到指定提示词，prompt_id=0 表示临时上传"""
     
     if not file.filename:
         raise HTTPException(
@@ -66,20 +66,30 @@ async def upload_attachment(
             detail="文件名不能为空"
         )
     
-    # 上传附件
-    attachment = await attachment_service.upload_attachment(
-        db=db,
-        prompt_id=prompt_id,
-        file=file,
-        media_type=media_type
-    )
+    # prompt_id=0 表示临时上传
+    if prompt_id == 0:
+        attachment = await attachment_service.upload_temporary_attachment(
+            db=db,
+            file=file,
+            media_type=media_type
+        )
+        message = "文件临时上传成功"
+    else:
+        # 正常上传并关联
+        attachment = await attachment_service.upload_attachment(
+            db=db,
+            prompt_id=prompt_id,
+            file=file,
+            media_type=media_type
+        )
+        message = "文件上传成功"
     
     # 转换为响应模式
     attachment_read = attachment_service.to_attachment_read(attachment)
     
     return AttachmentUploadResponse(
         attachment=attachment_read,
-        message="文件上传成功"
+        message=message
     )
 
 
@@ -292,6 +302,46 @@ def delete_prompt_attachments(
         status_code=status.HTTP_204_NO_CONTENT,
         headers={"X-Deleted-Count": str(deleted_count)}
     )
+
+
+@router.put(
+    "/prompts/{prompt_id}/attachments/batch-update",
+    response_model=list[AttachmentRead],
+    summary="批量更新附件关联",
+    description="将多个附件关联到指定的提示词"
+)
+def batch_update_attachment_prompt(
+    prompt_id: int,
+    attachment_ids: list[int],
+    db: Session = Depends(get_db)
+) -> list[AttachmentRead]:
+    """批量更新附件的 prompt_id
+    
+    Args:
+        prompt_id: 提示词 ID（路径参数）
+        attachment_ids: 附件 ID 列表（请求体 JSON 数组）
+    """
+    
+    if not attachment_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="附件 ID 列表不能为空"
+        )
+    
+    # 关联附件
+    attachments = attachment_service.attach_to_prompt(
+        db=db,
+        attachment_ids=attachment_ids,
+        prompt_id=prompt_id
+    )
+    
+    # 转换为响应模式（确保返回 Pydantic 对象列表）
+    attachment_reads = [
+        attachment_service.to_attachment_read(attachment)
+        for attachment in attachments
+    ]
+    
+    return attachment_reads
 
 
 @router.get(

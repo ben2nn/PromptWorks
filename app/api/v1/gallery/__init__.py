@@ -10,6 +10,7 @@ from .prompts import router as prompts_router
 from .categories import router as categories_router
 from .tags import router as tags_router
 from .featured import router as featured_router
+from .exceptions import GalleryResponse, gallery_exception_handler
 
 # 创建画廊API主路由器
 router = APIRouter(prefix="/gallery", tags=["gallery"])
@@ -20,24 +21,5 @@ router.include_router(categories_router, prefix="/categories", tags=["gallery-ca
 router.include_router(tags_router, prefix="/tags", tags=["gallery-tags"])
 router.include_router(featured_router, prefix="/featured", tags=["gallery-featured"])
 
-
-class GalleryResponse:
-    """画廊API统一响应格式"""
-    
-    @staticmethod
-    def success(data=None, pagination=None):
-        """成功响应格式"""
-        response = {"success": True}
-        if data is not None:
-            response["data"] = data
-        if pagination:
-            response["pagination"] = pagination
-        return response
-    
-    @staticmethod
-    def error(code: str, message: str):
-        """错误响应格式"""
-        return {
-            "success": False,
-            "error": {"code": code, "message": message}
-        }
+# 导出统一响应格式类供其他模块使用
+__all__ = ["router", "GalleryResponse"]
