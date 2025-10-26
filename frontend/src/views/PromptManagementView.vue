@@ -462,9 +462,11 @@ const filteredPrompts = computed(() => {
     if (!matchKeyword(keyword, prompt)) {
       return false
     }
+    // 标签筛选：使用并集逻辑（OR），只要包含任意一个选中的标签即可
     if (tagIds.length) {
       const tagSet = new Set(prompt.tags.map((tag) => tag.id))
-      if (!tagIds.every((tagId) => tagSet.has(tagId))) {
+      const hasAnyTag = tagIds.some((tagId) => tagSet.has(tagId))
+      if (!hasAnyTag) {
         return false
       }
     }
