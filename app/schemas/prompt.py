@@ -209,6 +209,41 @@ class PromptRead(PromptBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+    
+    @model_validator(mode="before")
+    @classmethod
+    def process_attachments(cls, data):
+        """处理附件数据，生成下载链接"""
+        if isinstance(data, dict):
+            return data
+        
+        # 如果是 ORM 对象，处理附件
+        if hasattr(data, 'attachments') and data.attachments:
+            from app.services.attachment import attachment_service
+            
+            # 转换附件对象为 AttachmentRead
+            processed_attachments = []
+            for attachment in data.attachments:
+                processed_attachments.append(attachment_service.to_attachment_read(attachment))
+            
+            # 创建一个字典来存储处理后的数据
+            result = {
+                'id': data.id,
+                'name': data.name,
+                'description': data.description,
+                'author': data.author,
+                'prompt_class': data.prompt_class,
+                'media_type': data.media_type,
+                'current_version': data.current_version,
+                'versions': data.versions,
+                'tags': data.tags,
+                'attachments': processed_attachments,
+                'created_at': data.created_at,
+                'updated_at': data.updated_at,
+            }
+            return result
+        
+        return data
 
 
 # 解析前向引用 - 在所有模型定义之后导入

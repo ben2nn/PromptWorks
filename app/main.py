@@ -53,6 +53,12 @@ def create_application() -> FastAPI:
     app.add_middleware(StaticFilesCORSMiddleware)
     
     allowed_origins = settings.BACKEND_CORS_ORIGINS or ["http://localhost:5173"]
+    # 添加 Next.js 开发服务器的常用端口
+    if "http://localhost:3000" not in allowed_origins:
+        allowed_origins.append("http://localhost:3000")
+    if "http://localhost:3001" not in allowed_origins:
+        allowed_origins.append("http://localhost:3001")
+    
     allow_credentials = settings.BACKEND_CORS_ALLOW_CREDENTIALS
     if "*" in allowed_origins:
         allow_credentials = False
