@@ -23,7 +23,8 @@ COPY pyproject.toml README.md alembic.ini /app/
 COPY app /app/app
 COPY alembic /app/alembic
 
-RUN pip install --upgrade pip && \
+# 升级 pip 和 setuptools 到最新版本
+RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir .
 
 # 创建文件存储目录
