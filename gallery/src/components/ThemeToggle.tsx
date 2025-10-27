@@ -40,16 +40,14 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className = '' }) => {
       onKeyDown={handleKeyDown}
       className={`
         relative
-        p-2.5 rounded-lg
-        bg-gray-100 hover:bg-gray-200
-        dark:bg-gray-800 dark:hover:bg-gray-700
+        p-2 rounded-lg
         text-gray-700 dark:text-gray-200
+        hover:text-gray-900 dark:hover:text-white
         transition-all duration-300 ease-out
         hover:scale-110 active:scale-95
-        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-        dark:focus:ring-blue-400 dark:focus:ring-offset-2
-        dark:focus:ring-offset-gray-900
-        shadow-sm hover:shadow-md
+        focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2
+        dark:focus:ring-blue-400/50 dark:focus:ring-offset-2
+        dark:focus:ring-offset-transparent
         ${className}
       `}
       aria-label={ariaLabel}
