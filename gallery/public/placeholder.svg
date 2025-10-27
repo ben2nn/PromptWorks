@@ -1,0 +1,13 @@
+<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" fill="#f3f4f6"/>
+  <g transform="translate(200, 200)">
+    <path d="M-40 -20 L-40 20 L-20 20 L-20 40 L20 40 L20 20 L40 20 L40 -20 L20 -20 L20 -40 L-20 -40 L-20 -20 Z" 
+          fill="#d1d5db" opacity="0.5"/>
+    <circle cx="0" cy="-30" r="15" fill="#9ca3af" opacity="0.5"/>
+    <path d="M-50 30 L-30 10 L-10 30 L10 10 L30 30 L50 10 L50 50 L-50 50 Z" 
+          fill="#9ca3af" opacity="0.5"/>
+  </g>
+  <text x="200" y="350" font-family="Arial, sans-serif" font-size="16" fill="#9ca3af" text-anchor="middle">
+    暂无图片
+  </text>
+</svg>

@@ -1,0 +1,35 @@
+{
+  "name": "prompt-gallery",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "docker:build": "docker build -t prompt-gallery .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env.local prompt-gallery",
+    "docker:build-prod": "docker build --build-arg NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1 -t prompt-gallery:prod .",
+    "preview": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "@types/react-window": "^2.0.0",
+    "axios": "^1.12.2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.11.11",
+    "next": "14.2.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.15",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5"
+  }
+}
