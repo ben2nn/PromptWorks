@@ -39,7 +39,7 @@ COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.js ./
 
 # 暴露端口
-EXPOSE 80
+EXPOSE 3000
 
 # 启动应用
 CMD ["npm", "start"]
