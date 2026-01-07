@@ -204,48 +204,60 @@ class PromptRead(PromptBase):
     current_version: PromptVersionRead | None = None
     versions: list[PromptVersionRead] = Field(default_factory=list)
     tags: list[PromptTagRead] = Field(default_factory=list)
-    attachments: list["AttachmentRead"] = Field(default_factory=list, description="附件列表")
+    attachments: list["AttachmentRead"] = Field(
+        default_factory=list, description="附件列表"
+    )
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-    
+
     @model_validator(mode="before")
     @classmethod
     def process_attachments(cls, data):
         """处理附件数据，生成下载链接"""
         if isinstance(data, dict):
             return data
-        
+
         # 如果是 ORM 对象，处理附件
-        if hasattr(data, 'attachments') and data.attachments:
+        if hasattr(data, "attachments") and data.attachments:
             from app.services.attachment import attachment_service
-            
+
             # 转换附件对象为 AttachmentRead
             processed_attachments = []
             for attachment in data.attachments:
-                processed_attachments.append(attachment_service.to_attachment_read(attachment))
-            
+                processed_attachments.append(
+                    attachment_service.to_attachment_read(attachment)
+                )
+
             # 创建一个字典来存储处理后的数据
             result = {
-                'id': data.id,
-                'name': data.name,
-                'description': data.description,
-                'author': data.author,
-                'prompt_class': data.prompt_class,
-                'media_type': data.media_type,
-                'current_version': data.current_version,
-                'versions': data.versions,
-                'tags': data.tags,
-                'attachments': processed_attachments,
-                'created_at': data.created_at,
-                'updated_at': data.updated_at,
+                "id": data.id,
+                "name": data.name,
+                "description": data.description,
+                "author": data.author,
+                "prompt_class": data.prompt_class,
+                "media_type": data.media_type,
+                "current_version": data.current_version,
+                "versions": data.versions,
+                "tags": data.tags,
+                "attachments": processed_attachments,
+                "created_at": data.created_at,
+                "updated_at": data.updated_at,
             }
             return result
-        
+
         return data
+
+
+class PromptListResponse(BaseModel):
+    """Prompt 列表响应，包含分页信息"""
+
+    items: list[PromptRead]
+    total: int = Field(default=0, ge=0, description="符合筛选条件的总记录数")
 
 
 # 解析前向引用 - 在所有模型定义之后导入
 from app.schemas.attachment import AttachmentRead  # noqa: E402
+
 PromptRead.model_rebuild()

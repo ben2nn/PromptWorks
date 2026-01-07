@@ -10,7 +10,7 @@ def test_get_version():
     """测试获取版本号"""
     version = get_version()
     assert isinstance(version, str)
-    assert len(version.split('.')) == 3  # 确保是 x.y.z 格式
+    assert len(version.split(".")) == 3  # 确保是 x.y.z 格式
 
 
 def test_get_version_info():
@@ -32,7 +32,7 @@ def test_version_consistency():
     """测试版本一致性"""
     version = get_version()
     version_info = get_version_info()
-    
+
     # 将版本字符串转换为元组进行比较
-    version_parts = tuple(int(part) for part in version.split('.'))
+    version_parts = tuple(int(part) for part in version.split("."))
     assert version_parts == version_info

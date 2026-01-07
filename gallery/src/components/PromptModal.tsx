@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { PromptModalProps } from '@/types';
 import { Modal } from './ui/Modal';
 import { getFullImageUrl } from '@/lib/utils';
+import SafeImage from './SafeImage';
 
 /**
  * PromptModal 组件 - 提示词详情弹框
@@ -235,7 +235,7 @@ export const PromptModal: React.FC<PromptModalProps> = ({
                     animationFillMode: 'backwards'
                   }}
                 >
-                  <Image
+                  <SafeImage
                     src={getFullImageUrl(attachment.download_url || attachment.thumbnail_url)}
                     alt={attachment.original_filename || attachment.filename || `示例图片 ${attachmentIndex + 1}`}
                     fill

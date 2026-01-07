@@ -107,10 +107,10 @@ class Prompt(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     author: Mapped[str | None] = mapped_column(String(100), nullable=True)
     media_type: Mapped[MediaType] = mapped_column(
-        Enum(MediaType, values_callable=lambda obj: [e.value for e in obj]), 
-        default=MediaType.TEXT, 
+        Enum(MediaType, values_callable=lambda obj: [e.value for e in obj]),
+        default=MediaType.TEXT,
         nullable=False,
-        index=True
+        index=True,
     )
     current_version_id: Mapped[int | None] = mapped_column(
         ForeignKey(
@@ -178,7 +178,9 @@ class PromptVersion(Base):
     )
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="英文提示词内容")
-    contentzh: Mapped[str | None] = mapped_column(Text, nullable=True, comment="中文提示词内容")
+    contentzh: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="中文提示词内容"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

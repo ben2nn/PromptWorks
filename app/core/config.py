@@ -21,23 +21,23 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     BACKEND_CORS_ORIGINS: Union[str, list[str]] = ["http://localhost:5173"]
     BACKEND_CORS_ALLOW_CREDENTIALS: bool = True
-    
+
     # 文件存储配置
     FILE_STORAGE_TYPE: str = "local"  # local, s3, oss
     FILE_STORAGE_PATH: str = "./uploads"
     FILE_MAX_SIZE: int = 10 * 1024 * 1024  # 10MB
     FILE_BASE_URL: str = "http://localhost:8000"
-    
+
     # 缩略图配置
     THUMBNAIL_SIZE: str = "200x200"
     THUMBNAIL_QUALITY: int = 85
-    
+
     # AWS S3 配置
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_S3_BUCKET: str | None = None
     AWS_S3_REGION: str = "us-east-1"
-    
+
     # 阿里云 OSS 配置
     ALIYUN_ACCESS_KEY_ID: str | None = None
     ALIYUN_ACCESS_KEY_SECRET: str | None = None

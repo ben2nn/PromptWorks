@@ -9,7 +9,7 @@ services:
     ports:
       - "15432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U promptworks -d promptworks"]
       interval: 5s
@@ -23,7 +23,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -35,22 +35,12 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: promptworks-backend
+    env_file:
+      - .env.docker
     environment:
-      APP_ENV: production
-      APP_TEST_MODE: "false"
-      API_V1_STR: /api/v1
-      PROJECT_NAME: PromptWorks
+      # 覆盖特定的环境变量（如果需要）
       DATABASE_URL: postgresql+psycopg://promptworks:promptworks@postgres:5432/promptworks
       REDIS_URL: redis://redis:6379/0
-      BACKEND_CORS_ORIGINS: '["http://frontend:18080","http://gallery:18081"]'
-      BACKEND_CORS_ALLOW_CREDENTIALS: "true"
-      # 文件存储配置
-      FILE_STORAGE_TYPE: local
-      FILE_STORAGE_PATH: /app/uploads
-      FILE_MAX_SIZE: 10485760
-      FILE_BASE_URL: http://backend:8000
-      THUMBNAIL_SIZE: 200x200
-      THUMBNAIL_QUALITY: 85
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,7 +49,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - uploads_data:/app/uploads
+      - ./data/uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/health"]
       interval: 30s
@@ -86,32 +76,13 @@ services:
       context: ./gallery
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: http://backend:8000
+        NEXT_PUBLIC_API_BASE_URL: http://192.168.31.222:8000
     container_name: promptworks-gallery
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://backend:8000
+      NEXT_PUBLIC_API_BASE_URL: http://192.168.31.222:8000
     depends_on:
       backend:
         condition: service_started
     ports:
       - "18081:80"
 
-volumes:
-  postgres_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/postgres
-  redis_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/redis
-  uploads_data:
-    driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data/uploads

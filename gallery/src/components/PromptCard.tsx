@@ -1,7 +1,7 @@
 import React from 'react';
-import Image from 'next/image';
 import { PromptCardProps } from '@/types';
 import { getFullImageUrl } from '@/lib/utils';
+import SafeImage from './SafeImage';
 
 /**
  * PromptCard 组件 - 提示词卡片
@@ -36,7 +36,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({ prompt, onClick }) => {
       {/* 预览图片 */}
       <div className="relative w-full aspect-square bg-gray-100 dark:bg-slate-700 overflow-hidden">
         {prompt.attachments && prompt.attachments.length > 0 ? (
-          <Image
+          <SafeImage
             src={getFullImageUrl(prompt.attachments[0].thumbnail_url || prompt.attachments[0].download_url)}
             alt={prompt.name}
             fill

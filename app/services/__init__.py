@@ -12,15 +12,12 @@ __all__ = [
     # 附件管理
     "AttachmentService",
     "attachment_service",
-    
     # 文件存储
-    "FileStorageService", 
+    "FileStorageService",
     "file_storage_service",
-    
     # 文件验证
     "FileValidationService",
     "file_validation_service",
-    
     # 缩略图生成
     "ThumbnailService",
     "thumbnail_service",

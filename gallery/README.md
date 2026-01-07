@@ -13,6 +13,9 @@
 - 🚀 基于 Next.js 14 App Router
 - 🎭 使用 Framer Motion 实现动画
 - 💅 Tailwind CSS 样式方案
+- 🖼️ 智能图像加载和错误处理
+- 🔄 图像代理服务，解决外部图像访问问题
+- ⚡ Sharp 图像优化支持
 
 ## 技术栈
 
@@ -22,6 +25,8 @@
 - **动画**: Framer Motion
 - **HTTP 客户端**: Axios
 - **UI 组件**: React 18
+- **图像处理**: Sharp (生产环境图像优化)
+- **图像代理**: 内置 API 路由处理外部图像
 
 ## 快速开始
 
@@ -47,7 +52,12 @@ Copy-Item .env.example .env.local
 编辑 `.env.local` 配置 API 地址：
 
 ```bash
+# API 基础 URL
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+
+# 图像加载配置
+NEXT_PUBLIC_IMAGE_TIMEOUT=10000
+NEXT_PUBLIC_FALLBACK_IMAGE_ENABLED=true
 ```
 
 ### 启动开发服务器
@@ -57,6 +67,10 @@ npm run dev
 ```
 
 访问 http://localhost:3000
+
+### 测试图像加载
+
+访问 http://localhost:3000/test-images 测试图像加载和错误处理功能
 
 ## 可用脚本
 
@@ -187,6 +201,22 @@ const results = await searchPrompts('keyword')
 Remove-Item -Recurse -Force .next
 npm run build
 ```
+
+### Sharp 依赖问题
+
+如果遇到 Sharp 相关错误，重新安装依赖：
+
+```powershell
+Remove-Item -Recurse -Force node_modules
+npm install
+```
+
+### 图像加载失败
+
+1. 检查网络连接
+2. 访问 `/test-images` 页面测试图像加载
+3. 查看浏览器控制台的错误信息
+4. 验证图像代理 API 是否正常工作
 
 ### API 请求失败
 

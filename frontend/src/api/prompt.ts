@@ -6,6 +6,13 @@ export interface PromptListParams {
   limit?: number
   offset?: number
   media_type?: MediaType
+  class_id?: number
+  tag_ids?: string
+}
+
+export interface PromptListResponse {
+  items: Prompt[]
+  total: number
 }
 
 export interface PromptCreatePayload {
@@ -37,15 +44,17 @@ export interface PromptUpdatePayload {
   tag_ids?: number[] | null
 }
 
-export async function listPrompts(params: PromptListParams = {}): Promise<Prompt[]> {
+export async function listPrompts(params: PromptListParams = {}): Promise<PromptListResponse> {
   const searchParams = new URLSearchParams()
   if (params.q) searchParams.set('q', params.q)
   if (typeof params.limit === 'number') searchParams.set('limit', String(params.limit))
   if (typeof params.offset === 'number') searchParams.set('offset', String(params.offset))
   if (params.media_type) searchParams.set('media_type', params.media_type)
+  if (typeof params.class_id === 'number') searchParams.set('class_id', String(params.class_id))
+  if (params.tag_ids) searchParams.set('tag_ids', params.tag_ids)
   const query = searchParams.toString()
   const path = `/prompts${query ? `?${query}` : ''}`
-  return request<Prompt[]>(path)
+  return request<PromptListResponse>(path)
 }
 
 export async function getPrompt(promptId: number): Promise<Prompt> {

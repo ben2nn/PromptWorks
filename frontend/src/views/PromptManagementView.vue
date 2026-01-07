@@ -93,8 +93,8 @@
     <el-skeleton v-else-if="isLoading" animated :rows="6" />
 
     <template v-else>
-      <div v-if="filteredPrompts.length" class="card-grid">
-        <div v-for="prompt in paginatedPrompts" :key="prompt.id" class="card-grid__item">
+      <div v-if="prompts.length" class="card-grid">
+        <div v-for="prompt in prompts" :key="prompt.id" class="card-grid__item">
           <el-card class="prompt-card" shadow="hover" @click="goDetail(prompt.id)">
             <div class="prompt-card__header">
               <div class="prompt-card__title-section">
@@ -204,11 +204,11 @@
       
       <!-- 分页组件 -->
       <el-pagination
-        v-if="filteredPrompts.length > 0"
+        v-if="totalPrompts > 0"
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :page-sizes="[20, 50, 100, 200]"
-        :total="filteredPrompts.length"
+        :total="totalPrompts"
         layout="total, sizes, prev, pager, next, jumper"
         class="pagination"
         @size-change="handleSizeChange"
@@ -320,6 +320,7 @@ interface PromptFormState {
 const router = useRouter()
 const { t, locale } = useI18n()
 const prompts = ref<Prompt[]>([])
+const totalPrompts = ref(0) // 总记录数
 const promptClasses = ref<PromptClassStats[]>([])
 const promptTags = ref<PromptTagStats[]>([])
 const isLoading = ref(false)
@@ -421,70 +422,9 @@ function matchKeyword(keyword: string, prompt: Prompt) {
   return fields.some((field) => field?.toLowerCase().includes(target))
 }
 
-function sortPrompts(list: Prompt[]) {
-  const sorted = [...list]
-  switch (sortKey.value) {
-    case 'created_at':
-      sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      break
-    case 'updated_at':
-      sorted.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-      break
-    case 'author':
-      sorted.sort((a, b) => {
-        const authorA = a.author ?? ''
-        const authorB = b.author ?? ''
-        const cmp = authorA.localeCompare(authorB, locale.value)
-        if (cmp !== 0) return cmp
-        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      })
-      break
-    default:
-      sorted.sort((a, b) => {
-        const diff = new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        if (diff !== 0) return diff
-        return a.name.localeCompare(b.name, locale.value)
-      })
-  }
-  return sorted
-}
-
-const filteredPrompts = computed(() => {
-  const keyword = searchKeyword.value
-  const activeClass = activeClassKey.value
-  const tagIds = selectedTagIds.value
-  const mediaTypes = selectedMediaTypes.value
-
-  const list = prompts.value.filter((prompt) => {
-    if (activeClass !== 'all' && String(prompt.prompt_class.id) !== activeClass) {
-      return false
-    }
-    if (!matchKeyword(keyword, prompt)) {
-      return false
-    }
-    // 标签筛选：使用并集逻辑（OR），只要包含任意一个选中的标签即可
-    if (tagIds.length) {
-      const tagSet = new Set(prompt.tags.map((tag) => tag.id))
-      const hasAnyTag = tagIds.some((tagId) => tagSet.has(tagId))
-      if (!hasAnyTag) {
-        return false
-      }
-    }
-    if (mediaTypes.length && !mediaTypes.includes(prompt.media_type)) {
-      return false
-    }
-    return true
-  })
-
-  return sortPrompts(list)
-})
-
-// 分页后的数据
-const paginatedPrompts = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  const end = start + pageSize.value
-  return filteredPrompts.value.slice(start, end)
-})
+// 移除前端排序逻辑，改为后端排序
+// 前端不再需要 filteredPrompts 和 paginatedPrompts 计算属性
+// 直接使用 prompts 作为显示数据
 
 const createDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -773,15 +713,46 @@ function extractErrorMessage(error: unknown, fallback: string): string {
 
 async function fetchPrompts() {
   try {
-    // 设置较大的 limit 值以获取所有数据
-    const data = await listPrompts({ limit: 10000 })
-    prompts.value = data
+    // 构建查询参数
+    const params: any = {
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value
+    }
+    
+    // 搜索关键词
+    if (searchKeyword.value.trim()) {
+      params.q = searchKeyword.value.trim()
+    }
+    
+    // 分类筛选
+    if (activeClassKey.value !== 'all') {
+      params.class_id = Number(activeClassKey.value)
+    }
+    
+    // 标签筛选（OR逻辑）
+    if (selectedTagIds.value.length > 0) {
+      params.tag_ids = selectedTagIds.value.join(',')
+    }
+    
+    // 媒体类型筛选
+    if (selectedMediaTypes.value.length > 0) {
+      // 如果选择了多个媒体类型，需要多次请求或者修改后端支持
+      // 这里简化处理：只支持单个媒体类型筛选
+      if (selectedMediaTypes.value.length === 1) {
+        params.media_type = selectedMediaTypes.value[0]
+      }
+    }
+    
+    const response = await listPrompts(params)
+    prompts.value = response.items
+    totalPrompts.value = response.total
     promptError.value = null
   } catch (error) {
     const message = extractErrorMessage(error, t('promptManagement.messages.loadPromptFailed'))
     promptError.value = message
     ElMessage.error(message)
     prompts.value = []
+    totalPrompts.value = 0
   }
 }
 
@@ -789,10 +760,12 @@ async function fetchPrompts() {
 function handleSizeChange(newSize: number) {
   pageSize.value = newSize
   currentPage.value = 1 // 改变每页数量时重置到第一页
+  void fetchPrompts() // 重新加载数据
 }
 
 function handleCurrentChange(newPage: number) {
   currentPage.value = newPage
+  void fetchPrompts() // 重新加载数据
 }
 
 async function fetchCollections() {
@@ -846,9 +819,10 @@ watch(tagOptions, (options) => {
   selectedTagIds.value = selectedTagIds.value.filter((id) => available.has(id))
 })
 
-// 监听筛选条件变化，重置到第一页
+// 监听筛选条件变化，重置到第一页并重新加载数据
 watch([activeClassKey, searchKeyword, selectedTagIds, selectedMediaTypes, sortKey], () => {
   currentPage.value = 1
+  void fetchPrompts()
 })
 
 onMounted(() => {
