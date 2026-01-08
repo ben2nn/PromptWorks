@@ -108,7 +108,7 @@ export default function TestImagesPage() {
                 3
               </span>
               <div>
-                <strong>404 错误:</strong> 显示"图像加载失败"占位符
+                <strong>404 错误:</strong> 显示&ldquo;图像加载失败&rdquo;占位符
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -116,7 +116,7 @@ export default function TestImagesPage() {
                 4
               </span>
               <div>
-                <strong>超时错误:</strong> 10秒后显示"图像加载失败"占位符
+                <strong>超时错误:</strong> 10秒后显示&ldquo;图像加载失败&rdquo;占位符
               </div>
             </div>
           </div>

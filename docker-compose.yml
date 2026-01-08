@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: promptworks-postgres
+    restart: always
     environment:
       POSTGRES_DB: promptworks
       POSTGRES_USER: promptworks
@@ -19,6 +20,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: promptworks-redis
+    restart: always
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     ports:
       - "6379:6379"
@@ -35,12 +37,23 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: promptworks-backend
-    env_file:
-      - .env.docker
+    restart: always
     environment:
-      # 覆盖特定的环境变量（如果需要）
+      APP_ENV: production
+      APP_TEST_MODE: "false"
+      API_V1_STR: /api/v1
+      PROJECT_NAME: PromptWorks
       DATABASE_URL: postgresql+psycopg://promptworks:promptworks@postgres:5432/promptworks
       REDIS_URL: redis://redis:6379/0
+      BACKEND_CORS_ORIGINS: '["http://192.168.31.222:18080","http://192.168.31.222:18081","https://nana.hrids.com","https://pw.hrids.com"]'
+      BACKEND_CORS_ALLOW_CREDENTIALS: "true"
+      # 文件存储配置
+      FILE_STORAGE_TYPE: local
+      FILE_STORAGE_PATH: /app/uploads
+      FILE_MAX_SIZE: 10485760
+      FILE_BASE_URL: https://pw.hrids.com
+      THUMBNAIL_SIZE: 200x200
+      THUMBNAIL_QUALITY: 85
     depends_on:
       postgres:
         condition: service_healthy
@@ -51,7 +64,7 @@ services:
     volumes:
       - ./data/uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/system/health"]
+      test: ["CMD", "curl", "-f", "http://192.168.31.222:8000/api/v1/system/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -61,10 +74,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://backend:8000/api/v1
+        VITE_API_BASE_URL: https://pw.hrids.com/api/v1
     container_name: promptworks-frontend
+    restart: always
     environment:
-      VITE_API_BASE_URL: http://backend:8000/api/v1
+      VITE_API_BASE_URL: https://pw.hrids.com/api/v1
     depends_on:
       backend:
         condition: service_started
@@ -76,13 +90,13 @@ services:
       context: ./gallery
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: http://192.168.31.222:8000
+        NEXT_PUBLIC_API_BASE_URL: https://nana.hrids.com
     container_name: promptworks-gallery
+    restart: always
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://192.168.31.222:8000
+      NEXT_PUBLIC_API_BASE_URL: https://nana.hrids.com
     depends_on:
       backend:
         condition: service_started
     ports:
-      - "18081:80"
-
+      - "18081:3000"
