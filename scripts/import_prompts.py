@@ -4,14 +4,15 @@
 从 JSON 文件导入提示词数据到数据库
 
 使用方法:
-    python scripts/import_prompts.py prompts_20251025_192918.json
+    python scripts/import_prompts.py prompts_enhanced_20260201_041155.json
 
 功能:
-    1. 解析 JSON 数据
+    1. 解析增强版 JSON 数据格式
     2. 优先插入所有唯一的 tags
-    3. 下载图片并上传到系统
+    3. 下载封面图片并上传到系统
     4. 插入提示词并关联分类与 tags
     5. 处理中英文提示词内容
+    6. 支持新的数据结构（id, slug, title, cover_image, english_prompt, chinese_prompt, tags, detail_url）
 """
 
 import json
@@ -56,30 +57,52 @@ class PromptImporter:
         self.color_index += 1
         return color
 
-    def _split_content(self, content: str) -> tuple[str, str | None]:
+    def _split_content(self, english_prompt: str, chinese_prompt: str) -> tuple[str, str | None]:
         """
-        分离中英文提示词内容
+        处理中英文提示词内容
         
-        规则:
-        - 如果包含 "=== 提示词 ===" 分隔符，则分为英文和中文
-        - 否则，判断内容主要语言
+        参数:
+        - english_prompt: 英文提示词
+        - chinese_prompt: 中文提示词
+        
+        返回:
+        - (英文内容, 中文内容)
         """
-        if "=== 提示词 ===" in content:
-            parts = content.split("=== 提示词 ===", 1)
-            english = parts[0].strip()
-            chinese = parts[1].strip() if len(parts) > 1 else None
-            return english, chinese
+        # 清理内容
+        english_content = english_prompt.strip() if english_prompt else ""
+        chinese_content = chinese_prompt.strip() if chinese_prompt else ""
         
-        # 判断是否主要是中文
-        chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', content))
-        total_chars = len(content.replace(' ', '').replace('\n', ''))
+        # 如果都为空，返回空值
+        if not english_content and not chinese_content:
+            return "", None
+            
+        # 如果只有一个有内容，判断语言
+        if not english_content and chinese_content:
+            # 判断中文内容是否实际包含英文
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', chinese_content))
+            total_chars = len(chinese_content.replace(' ', '').replace('\n', ''))
+            
+            if total_chars > 0 and chinese_chars / total_chars > 0.3:
+                # 主要是中文
+                return "", chinese_content
+            else:
+                # 主要是英文，移到英文字段
+                return chinese_content, None
+                
+        if not chinese_content and english_content:
+            # 判断英文内容是否实际包含中文
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', english_content))
+            total_chars = len(english_content.replace(' ', '').replace('\n', ''))
+            
+            if total_chars > 0 and chinese_chars / total_chars > 0.3:
+                # 主要是中文，移到中文字段
+                return "", english_content
+            else:
+                # 主要是英文
+                return english_content, None
         
-        if total_chars > 0 and chinese_chars / total_chars > 0.3:
-            # 主要是中文
-            return "", content
-        else:
-            # 主要是英文
-            return content, None
+        # 两个都有内容，直接返回
+        return english_content, chinese_content if chinese_content else None
 
     def _ensure_tag(self, db: Session, tag_name: str) -> PromptTag:
         """确保标签存在，如果不存在则创建"""
@@ -108,9 +131,9 @@ class PromptImporter:
         image_url: str,
         prompt_title: str
     ) -> PromptAttachment | None:
-        """下载图片并上传到系统"""
+        """下载封面图片并上传到系统"""
         try:
-            print(f"  → 下载图片: {image_url}")
+            print(f"  → 下载封面图片: {image_url}")
             
             with httpx.Client(timeout=30.0) as client:
                 response = client.get(image_url, follow_redirects=True)
@@ -119,6 +142,10 @@ class PromptImporter:
                 # 获取文件名和扩展名
                 parsed_url = urlparse(image_url)
                 original_filename = Path(parsed_url.path).name
+                
+                # 如果没有文件名，使用默认名称
+                if not original_filename or '.' not in original_filename:
+                    original_filename = f"cover_image.jpg"
                 
                 # 确定 MIME 类型
                 content_type = response.headers.get('content-type', 'image/jpeg')
@@ -175,11 +202,11 @@ class PromptImporter:
                 db.add(attachment)
                 db.flush()
                 
-                print(f"  ✓ 图片已上传: {filename}")
+                print(f"  ✓ 封面图片已上传: {filename}")
                 return attachment
                 
         except Exception as e:
-            print(f"  ✗ 图片下载失败: {str(e)}")
+            print(f"  ✗ 封面图片下载失败: {str(e)}")
             return None
 
     def _import_prompt(
@@ -191,31 +218,63 @@ class PromptImporter:
     ) -> None:
         """导入单个提示词"""
         title = prompt_data.get("title", "")
-        print(f"\n[{index}/{total}] 导入: {title}")
+        slug = prompt_data.get("slug", "")
+        original_id = prompt_data.get("id", 0)
+        
+        print(f"\n[{index}/{total}] 导入: {title} (ID: {original_id})")
 
-        # 分离中英文内容
-        content = prompt_data.get("content", "")
-        english_content, chinese_content = self._split_content(content)
+        # 处理中英文内容
+        english_prompt = prompt_data.get("english_prompt", "")
+        chinese_prompt = prompt_data.get("chinese_prompt", "")
+        english_content, chinese_content = self._split_content(english_prompt, chinese_prompt)
+
+        # 如果两个都为空，跳过
+        if not english_content and not chinese_content:
+            print(f"  ⚠ 跳过: 没有提示词内容")
+            return
 
         # 处理标签
         tags = []
         for tag_name in prompt_data.get("tags", []):
-            tag = self._ensure_tag(db, tag_name)
-            tags.append(tag)
+            if tag_name.strip():  # 确保标签名不为空
+                tag = self._ensure_tag(db, tag_name.strip())
+                tags.append(tag)
 
-        # 下载并上传图片
+        # 下载并上传封面图片
         attachment = None
-        image_url = prompt_data.get("image_url")
-        if image_url:
+        cover_image_url = prompt_data.get("cover_image")
+        if cover_image_url:
             attachment = self._download_and_upload_image(
-                db, image_url, title
+                db, cover_image_url, title
             )
+
+        # 构建描述信息
+        detail_url = prompt_data.get("detail_url", "")
+        description_parts = []
+        if slug:
+            description_parts.append(f"Slug: {slug}")
+        if detail_url:
+            description_parts.append(f"来源: {detail_url}")
+        if original_id:
+            description_parts.append(f"原始ID: {original_id}")
+        
+        description = " | ".join(description_parts) if description_parts else "来源: opennana.com"
+
+        # 检查是否已存在相同名称的提示词
+        existing_prompt = db.query(Prompt).filter(
+            Prompt.class_id == self.class_id,
+            Prompt.name == title
+        ).first()
+        
+        if existing_prompt:
+            print(f"  ⚠ 跳过: 提示词已存在 (ID: {existing_prompt.id})")
+            return
 
         # 创建提示词
         prompt = Prompt(
             class_id=self.class_id,
             name=title,
-            description=f"来源: {prompt_data.get('source_url', 'opennana.com')}",
+            description=description,
             author="opennana",
             tags=tags
         )
@@ -240,9 +299,13 @@ class PromptImporter:
             attachment.prompt_id = prompt.id
 
         print(f"  ✓ 提示词已创建 (ID: {prompt.id})")
-        print(f"    - 标签: {', '.join(tag.name for tag in tags)}")
+        print(f"    - 英文内容: {'有' if english_content else '无'}")
+        print(f"    - 中文内容: {'有' if chinese_content else '无'}")
+        print(f"    - 标签: {', '.join(tag.name for tag in tags) if tags else '无'}")
         if attachment:
-            print(f"    - 附件: {attachment.filename}")
+            print(f"    - 封面图片: {attachment.filename}")
+        if slug:
+            print(f"    - Slug: {slug}")
 
     def import_data(self) -> None:
         """执行导入"""
@@ -251,7 +314,13 @@ class PromptImporter:
         with open(self.json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        prompts_data = data.get("prompts", [])
+        # 新格式：直接是提示词数组
+        if isinstance(data, list):
+            prompts_data = data
+        else:
+            # 兼容旧格式：包含 prompts 字段的对象
+            prompts_data = data.get("prompts", [])
+            
         total = len(prompts_data)
         print(f"找到 {total} 个提示词")
 
@@ -300,7 +369,7 @@ def main():
     """主函数"""
     if len(sys.argv) < 2:
         print("用法: python scripts/import_prompts.py <json_file> [class_id]")
-        print("示例: python scripts/import_prompts.py prompts_20251025_192918.json 4")
+        print("示例: python scripts/import_prompts.py prompts_enhanced_20260201_041155.json 4")
         sys.exit(1)
 
     json_file = sys.argv[1]

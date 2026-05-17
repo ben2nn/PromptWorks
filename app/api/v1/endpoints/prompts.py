@@ -169,7 +169,7 @@ def list_prompts(
     # 获取分页数据
     stmt = (
         _prompt_query()
-        .where(Prompt.id.in_(select(base_stmt.with_only_columns(Prompt.id).distinct())))
+        .where(Prompt.id.in_(base_stmt.with_only_columns(Prompt.id).distinct()))
         .order_by(Prompt.updated_at.desc())
         .offset(offset)
         .limit(limit)

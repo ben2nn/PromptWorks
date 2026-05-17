@@ -32,11 +32,12 @@ class Settings(BaseSettings):
     THUMBNAIL_SIZE: str = "200x200"
     THUMBNAIL_QUALITY: int = 85
 
-    # AWS S3 配置
+    # AWS S3 / MinIO 配置
     AWS_ACCESS_KEY_ID: str | None = None
     AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_S3_BUCKET: str | None = None
     AWS_S3_REGION: str = "us-east-1"
+    AWS_S3_ENDPOINT_URL: str | None = None  # MinIO 或其他 S3 兼容服务的地址
 
     # 阿里云 OSS 配置
     ALIYUN_ACCESS_KEY_ID: str | None = None
