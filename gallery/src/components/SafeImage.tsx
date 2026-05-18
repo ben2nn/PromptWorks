@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { getProxiedImageUrl, getPlaceholderImageUrl } from '@/lib/utils';
+import { getProxiedImageUrl, getPlaceholderImageUrl, isS3Url } from '@/lib/utils';
+import s3Loader from '@/lib/s3Loader';
 
 interface SafeImageProps {
   src: string;
@@ -80,6 +81,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
         priority={priority}
         placeholder={placeholder}
         blurDataURL={blurDataURL}
+        loader={isS3Url(currentSrc) ? s3Loader : undefined}
         onError={() => {
           console.warn(`图像加载失败: ${currentSrc}`);
           
