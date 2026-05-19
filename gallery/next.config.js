@@ -17,6 +17,7 @@ const imageRemotePatterns = [
 
 // S3 / MinIO bucket 域名支持
 const s3BucketDomain = process.env.NEXT_PUBLIC_S3_BUCKET_DOMAIN;
+console.log('[next.config] S3_BUCKET_DOMAIN:', s3BucketDomain || '(未配置)');
 if (s3BucketDomain) {
   // 解析域名和端口（MinIO 地址可能带端口，如 minio.example.com:9000）
   const lastColon = s3BucketDomain.lastIndexOf(':');

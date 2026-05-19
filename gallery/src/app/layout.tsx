@@ -23,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="loading">
+    <html lang="zh-CN" className="loading" suppressHydrationWarning>
       <head>
         <ThemeScript />
         <meta name="color-scheme" content="light dark" />
@@ -39,7 +39,7 @@ export default function RootLayout({
           `
         }} />
       </head>
-      <body className="antialiased loading">
+      <body className="antialiased loading" suppressHydrationWarning>
         <NoFlashProvider>
           <ThemeProvider>
             {children}
